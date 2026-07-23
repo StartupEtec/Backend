@@ -21,19 +21,20 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
    ```
    *Edita `.env` si es necesario.*
 
+
 3. Levantar el entorno de base de datos (PostgreSQL/PostGIS):
    *(Configura y levanta tu contenedor de base de datos local)*
 
-4. Compilar el proyecto en TypeScript:
+4. Iniciar el proyecto:
    ```bash
-   npm run build
+   npm run dev
    ```
+
 
 ## 🛠️ Scripts Disponibles
 
-- `npm run dev`: Inicia el servidor de desarrollo utilizando `nodemon` y `ts-node` en caliente.
-- `npm start`: Inicia el servidor en producción desde el directorio de distribución compilado (`dist`).
-- `npm run build`: Compila los archivos TypeScript a JavaScript en la carpeta `dist`.
+- `npm run dev`: Inicia el servidor de desarrollo utilizando `nodemon` en caliente sobre `src/server.js`.
+- `npm start`: Inicia el servidor en producción utilizando Node.js nativo sobre `src/server.js`.
 - `npm run format`: Formatea el código de manera automática utilizando `Prettier`.
 - `npm run format:check`: Verifica si hay desviaciones en las reglas del formateador de código.
 - `npm test`: Ejecuta la suite de pruebas unitarias usando `Jest`.
@@ -50,9 +51,10 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
 │   ├── routes/         # Definición de rutas Express
 │   ├── services/       # Lógica de negocio core
 │   ├── utils/          # Utilidades y funciones helper
-│   ├── app.ts          # Configuración de Express
-│   └── server.ts       # Punto de entrada del servidor
+│   ├── app.js          # Configuración de Express
+│   └── server.js       # Punto de entrada del servidor
 ├── tests/              # Pruebas unitarias y de integración
 ├── .env.example        # Plantilla de variables de entorno
-└── tsconfig.json       # Configuración de TypeScript compiler
+└── .gitignore          # Archivo para excluir archivos sensibles (.env)
+
 ```

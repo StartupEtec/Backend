@@ -1,10 +1,10 @@
-module.exports = {
-  preset: 'ts-jest',
+export default {
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.ts'],
+  testMatch: ['**/tests/**/*.test.js'],
   verbose: true,
   forceExit: true,
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
+  transform: {}
 };

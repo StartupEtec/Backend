@@ -1,4 +1,4 @@
-import app from './app';
+import app from './app.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -7,7 +7,6 @@ const server = app.listen(PORT, () => {
   console.log(`Healthcheck disponible en http://localhost:${PORT}/api/v1/health`);
 });
 
-// Manejo de apagado gradual (Graceful Shutdown)
 const shutdown = () => {
   console.log('Cerrando servidor HTTP de forma gradual...');
   server.close(() => {

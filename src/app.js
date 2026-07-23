@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -6,7 +6,6 @@ dotenv.config();
 
 const app = express();
 
-// Configuración de CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000'];
@@ -27,7 +26,7 @@ app.use(
 app.use(express.json());
 
 // Endpoint de salud (Health Check)
-app.get('/api/v1/health', (req: Request, res: Response) => {
+app.get('/api/v1/health', (req, res) => {
   res.status(200).json({
     status: 'UP',
     timestamp: new Date().toISOString(),
@@ -36,7 +35,7 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 });
 
 // Middleware centralizado de manejo de errores
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err, req, res, next) => {
   const statusCode = err.message === 'Not allowed by CORS' ? 403 : 500;
   
   res.status(statusCode).json({
