@@ -58,3 +58,42 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
 └── .gitignore          # Archivo para excluir archivos sensibles (.env)
 
 ```
+
+## 🐳 Levantar con Docker y Docker Compose
+
+El proyecto está configurado para ejecutarse fácilmente en contenedores usando Docker y Docker Compose, lo que levanta tanto la API como la base de datos PostgreSQL de forma automatizada y sincronizada.
+
+### Requisitos previos
+
+Asegúrate de tener instalados:
+- **Docker**
+- **Docker Compose**
+
+### Instrucciones para iniciar el entorno
+
+1. **Crear archivo de variables de entorno**:
+   ```bash
+   cp .env.example .env
+   ```
+   *(La configuración por defecto apunta al servicio de base de datos dentro de Docker).*
+
+2. **Levantar los servicios**:
+   ```bash
+   docker-compose up --build
+   ```
+   *Este comando construirá la imagen del backend e iniciará los servicios de base de datos (`db`) y de API (`api`).*
+
+3. **Verificar el estado**:
+   - La API estará accesible en: `http://localhost:3000`
+   - El endpoint de salud estará disponible en: `http://localhost:3000/api/v1/health`
+
+### Detener los servicios
+
+Para detener y limpiar los contenedores, ejecuta:
+```bash
+docker-compose down
+```
+Para borrar también los datos persistidos de la base de datos, puedes añadir la bandera `-v`:
+```bash
+docker-compose down -v
+```
