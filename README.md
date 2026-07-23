@@ -97,3 +97,30 @@ Para borrar también los datos persistidos de la base de datos, puedes añadir l
 ```bash
 docker-compose down -v
 ```
+
+---
+
+## 🚀 Pipeline de CI/CD (GitHub Actions)
+
+El proyecto cuenta con integración y despliegue continuo automatizados mediante GitHub Actions.
+
+### 🧪 Integración Continua (CI)
+Se ejecuta de forma automática en cada **Pull Request** apuntando a cualquier rama o en pushes a ramas de desarrollo. Realiza las siguientes tareas:
+1. Valida el formato de código con Prettier (`npm run format:check`).
+2. Corre las pruebas unitarias y de integración del proyecto (`npm test`).
+
+### 📦 Despliegue Continuo (CD)
+Se ejecuta en cada **Push** o Merge directo a la rama `main`. Realiza las siguientes tareas:
+1. Construye la imagen Docker de producción.
+2. Sube la imagen Docker etiquetada a **Oracle Cloud Infrastructure Registry (OCIR)**.
+
+### 🔒 Secretos requeridos en GitHub
+Para que el workflow de CD funcione correctamente, debes configurar los siguientes secretos en tu repositorio de GitHub (`Settings > Secrets and variables > Actions`):
+
+| Secreto | Descripción | Ejemplo / Formato |
+|---------|-------------|-------------------|
+| `OCI_REGISTRY` | Endpoint del registro de contenedores de Oracle Cloud | `<region-code>.ocir.io` |
+| `OCI_USERNAME` | Nombre de usuario de acceso a OCI (incluye namespace) | `<tenancy-namespace>/oracleidentitycloudservice/<email>` |
+| `OCI_AUTH_TOKEN` | Token de autenticación generado en la consola de OCI | `T[a1_exampleToken}` |
+| `OCI_TENANCY_NAMESPACE` | Namespace de tu Tenancy en OCI | `id3abcde1234` |
+| `OCI_REPO_NAME` | Nombre del repositorio de imágenes en OCIR | `backend-service` |
