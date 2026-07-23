@@ -9,13 +9,18 @@
     "dev": "nodemon src/server.js",
     "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\" \"tests/**/*.js\"",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "migrate:latest": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback",
+    "migrate:make": "knex migrate:make",
+    "seed:run": "knex seed:run"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "joi": "^17.13.3",
+    "knex": "^3.1.0",
     "pg": "^8.12.0"
   },
   "devDependencies": {

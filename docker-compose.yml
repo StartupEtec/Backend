@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:14-alpine
+    image: postgis/postgis:14-3.4-alpine
     container_name: ondemand_db
     restart: always
     environment:
