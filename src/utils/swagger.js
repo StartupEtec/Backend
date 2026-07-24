@@ -1,0 +1,464 @@
+import swaggerJSDoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Backend API — Plataforma de Trabajo Independiente On-Demand',
+      version: '1.0.0',
+      description: `
+## Flujo de Autenticación con Verificación en Dos Pasos (2FA/OTP)
+
+La API implementa un sistema de autenticación con JWT y verificación OTP de dos pasos.
+
+### Flujo de Registro
+1. \`POST /auth/register\` — Crea el usuario y envía un OTP por Email/SMS.
+2. \`POST /auth/verify-otp\` — Valida el OTP. Devuelve \`accessToken\` + \`refreshToken\`.
+
+### Flujo de Login
+1. \`POST /auth/login\` — Valida credenciales. Si son correctas, envía OTP y retorna estado \`PENDING_VERIFICATION\`.
+2. \`POST /auth/verify-otp\` — Valida el OTP. Devuelve \`accessToken\` + \`refreshToken\`.
+
+### Renovación de token
+- \`POST /auth/refresh-token\` — Usa el \`refreshToken\` para obtener un nuevo \`accessToken\` + nuevo \`refreshToken\` (rotación de token por seguridad).
+
+### Tokens
+- **accessToken**: JWT firmado, payload \`{ user_id, email, current_role, iat, exp }\`. Expira en **1 hora**.
+- **refreshToken**: JWT firmado, payload \`{ user_id, jti, exp }\`. Expira en **7 días**. Almacenado en BD para revocación.
+
+### Rate Limiting
+Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15 minutos**.
+      `,
+    },
+    servers: [
+      {
+        url: 'http://localhost:3000/api/v1',
+        description: 'Servidor local de desarrollo',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Ingrese el accessToken obtenido de /auth/verify-otp',
+        },
+      },
+      schemas: {
+        // ── Request schemas ──────────────────────────────────────────────
+        RegisterRequest: {
+          type: 'object',
+          required: ['email', 'phone', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'usuario@example.com' },
+            phone: {
+              type: 'string',
+              minLength: 8,
+              maxLength: 15,
+              example: '3001234567',
+              description: 'Número de teléfono (8–15 dígitos)',
+            },
+            password: {
+              type: 'string',
+              format: 'password',
+              example: 'P@ssword123!',
+              description:
+                'Mínimo 8 caracteres, debe incluir: mayúscula, minúscula, número y símbolo',
+            },
+          },
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['password'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'usuario@example.com',
+              description: 'Requerido si no se proporciona phone',
+            },
+            phone: {
+              type: 'string',
+              example: '3001234567',
+              description: 'Requerido si no se proporciona email',
+            },
+            password: { type: 'string', format: 'password', example: 'P@ssword123!' },
+          },
+        },
+        VerifyOtpRequest: {
+          type: 'object',
+          required: ['otp_code'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'usuario@example.com',
+              description: 'Requerido si no se proporciona phone',
+            },
+            phone: {
+              type: 'string',
+              example: '3001234567',
+              description: 'Requerido si no se proporciona email',
+            },
+            otp_code: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 6,
+              example: '123456',
+              description: 'Código OTP de 6 dígitos recibido por Email/SMS',
+            },
+          },
+        },
+        RefreshTokenRequest: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              description: 'Refresh token obtenido de /auth/verify-otp',
+            },
+          },
+        },
+
+        // ── Success response schemas ──────────────────────────────────────
+        RegisterResponse: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              example:
+                'Usuario registrado correctamente. Por favor verifica tu cuenta con el código OTP enviado.',
+            },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+                email: { type: 'string', example: 'usuario@example.com' },
+                phone: { type: 'string', example: '3001234567' },
+              },
+            },
+          },
+        },
+        LoginPendingResponse: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', example: 'PENDING_VERIFICATION' },
+            message: {
+              type: 'string',
+              example: 'Código OTP enviado al correo/teléfono registrado.',
+            },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                email: { type: 'string' },
+              },
+            },
+          },
+        },
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Verificación exitosa' },
+            accessToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUz...',
+              description: 'JWT de acceso. Expira en 1 hora.',
+            },
+            refreshToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUz...',
+              description: 'Token de refresco. Expira en 7 días.',
+            },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                email: { type: 'string' },
+                phone: { type: 'string' },
+              },
+            },
+          },
+        },
+        RefreshTokenResponse: {
+          type: 'object',
+          properties: {
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUz...' },
+            refreshToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUz...',
+              description: 'Nuevo refresh token (el anterior queda revocado)',
+            },
+          },
+        },
+
+        // ── Error response schemas ────────────────────────────────────────
+        ValidationError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'VALIDATION_ERROR' },
+            message: {
+              type: 'string',
+              example:
+                'La contraseña debe tener al menos 8 caracteres, incluir una mayúscula, una minúscula, un número y un símbolo',
+            },
+            statusCode: { type: 'integer', example: 400 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        UnauthorizedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'AUTH_FAILED' },
+            message: { type: 'string', example: 'Credenciales incorrectas' },
+            statusCode: { type: 'integer', example: 401 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        InvalidOtpError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'INVALID_OTP' },
+            message: { type: 'string', example: 'Código OTP inválido o expirado' },
+            statusCode: { type: 'integer', example: 400 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ConflictError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'CONFLICT_ERROR' },
+            message: {
+              type: 'string',
+              example: 'El correo electrónico o teléfono ya están registrados',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        InvalidRefreshTokenError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'INVALID_REFRESH_TOKEN' },
+            message: {
+              type: 'string',
+              example: 'Token de refresco inválido, expirado o ya utilizado',
+            },
+            statusCode: { type: 'integer', example: 401 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        RateLimitError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'TOO_MANY_REQUESTS' },
+            message: {
+              type: 'string',
+              example:
+                'Demasiados intentos de autenticación. Por favor, intente de nuevo en 15 minutos.',
+            },
+            statusCode: { type: 'integer', example: 429 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ForbiddenError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'FORBIDDEN' },
+            message: {
+              type: 'string',
+              example: 'No tiene permisos suficientes para acceder a este recurso',
+            },
+            statusCode: { type: 'integer', example: 403 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  },
+  apis: ['./src/routes/*.js', './src/utils/swagger.js'],
+};
+
+const swaggerSpec = swaggerJSDoc(options);
+
+export const setupSwagger = (app) => {
+  app.use('/api/v1/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+};
+
+/**
+ * @openapi
+ * /auth/register:
+ *   post:
+ *     summary: Registrar un nuevo usuario
+ *     description: |
+ *       Crea una cuenta nueva con email, teléfono y contraseña.
+ *       Al finalizar, envía un código OTP de 6 dígitos por Email y SMS.
+ *       El usuario debe verificar el OTP mediante `POST /auth/verify-otp` para activar su cuenta.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegisterRequest'
+ *           example:
+ *             email: usuario@example.com
+ *             phone: "3001234567"
+ *             password: "P@ssword123!"
+ *     responses:
+ *       201:
+ *         description: Usuario creado exitosamente. OTP enviado por Email y SMS.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegisterResponse'
+ *       400:
+ *         description: Error de validación (email inválido, contraseña débil, etc.)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       409:
+ *         description: El correo electrónico o teléfono ya están registrados.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConflictError'
+ *       429:
+ *         description: Demasiados intentos. Rate limit excedido (5 req/IP/15min).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/login:
+ *   post:
+ *     summary: Iniciar sesión del usuario
+ *     description: |
+ *       Valida las credenciales del usuario. Si son correctas, genera y envía un OTP por Email/SMS
+ *       y retorna el estado `PENDING_VERIFICATION`. El usuario debe verificar el OTP con
+ *       `POST /auth/verify-otp` para obtener el JWT de acceso.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *           examples:
+ *             loginConEmail:
+ *               summary: Login con email
+ *               value:
+ *                 email: usuario@example.com
+ *                 password: "P@ssword123!"
+ *             loginConTelefono:
+ *               summary: Login con teléfono
+ *               value:
+ *                 phone: "3001234567"
+ *                 password: "P@ssword123!"
+ *     responses:
+ *       200:
+ *         description: Credenciales válidas. OTP enviado. Estado PENDING_VERIFICATION.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginPendingResponse'
+ *       400:
+ *         description: Error de validación.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Credenciales incorrectas (usuario no encontrado o contraseña inválida).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/verify-otp:
+ *   post:
+ *     summary: Verificar código OTP (2FA)
+ *     description: |
+ *       Valida el código OTP de 6 dígitos enviado durante el registro o login.
+ *       Si el OTP es válido y no ha expirado (10 minutos), devuelve un JWT de acceso
+ *       y un refresh token. El OTP se invalida automáticamente tras un uso exitoso.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyOtpRequest'
+ *           example:
+ *             email: usuario@example.com
+ *             otp_code: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP verificado exitosamente. Devuelve JWT + RefreshToken.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: OTP inválido, incorrecto o expirado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InvalidOtpError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/refresh-token:
+ *   post:
+ *     summary: Renovar JWT de acceso mediante refresh token
+ *     description: |
+ *       Valida el refresh token, lo revoca (rotación de token por seguridad) y emite un nuevo
+ *       accessToken (1 hora) + nuevo refreshToken (7 días).
+ *       El refresh token anterior queda invalidado inmediatamente tras este llamado.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenRequest'
+ *     responses:
+ *       200:
+ *         description: Nuevo JWT y RefreshToken (rotado) emitidos exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RefreshTokenResponse'
+ *       400:
+ *         description: Error de validación.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Refresh token inválido, expirado o ya revocado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InvalidRefreshTokenError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ */

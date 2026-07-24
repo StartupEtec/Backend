@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import authController from '../controllers/AuthController.js';
+import { authRateLimiter } from '../middlewares/rateLimiter.js';
+
+const router = Router();
+
+// Apply auth rate limiting to all auth endpoints
+router.use(authRateLimiter);
+
+router.post('/register', authController.register);
+router.post('/login', authController.login);
+router.post('/verify-otp', authController.verifyOtp);
+router.post('/refresh-token', authController.refreshToken);
+
+export default router;

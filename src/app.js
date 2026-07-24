@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import authRoutes from './routes/authRoutes.js';
+import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
 
@@ -25,6 +27,12 @@ app.use(
 
 app.use(express.json());
 
+// Configurar Swagger
+setupSwagger(app);
+
+// Rutas
+app.use('/api/v1/auth', authRoutes);
+
 // Endpoint de salud (Health Check)
 app.get('/api/v1/health', (req, res) => {
   res.status(200).json({
@@ -37,7 +45,7 @@ app.get('/api/v1/health', (req, res) => {
 // Middleware centralizado de manejo de errores
 app.use((err, req, res, next) => {
   const statusCode = err.message === 'Not allowed by CORS' ? 403 : 500;
-  
+
   res.status(statusCode).json({
     error: statusCode === 403 ? 'CORS_ERROR' : 'INTERNAL_SERVER_ERROR',
     message: err.message || 'Ocurrió un error interno en el servidor',

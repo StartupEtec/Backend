@@ -16,7 +16,7 @@ export async function up(knex) {
     table.boolean('verified_phone').defaultTo(false).notNullable();
     table.boolean('active').defaultTo(true).notNullable();
     table.timestamps(true, true); // created_at, updated_at
-    
+
     table.index(['created_at']);
   });
 
@@ -51,7 +51,13 @@ export async function up(knex) {
   // 4. Tabla client_profiles
   await knex.schema.createTable('client_profiles', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('user_id').references('id').inTable('users').onDelete('CASCADE').unique().notNullable();
+    table
+      .uuid('user_id')
+      .references('id')
+      .inTable('users')
+      .onDelete('CASCADE')
+      .unique()
+      .notNullable();
     table.string('full_name').notNullable();
     table.string('avatar_url');
     table.text('bio');
@@ -64,7 +70,13 @@ export async function up(knex) {
   // 5. Tabla worker_profiles
   await knex.schema.createTable('worker_profiles', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('user_id').references('id').inTable('users').onDelete('CASCADE').unique().notNullable();
+    table
+      .uuid('user_id')
+      .references('id')
+      .inTable('users')
+      .onDelete('CASCADE')
+      .unique()
+      .notNullable();
     table.string('full_name').notNullable();
     table.string('avatar_url');
     table.text('bio');
@@ -81,7 +93,12 @@ export async function up(knex) {
   // 6. Tabla certifications
   await knex.schema.createTable('certifications', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('worker_id').references('id').inTable('worker_profiles').onDelete('CASCADE').notNullable();
+    table
+      .uuid('worker_id')
+      .references('id')
+      .inTable('worker_profiles')
+      .onDelete('CASCADE')
+      .notNullable();
     table.string('document_type').notNullable(); // ID, LICENSE, CERTIFICATE, BACKGROUND_CHECK
     table.string('document_url').notNullable();
     table.string('verification_status').defaultTo('PENDING').notNullable(); // PENDING, APPROVED, REJECTED
@@ -109,10 +126,30 @@ export async function up(knex) {
   // 8. Tabla orders
   await knex.schema.createTable('orders', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('client_id').references('id').inTable('client_profiles').onDelete('RESTRICT').notNullable();
-    table.uuid('worker_id').references('id').inTable('worker_profiles').onDelete('RESTRICT').notNullable();
-    table.uuid('category_id').references('id').inTable('categories').onDelete('RESTRICT').notNullable();
-    table.uuid('location_id').references('id').inTable('locations').onDelete('RESTRICT').notNullable();
+    table
+      .uuid('client_id')
+      .references('id')
+      .inTable('client_profiles')
+      .onDelete('RESTRICT')
+      .notNullable();
+    table
+      .uuid('worker_id')
+      .references('id')
+      .inTable('worker_profiles')
+      .onDelete('RESTRICT')
+      .notNullable();
+    table
+      .uuid('category_id')
+      .references('id')
+      .inTable('categories')
+      .onDelete('RESTRICT')
+      .notNullable();
+    table
+      .uuid('location_id')
+      .references('id')
+      .inTable('locations')
+      .onDelete('RESTRICT')
+      .notNullable();
     table.string('status').defaultTo('PENDING').notNullable(); // PENDING, ACCEPTED, REJECTED, IN_PROGRESS, COMPLETED, CANCELLED
     table.timestamps(true, true);
 
@@ -174,7 +211,11 @@ export async function up(knex) {
     table.uuid('receiver_id').references('id').inTable('users').onDelete('RESTRICT').notNullable();
     table.decimal('amount', 10, 2).notNullable();
     table.string('status').defaultTo('PENDING').notNullable(); // PENDING, ESCROWED, COMPLETED, REFUNDED
-    table.uuid('payment_method_id').references('id').inTable('payment_methods').onDelete('SET NULL');
+    table
+      .uuid('payment_method_id')
+      .references('id')
+      .inTable('payment_methods')
+      .onDelete('SET NULL');
     table.timestamps(true, true);
 
     table.index(['order_id']);
