@@ -8,7 +8,7 @@ FROM base AS development
 RUN npm install
 COPY . .
 EXPOSE 3000
-CMD ["npm", "run dev"]
+CMD ["npm", "run" ,"dev"]
 
 # Stage 3: Production build and run
 FROM base AS production
