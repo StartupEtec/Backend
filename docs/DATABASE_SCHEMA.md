@@ -1,6 +1,6 @@
 # Esquema de Base de Datos - Digital On-Demand Platform
 
-Este documento detalla el esquema de base de datos relacional implementado en PostgreSQL para soportar la plataforma. Incluye geolocalización avanzada (PostGIS) y una estructura optimizada para el **Modelo de Rol Dual** y **Transacciones con Escrow**.
+Este documento detalla el esquema de base de datos relacional implementado en PostgreSQL para soportar la plataforma. Incluye geolocalización avanzada (PostGIS) y una estructura optimizada para el **Modelo de Rol Dual**, **Transacciones con Escrow** y **Autenticación con JWT y OTP en dos pasos**.
 
 ---
 
@@ -10,6 +10,7 @@ Este documento detalla el esquema de base de datos relacional implementado en Po
 - `users` (1) ── (1) `worker_profiles`
 - `users` (1) ── (N) `locations`
 - `users` (1) ── (N) `payment_methods`
+- `users` (1) ── (N) `refresh_tokens` _(autenticación JWT)_
 - `worker_profiles` (1) ── (N) `certifications`
 - `client_profiles` (1) ── (N) `orders` (como solicitante)
 - `worker_profiles` (1) ── (N) `orders` (como proveedor)
@@ -33,14 +34,37 @@ Almacena las credenciales globales del usuario. El mismo usuario puede actuar co
 | `id` | `UUID` | `PRIMARY KEY` | Identificador único autogenerado. |
 | `email` | `VARCHAR` | `UNIQUE`, `NOT NULL` | Correo electrónico principal. |
 | `phone` | `VARCHAR` | `UNIQUE`, `NOT NULL` | Teléfono de contacto. |
-| `password_hash` | `VARCHAR` | `NOT NULL` | Contraseña cifrada con bcrypt o similar. |
+| `password_hash` | `VARCHAR` | `NOT NULL` | Contraseña cifrada con bcrypt (12 rondas). |
 | `verified_email`| `BOOLEAN` | `DEFAULT false` | Indicador de email verificado. |
 | `verified_phone`| `BOOLEAN` | `DEFAULT false` | Indicador de teléfono verificado. |
 | `active` | `BOOLEAN` | `DEFAULT true` | Estado de la cuenta. |
+| `otp_code` | `VARCHAR` | `NULLABLE` | Código OTP de 6 dígitos activo. Se borra tras verificación exitosa. |
+| `otp_expires_at`| `TIMESTAMP` | `NULLABLE` | Expiración del OTP (10 minutos desde su generación). |
+| `is_verified` | `BOOLEAN` | `DEFAULT false` | `true` tras verificar el primer OTP. |
+| `current_role` | `VARCHAR` | `DEFAULT 'client'` | Rol activo en sesión: `client` o `worker`. Incluido en el payload JWT. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación del registro. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Fecha de última modificación. |
 
 *   **Índices**: B-Tree en `created_at`.
+*   **Agregado en**: Migración `20260724000000_add_auth_fields_and_refresh_tokens.js` (campos `otp_code`, `otp_expires_at`, `is_verified`, `current_role`).
+
+---
+
+### 1b. `refresh_tokens`
+Almacena los refresh tokens activos para implementar rotación segura de tokens JWT. Cada token tiene un identificador único (`jti`) que permite revocación individual sin invalidar toda la sesión.
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY` | Identificador único autogenerado. |
+| `user_id` | `UUID` | `FOREIGN KEY` (Cascade) | Usuario propietario del token. |
+| `jti` | `VARCHAR` | `UNIQUE`, `NOT NULL` | JWT ID único (UUID v4). Permite revocación individual. |
+| `expires_at` | `TIMESTAMP` | `NOT NULL` | Fecha de expiración del token (7 días). |
+| `created_at` | `TIMESTAMP` | `DEFAULT Now()` | Fecha de emisión. |
+
+*   **Índices**: B-Tree en `user_id`, `jti`.
+*   **Cascade DELETE**: Al eliminar un usuario, todos sus refresh tokens se eliminan automáticamente.
+*   **Rotación**: Cada uso de `POST /auth/refresh-token` revoca el token actual y emite uno nuevo.
+*   **Agregado en**: Migración `20260724000000_add_auth_fields_and_refresh_tokens.js`.
 
 ---
 
@@ -254,3 +278,115 @@ Mediaciones abiertas en caso de inconformidad o problemas en la entrega de un se
 | `resolution_notes` | `TEXT` | - | Notas del mediador/resolución final. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de apertura. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
+
+---
+
+## 🔐 Sistema de Autenticación (Issue #5)
+
+Documenta la implementación completa del sistema de autenticación JWT con verificación OTP en dos pasos.
+
+### Flujo de Registro
+
+```
+1. POST /api/v1/auth/register  { email, phone, password }
+        ↓  Valida formato (Joi) + verifica unicidad en BD
+        ↓  Crea usuario con password_hash (bcrypt, 10 rondas)
+        ↓  Genera OTP (6 dígitos aleatorios, expira 10 min)
+        ↓  Guarda OTP en users.otp_code / otp_expires_at
+        ↓  Envía OTP por Email y SMS (NotificationProvider)
+   ← 201 { user: { id, email, phone } }
+
+2. POST /api/v1/auth/verify-otp  { email, otp_code }
+        ↓  Valida OTP vs. users.otp_code + otp_expires_at
+        ↓  Limpia otp_code, otp_expires_at → is_verified = true
+        ↓  Genera accessToken (JWT, 1h) + refreshToken (JWT, 7d)
+        ↓  Almacena refreshToken.jti en tabla refresh_tokens
+   ← 200 { accessToken, refreshToken, user }
+```
+
+### Flujo de Login
+
+```
+1. POST /api/v1/auth/login  { email | phone, password }
+        ↓  Busca usuario por email o phone
+        ↓  Compara password con password_hash (bcrypt.compare)
+        ↓  Genera y envía OTP (mismo mecanismo que registro)
+   ← 200 { status: 'PENDING_VERIFICATION', user: { id, email } }
+
+2. POST /api/v1/auth/verify-otp  { email, otp_code }
+        ↓  (mismo flujo que en registro)
+   ← 200 { accessToken, refreshToken, user }
+```
+
+### Renovación de Token
+
+```
+POST /api/v1/auth/refresh-token  { refreshToken }
+        ↓  Verifica firma JWT (REFRESH_TOKEN_SECRET)
+        ↓  Valida jti en tabla refresh_tokens + expiración
+        ↓  Revoca token actual (DELETE de refresh_tokens por jti)
+        ↓  Genera nuevo accessToken + nuevo refreshToken
+   ← 200 { accessToken, refreshToken }
+```
+
+### Estructura de los Tokens JWT
+
+#### Access Token (exp: 1 hora)
+```json
+{
+  "user_id": "uuid-del-usuario",
+  "email": "usuario@example.com",
+  "current_role": "client",
+  "iat": 1234567890,
+  "exp": 1234571490
+}
+```
+
+#### Refresh Token (exp: 7 días)
+```json
+{
+  "user_id": "uuid-del-usuario",
+  "jti": "uuid-v4-único",
+  "iat": 1234567890,
+  "exp": 1235172690
+}
+```
+
+### Middlewares
+
+| Middleware | Archivo | Descripción |
+|---|---|---|
+| `authenticateToken` | `src/middlewares/authMiddleware.js` | Valida JWT en header `Authorization: Bearer <token>`. Inyecta `req.user` con el payload decodificado. |
+| `requireRole(roles)` | `src/middlewares/authMiddleware.js` | Verifica que `req.user.current_role` esté en la lista de roles permitidos. Los roles `worker` y `provider` son equivalentes. |
+| `authRateLimiter` | `src/middlewares/rateLimiter.js` | Limita a **5 requests por IP cada 15 minutos** en todos los endpoints `/auth/*`. Responde `429` al superarse. |
+
+### Validación de contraseña
+
+```
+Regex: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[símbolos]).{8,}$/
+
+✅ Válida:   P@ssword123!
+❌ Inválida: password123   (sin mayúscula ni símbolo)
+❌ Inválida: Pass1!        (menos de 8 caracteres)
+```
+
+### Servicios implementados
+
+| Servicio | Archivo | Responsabilidad |
+|---|---|---|
+| `AuthService` | `src/services/AuthService.js` | Generación/verificación de JWT access tokens y refresh tokens con rotación. |
+| `OtpService` | `src/services/OtpService.js` | Generación, almacenamiento y validación de OTP. Delega el envío a `NotificationProvider`. |
+| `NotificationProvider` | `src/services/OtpService.js` | Abstracción de envío de notificaciones. Simulación actual; preparada para Twilio (SMS) y SendGrid (Email). |
+
+### Documentación de la API
+
+Swagger UI disponible en: `http://localhost:3000/api/v1/api-docs`
+
+Documenta los 4 endpoints con esquemas de request, respuestas exitosas y de error:
+
+| Endpoint | Códigos de respuesta |
+|---|---|
+| `POST /auth/register` | `201`, `400` (validación), `409` (conflicto), `429` (rate limit) |
+| `POST /auth/login` | `200`, `400`, `401` (credenciales), `429` |
+| `POST /auth/verify-otp` | `200`, `400` (OTP inválido/expirado), `429` |
+| `POST /auth/refresh-token` | `200`, `400`, `401` (token inválido), `429` |

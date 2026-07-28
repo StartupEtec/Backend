@@ -25,7 +25,8 @@ export async function seed(knex) {
     {
       id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f003',
       name: 'Electricidad',
-      description: 'Instalaciones eléctricas, reparaciones de cortocircuitos, llaves térmicas y cableado.',
+      description:
+        'Instalaciones eléctricas, reparaciones de cortocircuitos, llaves térmicas y cableado.',
       icon_url: 'https://example.com/icons/electricity.svg',
       active: true,
     },
@@ -53,7 +54,8 @@ export async function seed(knex) {
     {
       id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f007',
       name: 'Climatización',
-      description: 'Instalación, mantenimiento y service de aires acondicionados y sistemas de calefacción.',
+      description:
+        'Instalación, mantenimiento y service de aires acondicionados y sistemas de calefacción.',
       icon_url: 'https://example.com/icons/hvac.svg',
       active: true,
     },
@@ -67,7 +69,8 @@ export async function seed(knex) {
     {
       id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f009',
       name: 'Soporte Técnico',
-      description: 'Reparación de computadoras, instalación de software, redes hogareñas y configuración de routers.',
+      description:
+        'Reparación de computadoras, instalación de software, redes hogareñas y configuración de routers.',
       icon_url: 'https://example.com/icons/tech-support.svg',
       active: true,
     },
