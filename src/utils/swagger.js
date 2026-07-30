@@ -122,6 +122,58 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             },
           },
         },
+        ForgotPasswordRequest: {
+          type: 'object',
+          properties: {
+            email: { type: 'string', format: 'email', example: 'usuario@example.com' },
+            phone: { type: 'string', example: '3001234567' },
+          },
+          description: 'Debe proporcionarse al menos email o phone',
+        },
+        VerifyResetCodeRequest: {
+          type: 'object',
+          required: ['reset_code'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'usuario@example.com' },
+            phone: { type: 'string', example: '3001234567' },
+            reset_code: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 6,
+              example: '123456',
+              description: 'Código de recuperación de 6 dígitos',
+            },
+          },
+          description: 'Debe proporcionarse al menos email o phone junto con el código',
+        },
+        ResetPasswordRequest: {
+          type: 'object',
+          required: ['token', 'password'],
+          properties: {
+            token: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUz...',
+              description: 'Token temporal obtenido de /auth/verify-reset-code',
+            },
+            password: {
+              type: 'string',
+              format: 'password',
+              example: 'NewSecureP@ss1!',
+              description: 'Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo',
+            },
+          },
+        },
+        TempTokenResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Código verificado correctamente.' },
+            token: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUz...',
+              description: 'Token temporal de restablecimiento. Válido por 10 minutos.',
+            },
+          },
+        },
 
         // ── Success response schemas ──────────────────────────────────────
         RegisterResponse: {
@@ -455,6 +507,121 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/InvalidRefreshTokenError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Solicitar código de recuperación de contraseña
+ *     description: |
+ *       Acepta email o phone y genera un código de recuperación de 6 dígitos válido por 30 minutos.
+ *       Envía el código de forma simulada por SMS/Email (revisar logs en desarrollo).
+ *       Protegido por rate limiting (5 req/IP/15min).
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ForgotPasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Código de recuperación enviado exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Código de recuperación enviado correctamente.
+ *       400:
+ *         description: Error de validación.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       404:
+ *         description: Usuario no encontrado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/verify-reset-code:
+ *   post:
+ *     summary: Validar código de recuperación
+ *     description: |
+ *       Valida el código de recuperación enviado. Si es correcto, retorna un token temporal de JWT
+ *       válido por 10 minutos. El código se limpia tras la validación.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyResetCodeRequest'
+ *     responses:
+ *       200:
+ *         description: Código verificado correctamente. Retorna token temporal.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TempTokenResponse'
+ *       400:
+ *         description: Código de recuperación inválido o expirado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       429:
+ *         description: Rate limit excedido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/reset-password:
+ *   post:
+ *     summary: Restablecer contraseña con token temporal
+ *     description: |
+ *       Acepta el token temporal de JWT (obtenido de /auth/verify-reset-code) y la nueva contraseña.
+ *       Verifica la firma y validez del token contra el hash de contraseña actual (permitiendo un solo uso).
+ *       Actualiza la base de datos y audita la acción.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResetPasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Contraseña restablecida correctamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Contraseña restablecida correctamente.
+ *       400:
+ *         description: Token temporal inválido/expirado o error de validación de contraseña.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
  *       429:
  *         description: Rate limit excedido.
  *         content:
