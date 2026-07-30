@@ -257,6 +257,175 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           },
         },
 
+        // ── Worker Profile schemas ────────────────────────────────────────
+        WorkerProfileResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            full_name: { type: 'string', example: 'Carlos García' },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              example: 'Técnico especialista en reparaciones',
+              nullable: true,
+            },
+            category_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-...',
+              nullable: true,
+            },
+            category_name: { type: 'string', example: 'Plumbing', nullable: true },
+            hourly_rate: { type: 'number', example: 35.5 },
+            availability_status: {
+              type: 'string',
+              example: 'AVAILABLE',
+              enum: ['AVAILABLE', 'BUSY', 'OFFLINE'],
+            },
+            certification_status: {
+              type: 'string',
+              example: 'PENDING',
+              enum: ['PENDING', 'APPROVED', 'REJECTED'],
+            },
+            average_rating: {
+              type: 'string',
+              example: '4.5',
+              nullable: true,
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateWorkerProfileRequest: {
+          type: 'object',
+          required: ['full_name', 'category_id', 'hourly_rate'],
+          properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Carlos García',
+              description: 'Nombre completo del trabajador',
+            },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              description: 'URL del avatar (JPG/PNG)',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              maxLength: 500,
+              example: 'Técnico especialista en reparaciones',
+              description: 'Biografía del trabajador (máx. 500 caracteres)',
+              nullable: true,
+            },
+            category_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-...',
+              description: 'ID de la categoría de servicio',
+            },
+            hourly_rate: {
+              type: 'number',
+              example: 35.5,
+              description: 'Tarifa por hora (valor positivo)',
+            },
+            availability_status: {
+              type: 'string',
+              example: 'AVAILABLE',
+              enum: ['AVAILABLE', 'BUSY', 'OFFLINE'],
+              description: 'Estado de disponibilidad (por defecto AVAILABLE)',
+            },
+          },
+        },
+        UpdateWorkerProfileRequest: {
+          type: 'object',
+          properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Carlos García',
+              description: 'Nombre completo del trabajador',
+            },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              description: 'URL del avatar (JPG/PNG)',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              maxLength: 500,
+              example: 'Técnico especialista en reparaciones',
+              description: 'Biografía del trabajador (máx. 500 caracteres)',
+              nullable: true,
+            },
+            category_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-...',
+              description: 'ID de la categoría de servicio',
+            },
+            hourly_rate: {
+              type: 'number',
+              example: 40.0,
+              description: 'Tarifa por hora (valor positivo)',
+            },
+            availability_status: {
+              type: 'string',
+              example: 'BUSY',
+              enum: ['AVAILABLE', 'BUSY', 'OFFLINE'],
+              description: 'Estado de disponibilidad',
+            },
+          },
+          description: 'Todos los campos son opcionales en PATCH',
+        },
+        CreateWorkerProfileResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Perfil de trabajador creado correctamente' },
+            profile: { $ref: '#/components/schemas/WorkerProfileResponse' },
+          },
+        },
+        UpdateWorkerProfileResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Perfil de trabajador actualizado correctamente' },
+            profile: { $ref: '#/components/schemas/WorkerProfileResponse' },
+          },
+        },
+        WorkerProfileExistsError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'WORKER_PROFILE_EXISTS' },
+            message: {
+              type: 'string',
+              example: 'El perfil de trabajador ya existe. Usa PATCH para actualizarlo.',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        WorkerProfileNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'WORKER_PROFILE_NOT_FOUND' },
+            message: {
+              type: 'string',
+              example: 'Perfil de trabajador no encontrado. Crea uno con POST.',
+            },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+
         UpdateProfileRequest: {
           type: 'object',
           required: ['full_name'],
@@ -1179,4 +1348,168 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ClientProfileNotFoundError'
+ *
+ * /users/{id}/worker-profile:
+ *   get:
+ *     summary: Obtener perfil de trabajador
+ *     description: |
+ *       Retorna el perfil de trabajador del usuario autenticado con rol worker.
+ *       Solo el propio usuario puede acceder a su perfil (validación por JWT y rol worker).
+ *       Incluye nombre, categoría, tarifa, biografía, rating promedio y disponibilidad.
+ *       Si no existe, retorna 404 con indicación de usar POST.
+ *     tags: [Trabajadores]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     responses:
+ *       200:
+ *         description: Perfil de trabajador
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WorkerProfileResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Perfil de trabajador no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WorkerProfileNotFoundError'
+ *   post:
+ *     summary: Crear perfil de trabajador
+ *     description: |
+ *       Crea un nuevo perfil de trabajador para el usuario autenticado con rol worker.
+ *       Solo el propio usuario puede crear su perfil (validación por JWT y rol worker).
+ *       Si el perfil ya existe, retorna 409.
+ *     tags: [Trabajadores]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateWorkerProfileRequest'
+ *           example:
+ *             full_name: "Carlos García"
+ *             avatar_url: "https://example.com/avatar.jpg"
+ *             bio: "Técnico especialista en reparaciones"
+ *             category_id: "b2c3d4e5-..."
+ *             hourly_rate: 35.5
+ *             availability_status: "AVAILABLE"
+ *     responses:
+ *       201:
+ *         description: Perfil de trabajador creado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateWorkerProfileResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       409:
+ *         description: El perfil de trabajador ya existe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WorkerProfileExistsError'
+ *   patch:
+ *     summary: Actualizar perfil de trabajador
+ *     description: |
+ *       Actualiza los datos del perfil de trabajador del usuario autenticado.
+ *       Solo el propio usuario puede actualizar su perfil (validación por JWT y rol worker).
+ *       Todos los campos son opcionales. Si el perfil no existe, retorna 404.
+ *     tags: [Trabajadores]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateWorkerProfileRequest'
+ *           example:
+ *             hourly_rate: 40.0
+ *             availability_status: "BUSY"
+ *             bio: "Nueva biografía actualizada"
+ *     responses:
+ *       200:
+ *         description: Perfil de trabajador actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateWorkerProfileResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Perfil de trabajador no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WorkerProfileNotFoundError'
  */

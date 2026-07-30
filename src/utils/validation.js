@@ -146,3 +146,61 @@ export const updateProfileSchema = Joi.object({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
 });
+
+export const createWorkerProfileSchema = Joi.object({
+  full_name: Joi.string().min(1).max(100).required().messages({
+    'string.empty': 'El nombre no puede estar vacío',
+    'string.min': 'El nombre debe tener al menos 1 caracter',
+    'string.max': 'El nombre no debe exceder los 100 caracteres',
+    'any.required': 'El nombre es requerido',
+  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
+    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
+  }),
+  bio: Joi.string().max(500).allow('', null).messages({
+    'string.max': 'La biografía no debe exceder los 500 caracteres',
+  }),
+  category_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'La categoría debe ser un UUID válido',
+    'any.required': 'La categoría es requerida',
+  }),
+  hourly_rate: Joi.number().positive().precision(2).required().messages({
+    'number.base': 'La tarifa por hora debe ser un número',
+    'number.positive': 'La tarifa por hora debe ser un valor positivo',
+    'any.required': 'La tarifa por hora es requerida',
+  }),
+  availability_status: Joi.string()
+    .valid('AVAILABLE', 'BUSY', 'OFFLINE')
+    .default('AVAILABLE')
+    .messages({
+      'any.only': 'El estado de disponibilidad debe ser AVAILABLE, BUSY u OFFLINE',
+    }),
+});
+
+export const updateWorkerProfileSchema = Joi.object({
+  full_name: Joi.string().min(1).max(100).messages({
+    'string.empty': 'El nombre no puede estar vacío',
+    'string.min': 'El nombre debe tener al menos 1 caracter',
+    'string.max': 'El nombre no debe exceder los 100 caracteres',
+  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
+    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
+  }),
+  bio: Joi.string().max(500).allow('', null).messages({
+    'string.max': 'La biografía no debe exceder los 500 caracteres',
+  }),
+  category_id: Joi.string().pattern(uuidPattern).messages({
+    'string.pattern.base': 'La categoría debe ser un UUID válido',
+  }),
+  hourly_rate: Joi.number().positive().precision(2).messages({
+    'number.base': 'La tarifa por hora debe ser un número',
+    'number.positive': 'La tarifa por hora debe ser un valor positivo',
+  }),
+  availability_status: Joi.string().valid('AVAILABLE', 'BUSY', 'OFFLINE').messages({
+    'any.only': 'El estado de disponibilidad debe ser AVAILABLE, BUSY u OFFLINE',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
