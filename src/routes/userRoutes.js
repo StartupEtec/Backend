@@ -31,6 +31,9 @@ router.patch(
   workerProfileController.updateProfile,
 );
 
+// Ruta de cambio de rol (accesible por cualquier usuario autenticado con ambos perfiles)
+router.post('/:id/switch-role', authenticateToken, userController.switchRole);
+
 // Rutas genéricas de usuario
 router.get('/me', authenticateToken, userController.getMyProfile);
 router.get('/:id', userController.getUserById);

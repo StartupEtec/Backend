@@ -426,6 +426,81 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           },
         },
 
+        // ── Switch Role schemas ───────────────────────────────────────────
+        SwitchRoleRequest: {
+          type: 'object',
+          required: ['role'],
+          properties: {
+            role: {
+              type: 'string',
+              example: 'worker',
+              enum: ['client', 'worker'],
+              description: 'Rol al que se desea cambiar (client o worker)',
+            },
+          },
+        },
+        SwitchRoleResponse: {
+          type: 'object',
+          properties: {
+            new_role: {
+              type: 'string',
+              example: 'worker',
+              enum: ['client', 'worker'],
+              description: 'Rol activo después del cambio',
+            },
+            previous_role: {
+              type: 'string',
+              example: 'client',
+              enum: ['client', 'worker'],
+              nullable: true,
+              description: 'Rol anterior antes del cambio',
+            },
+            accessToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUzI1NiIs...',
+              description: 'Nuevo JWT con el rol actualizado. Expira en 1 hora.',
+            },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        SwitchRoleSameRoleError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'SAME_ROLE' },
+            message: {
+              type: 'string',
+              example: 'El usuario ya tiene el rol worker',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        SwitchRoleMissingProfileError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'MISSING_WORKER_PROFILE' },
+            message: {
+              type: 'string',
+              example: 'Debes tener un perfil de trabajador para cambiar de rol',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        SwitchRoleNotCertifiedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'WORKER_NOT_CERTIFIED' },
+            message: {
+              type: 'string',
+              example:
+                'Tu perfil de trabajador debe tener certificación aprobada para activar el rol',
+            },
+            statusCode: { type: 'integer', example: 403 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+
         UpdateProfileRequest: {
           type: 'object',
           required: ['full_name'],
@@ -1512,4 +1587,71 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/WorkerProfileNotFoundError'
+ *
+ * /users/{id}/switch-role:
+ *   post:
+ *     summary: Cambiar rol activo del usuario (dual-role)
+ *     description: |
+ *       Permite a un usuario con rol dual alternar entre cliente y trabajador.
+ *       Valida que ambos perfiles (client_profiles y worker_profiles) existan.
+ *       Si se cambia a worker, verifica que la certificación esté aprobada.
+ *       Re-emite un nuevo JWT con el rol actualizado.
+ *     tags: [Usuarios]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SwitchRoleRequest'
+ *           example:
+ *             role: "worker"
+ *     responses:
+ *       200:
+ *         description: Rol cambiado exitosamente. Nuevo JWT emitido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SwitchRoleResponse'
+ *       400:
+ *         description: Error de validación (rol inválido)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: Certificación no aprobada o acceso a otro usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SwitchRoleNotCertifiedError'
+ *       404:
+ *         description: Usuario no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *       409:
+ *         description: Mismo rol actual o perfil faltante
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/SwitchRoleSameRoleError'
+ *                 - $ref: '#/components/schemas/SwitchRoleMissingProfileError'
  */

@@ -132,6 +132,59 @@ class UserService {
       updated_at: updated.updated_at,
     };
   }
+
+  async switchRole(userId, newRole) {
+    const user = await db('users').where({ id: userId }).first();
+    if (!user) return { error: 'USER_NOT_FOUND', message: 'Usuario no encontrado' };
+
+    if (user.current_role === newRole) {
+      return {
+        error: 'SAME_ROLE',
+        message: `El usuario ya tiene el rol ${newRole}`,
+      };
+    }
+
+    const clientProfile = await db('client_profiles').where({ user_id: userId }).first();
+    if (!clientProfile) {
+      return {
+        error: 'MISSING_CLIENT_PROFILE',
+        message: 'Debes tener un perfil de cliente para cambiar de rol',
+      };
+    }
+
+    const workerProfile = await db('worker_profiles').where({ user_id: userId }).first();
+    if (!workerProfile) {
+      return {
+        error: 'MISSING_WORKER_PROFILE',
+        message: 'Debes tener un perfil de trabajador para cambiar de rol',
+      };
+    }
+
+    if (newRole === 'worker' && workerProfile.certification_status !== 'APPROVED') {
+      return {
+        error: 'WORKER_NOT_CERTIFIED',
+        message: 'Tu perfil de trabajador debe tener certificación aprobada para activar el rol',
+      };
+    }
+
+    const previousRole = user.current_role;
+
+    await db('users').where({ id: userId }).update({
+      current_role: newRole,
+      last_role: previousRole,
+    });
+
+    const updatedUser = await db('users').where({ id: userId }).first();
+
+    logger.info('[AUDITORIA] Cambio de rol', {
+      user_id: userId,
+      previous_role: previousRole,
+      new_role: newRole,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { user: updatedUser, previousRole };
+  }
 }
 
 export default new UserService();
