@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -32,6 +33,7 @@ setupSwagger(app);
 
 // Rutas
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
 
 // Endpoint de salud (Health Check)
 app.get('/api/v1/health', (req, res) => {

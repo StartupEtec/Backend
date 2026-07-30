@@ -47,6 +47,126 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
         },
       },
       schemas: {
+        // ── User Profile schemas ──────────────────────────────────────────
+        PublicProfileResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            full_name: { type: 'string', example: 'Juan Pérez' },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              example: 'Técnico especialista en reparaciones',
+              nullable: true,
+            },
+            average_rating: {
+              type: 'string',
+              example: '4.5',
+              nullable: true,
+              description: 'Rating promedio del usuario',
+            },
+            role: { type: 'string', example: 'worker', enum: ['worker', 'client'] },
+          },
+        },
+        PrivateProfileResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            email: { type: 'string', format: 'email', example: 'usuario@example.com' },
+            phone: { type: 'string', example: '3001234567' },
+            current_role: { type: 'string', example: 'client' },
+            is_verified: { type: 'boolean', example: true },
+            verified_email: { type: 'boolean', example: false },
+            verified_phone: { type: 'boolean', example: false },
+            active: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            average_rating: { type: 'string', example: '4.5', nullable: true },
+            profile: {
+              type: 'object',
+              properties: {
+                client: {
+                  type: 'object',
+                  nullable: true,
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    full_name: { type: 'string' },
+                    avatar_url: { type: 'string', nullable: true },
+                    bio: { type: 'string', nullable: true },
+                  },
+                },
+                worker: {
+                  type: 'object',
+                  nullable: true,
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    full_name: { type: 'string' },
+                    avatar_url: { type: 'string', nullable: true },
+                    bio: { type: 'string', nullable: true },
+                    hourly_rate: { type: 'number', example: 25.5 },
+                    availability_status: { type: 'string', example: 'AVAILABLE' },
+                    certification_status: { type: 'string', example: 'PENDING' },
+                  },
+                },
+              },
+            },
+          },
+        },
+        UpdateProfileRequest: {
+          type: 'object',
+          required: ['full_name'],
+          properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Juan Pérez',
+              description: 'Nombre completo del usuario',
+            },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              description: 'URL del avatar (JPG/PNG)',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              maxLength: 500,
+              example: 'Técnico especialista en reparaciones',
+              description: 'Biografía del usuario (máx. 500 caracteres)',
+              nullable: true,
+            },
+          },
+        },
+        UpdateProfileResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Perfil actualizado correctamente' },
+            profile: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                full_name: { type: 'string' },
+                avatar_url: { type: 'string', nullable: true },
+                bio: { type: 'string', nullable: true },
+                updated_at: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+        },
+        NotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'USER_NOT_FOUND' },
+            message: { type: 'string', example: 'Usuario no encontrado' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
         // ── Request schemas ──────────────────────────────────────────────
         RegisterRequest: {
           type: 'object',
@@ -628,4 +748,127 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *
+ * /users/{id}:
+ *   get:
+ *     summary: Obtener perfil público de un usuario
+ *     description: |
+ *       Retorna la información pública del perfil de un usuario (nombre, avatar, bio, rating promedio).
+ *       No requiere autenticación.
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     responses:
+ *       200:
+ *         description: Perfil público del usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PublicProfileResponse'
+ *       404:
+ *         description: Usuario no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *   patch:
+ *     summary: Actualizar perfil de usuario
+ *     description: |
+ *       Actualiza el nombre, avatar y/o biografía del perfil del usuario autenticado.
+ *       Solo el propio usuario puede modificar su perfil (validación por JWT).
+ *       Los cambios se registran en el log de auditoría.
+ *     tags: [Usuarios]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario (debe coincidir con el token)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateProfileRequest'
+ *           example:
+ *             full_name: "Juan Pérez"
+ *             avatar_url: "https://example.com/avatar.jpg"
+ *             bio: "Técnico especialista en reparaciones"
+ *     responses:
+ *       200:
+ *         description: Perfil actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateProfileResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para editar este perfil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Usuario no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *
+ * /users/me:
+ *   get:
+ *     summary: Obtener perfil privado del usuario autenticado
+ *     description: |
+ *       Retorna la información completa del usuario autenticado, incluyendo datos privados
+ *       (email, teléfono) y ambos perfiles (cliente y trabajador).
+ *       Requiere token JWT.
+ *     tags: [Usuarios]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Perfil completo del usuario autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PrivateProfileResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: Token inválido o expirado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Usuario no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
  */
