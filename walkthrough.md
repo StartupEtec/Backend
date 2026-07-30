@@ -37,6 +37,56 @@ A continuación se detalla la lista de archivos creados y modificados:
 
 ---
 
+## Issue #8: Endpoints de Perfil de Cliente (GET, POST, PATCH)
+
+Se ha completado el desarrollo de los endpoints específicos para gestionar el perfil de cliente (`client_profiles`), con creación, consulta y actualización de datos incluyendo ubicación por defecto y preferencias.
+
+### Cambios Realizados
+
+Archivos creados:
+
+- [ClientProfileService.js](file:///home/thiagox/Documentos/Backend/src/services/ClientProfileService.js): Servicio con 3 métodos:
+  - `getProfile(userId)`: retorna el perfil de cliente completo
+  - `createProfile(userId, data)`: crea un nuevo perfil (retorna null si ya existe)
+  - `updateProfile(userId, data)`: actualiza campos específicos del perfil (retorna null si no existe)
+
+- [ClientProfileController.js](file:///home/thiagox/Documentos/Backend/src/controllers/ClientProfileController.js): Controlador con 3 métodos:
+  - `getProfile`: maneja `GET /users/:id/client-profile`
+  - `createProfile`: maneja `POST /users/:id/client-profile`
+  - `updateProfile`: maneja `PATCH /users/:id/client-profile`
+
+- [20260730000000_add_client_preferences.js](file:///home/thiagox/Documentos/Backend/src/database/migrations/20260730000000_add_client_preferences.js): Migración que agrega columna `preferences` (JSONB) a `client_profiles`
+
+- [clientProfile.test.js](file:///home/thiagox/Documentos/Backend/tests/clientProfile.test.js): 20 tests (servicio, validación Joi, controlador)
+
+Archivos modificados:
+
+- [userRoutes.js](file:///home/thiagox/Documentos/Backend/src/routes/userRoutes.js): Agrega rutas `/:id/client-profile` antes de las rutas genéricas `/:id` para evitar conflictos
+- [validation.js](file:///home/thiagox/Documentos/Backend/src/utils/validation.js): Agrega `createClientProfileSchema` y `updateClientProfileSchema`
+- [swagger.js](file:///home/thiagox/Documentos/Backend/src/utils/swagger.js): Documenta los 3 endpoints con schemas de request/response
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id/client-profile` | JWT | Obtener perfil de cliente |
+| `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente (requiere `full_name`) |
+| `PATCH` | `/users/:id/client-profile` | JWT | Actualizar perfil de cliente (todos los campos opcionales) |
+
+### Validaciones
+- `full_name`: obligatorio en POST, opcional en PATCH, 1-100 caracteres
+- `avatar_url`: opcional, solo URL jpg/jpeg/png
+- `bio`: opcional, máximo 500 caracteres
+- `default_location_id`: opcional, debe ser UUID válido
+- `preferences`: opcional, objeto JSON libre
+- Autorización: `403` si el `user_id` del JWT no coincide con `:id`
+
+### Base de Datos
+- Nueva columna `preferences` (JSONB) en `client_profiles` para almacenar preferencias
+- Ejecutar migración: `npx knex migrate:latest`
+
+---
+
 ## Issue #7: Endpoints de Perfil de Usuario (GET, PATCH)
 
 Se ha completado el desarrollo de los endpoints para obtener y actualizar datos de perfil de usuario, siguiendo la arquitectura en capas y aplicando autorización, validación y auditoría.

@@ -85,6 +85,52 @@ export const resetPasswordSchema = Joi.object({
 });
 
 const imageUrlPattern = /\.(jpg|jpeg|png)(\?.*)?$/i;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const createClientProfileSchema = Joi.object({
+  full_name: Joi.string().min(1).max(100).required().messages({
+    'string.empty': 'El nombre no puede estar vacío',
+    'string.min': 'El nombre debe tener al menos 1 caracter',
+    'string.max': 'El nombre no debe exceder los 100 caracteres',
+    'any.required': 'El nombre es requerido',
+  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
+    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
+  }),
+  bio: Joi.string().max(500).allow('', null).messages({
+    'string.max': 'La biografía no debe exceder los 500 caracteres',
+  }),
+  default_location_id: Joi.string().pattern(uuidPattern).allow(null).messages({
+    'string.pattern.base': 'La ubicación por defecto debe ser un UUID válido',
+  }),
+  preferences: Joi.object().pattern(Joi.string(), Joi.any()).allow(null).messages({
+    'object.base': 'Las preferencias deben ser un objeto JSON válido',
+  }),
+});
+
+export const updateClientProfileSchema = Joi.object({
+  full_name: Joi.string().min(1).max(100).messages({
+    'string.empty': 'El nombre no puede estar vacío',
+    'string.min': 'El nombre debe tener al menos 1 caracter',
+    'string.max': 'El nombre no debe exceder los 100 caracteres',
+  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
+    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
+  }),
+  bio: Joi.string().max(500).allow('', null).messages({
+    'string.max': 'La biografía no debe exceder los 500 caracteres',
+  }),
+  default_location_id: Joi.string().pattern(uuidPattern).allow(null).messages({
+    'string.pattern.base': 'La ubicación por defecto debe ser un UUID válido',
+  }),
+  preferences: Joi.object().pattern(Joi.string(), Joi.any()).allow(null).messages({
+    'object.base': 'Las preferencias deben ser un objeto JSON válido',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
 
 export const updateProfileSchema = Joi.object({
   full_name: Joi.string().min(1).max(100).required().messages({

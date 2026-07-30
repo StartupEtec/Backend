@@ -116,6 +116,147 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             },
           },
         },
+        // ── Client Profile schemas ─────────────────────────────────────────
+        ClientProfileResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            full_name: { type: 'string', example: 'Juan Pérez' },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              nullable: true,
+            },
+            bio: { type: 'string', example: 'Cliente desde 2024', nullable: true },
+            default_location_id: { type: 'string', format: 'uuid', nullable: true },
+            preferences: {
+              type: 'object',
+              nullable: true,
+              example: { notifications: true, language: 'es', theme: 'light' },
+              description: 'Preferencias del cliente en JSON',
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateClientProfileRequest: {
+          type: 'object',
+          required: ['full_name'],
+          properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Juan Pérez',
+              description: 'Nombre completo del cliente',
+            },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              description: 'URL del avatar (JPG/PNG)',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              maxLength: 500,
+              example: 'Cliente desde 2024',
+              description: 'Biografía del cliente (máx. 500 caracteres)',
+              nullable: true,
+            },
+            default_location_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a1b2c3d4-...',
+              description: 'ID de la ubicación por defecto',
+              nullable: true,
+            },
+            preferences: {
+              type: 'object',
+              nullable: true,
+              example: { notifications: true, language: 'es', theme: 'light' },
+              description: 'Preferencias del cliente en formato JSON',
+            },
+          },
+        },
+        UpdateClientProfileRequest: {
+          type: 'object',
+          properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Juan Pérez',
+              description: 'Nombre completo del cliente',
+            },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              description: 'URL del avatar (JPG/PNG)',
+              nullable: true,
+            },
+            bio: {
+              type: 'string',
+              maxLength: 500,
+              example: 'Cliente desde 2024',
+              description: 'Biografía del cliente (máx. 500 caracteres)',
+              nullable: true,
+            },
+            default_location_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a1b2c3d4-...',
+              description: 'ID de la ubicación por defecto',
+              nullable: true,
+            },
+            preferences: {
+              type: 'object',
+              nullable: true,
+              example: { notifications: true, language: 'es', theme: 'light' },
+              description: 'Preferencias del cliente en formato JSON',
+            },
+          },
+          description: 'Todos los campos son opcionales en PATCH',
+        },
+        CreateClientProfileResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Perfil de cliente creado correctamente' },
+            profile: { $ref: '#/components/schemas/ClientProfileResponse' },
+          },
+        },
+        UpdateClientProfileResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Perfil de cliente actualizado correctamente' },
+            profile: { $ref: '#/components/schemas/ClientProfileResponse' },
+          },
+        },
+        ClientProfileExistsError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'CLIENT_PROFILE_EXISTS' },
+            message: {
+              type: 'string',
+              example: 'El perfil de cliente ya existe. Usa PATCH para actualizarlo.',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ClientProfileNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'CLIENT_PROFILE_NOT_FOUND' },
+            message: {
+              type: 'string',
+              example: 'Perfil de cliente no encontrado. Crea uno con POST.',
+            },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+
         UpdateProfileRequest: {
           type: 'object',
           required: ['full_name'],
@@ -871,4 +1012,171 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotFoundError'
+ *
+ * /users/{id}/client-profile:
+ *   get:
+ *     summary: Obtener perfil de cliente
+ *     description: |
+ *       Retorna el perfil de cliente del usuario autenticado.
+ *       Solo el propio usuario puede acceder a su perfil (validación por JWT).
+ *       Si no existe, retorna 404 con indicación de usar POST.
+ *     tags: [Clientes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     responses:
+ *       200:
+ *         description: Perfil de cliente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ClientProfileResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para acceder a este perfil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Perfil de cliente no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ClientProfileNotFoundError'
+ *   post:
+ *     summary: Crear perfil de cliente
+ *     description: |
+ *       Crea un nuevo perfil de cliente para el usuario autenticado.
+ *       Solo el propio usuario puede crear su perfil (validación por JWT).
+ *       Si el perfil ya existe, retorna 409.
+ *     tags: [Clientes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateClientProfileRequest'
+ *           example:
+ *             full_name: "Juan Pérez"
+ *             avatar_url: "https://example.com/avatar.jpg"
+ *             bio: "Cliente desde 2024"
+ *             default_location_id: "a1b2c3d4-..."
+ *             preferences:
+ *               notifications: true
+ *               language: "es"
+ *               theme: "light"
+ *     responses:
+ *       201:
+ *         description: Perfil de cliente creado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateClientProfileResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para crear este perfil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       409:
+ *         description: El perfil de cliente ya existe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ClientProfileExistsError'
+ *   patch:
+ *     summary: Actualizar perfil de cliente
+ *     description: |
+ *       Actualiza los datos del perfil de cliente del usuario autenticado.
+ *       Solo el propio usuario puede actualizar su perfil (validación por JWT).
+ *       Todos los campos son opcionales. Si el perfil no existe, retorna 404.
+ *     tags: [Clientes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateClientProfileRequest'
+ *           example:
+ *             full_name: "Juan Pérez Actualizado"
+ *             bio: "Nueva biografía"
+ *             preferences:
+ *               notifications: false
+ *               language: "en"
+ *     responses:
+ *       200:
+ *         description: Perfil de cliente actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateClientProfileResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para actualizar este perfil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Perfil de cliente no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ClientProfileNotFoundError'
  */
