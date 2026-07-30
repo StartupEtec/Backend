@@ -113,6 +113,7 @@ Información detallada para usuarios cuando actúan en rol de **Cliente**.
 | `avatar_url` | `VARCHAR` | - | Enlace a la imagen de avatar. |
 | `bio` | `TEXT` | - | Presentación breve del cliente. |
 | `default_location_id` | `UUID` | `FOREIGN KEY` (Set Null) | Ubicación predeterminada para órdenes. |
+| `preferences` | `JSONB` | - | Preferencias del cliente (notificaciones, idioma, tema, etc.). Agregado en migración `20260730000000_add_client_preferences.js`. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
 
@@ -379,6 +380,47 @@ Regex: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[símbolos]).{8,}$/
 | `NotificationProvider` | `src/services/OtpService.js` | Abstracción de envío de notificaciones. Simulación actual; preparada para Twilio (SMS) y SendGrid (Email). |
 
 ---
+
+## 🙋 Sistema de Perfiles de Cliente (Issue #8)
+
+Implementa endpoints específicos para gestionar el perfil de cliente (`client_profiles`), incluyendo ubicación por defecto y preferencias en JSON.
+
+### Flujo de Gestión de Perfil de Cliente
+
+```
+GET /users/:id/client-profile  (requiere JWT, solo propio usuario)
+        ↓  Valida autorización (req.user.user_id === req.params.id)
+        ↓  Busca en client_profiles por user_id
+   ← 200 { id, user_id, full_name, avatar_url, bio, default_location_id, preferences, created_at, updated_at }
+   ← 404 { error: 'CLIENT_PROFILE_NOT_FOUND' }  (si no existe)
+
+POST /users/:id/client-profile  (requiere JWT, solo propio usuario)
+        ↓  Valida autorización + body (Joi)
+        ↓  Verifica que no exista perfil previo
+        ↓  Inserta fila en client_profiles
+   ← 201 { message, profile }
+   ← 409 { error: 'CLIENT_PROFILE_EXISTS' }  (si ya existe)
+
+PATCH /users/:id/client-profile  (requiere JWT, solo propio usuario)
+        ↓  Valida autorización + body (todos los campos opcionales)
+        ↓  Actualiza solo los campos enviados
+        ↓  Log de auditoría
+   ← 200 { message, profile }
+   ← 404 { error: 'CLIENT_PROFILE_NOT_FOUND' }  (si no existe)
+```
+
+### Validaciones
+- `full_name`: obligatorio en POST, opcional en PATCH, 1-100 caracteres
+- `avatar_url`: opcional, solo URL jpg/jpeg/png
+- `bio`: opcional, máximo 500 caracteres
+- `default_location_id`: opcional, debe ser UUID válido
+- `preferences`: opcional, objeto JSON
+
+### Servicios implementados
+
+| Servicio | Archivo | Responsabilidad |
+|---|---|---|
+| `ClientProfileService` | `src/services/ClientProfileService.js` | CRUD de perfil de cliente con upsert y log de auditoría |
 
 ## 👤 Sistema de Perfiles de Usuario (Issue #7)
 

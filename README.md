@@ -122,6 +122,14 @@ docker-compose down -v
 | `GET` | `/users/me` | JWT | Perfil privado del usuario autenticado |
 | `PATCH` | `/users/:id` | JWT | Actualizar perfil (solo propio usuario) |
 
+### Perfil de Cliente (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id/client-profile` | JWT | Obtener perfil de cliente |
+| `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente |
+| `PATCH` | `/users/:id/client-profile` | JWT | Actualizar perfil de cliente |
+
 ### Salud y Documentación
 
 | Método | Ruta | Auth | Descripción |
