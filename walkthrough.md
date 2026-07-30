@@ -1,8 +1,10 @@
-# Walkthrough - Implementación de Autenticación con JWT, Refresh Tokens y OTP (2FA)
+# Walkthrough - Implementación del Backend
+
+## Issue #5: Sistema de Autenticación con JWT, Refresh Tokens y OTP (2FA)
 
 Se ha completado el desarrollo del sistema de autenticación seguro, modular y listo para producción según los criterios de aceptación y directrices de arquitectura.
 
-## Cambios Realizados
+### Cambios Realizados
 
 A continuación se detalla la lista de archivos creados y modificados:
 
@@ -32,6 +34,57 @@ A continuación se detalla la lista de archivos creados y modificados:
 
 - **Pruebas**:
   - [auth.test.js](file:///home/thiagox/Documentos/Backend/tests/auth.test.js): Suite de pruebas unitarias para hashing, tokens, OTP y middlewares.
+
+---
+
+## Issue #7: Endpoints de Perfil de Usuario (GET, PATCH)
+
+Se ha completado el desarrollo de los endpoints para obtener y actualizar datos de perfil de usuario, siguiendo la arquitectura en capas y aplicando autorización, validación y auditoría.
+
+### Cambios Realizados
+
+Archivos creados:
+
+- [UserService.js](file:///home/thiagox/Documentos/Backend/src/services/UserService.js): Servicio con 3 métodos:
+  - `getPublicProfile(userId)`: retorna datos públicos (nombre, avatar, bio, rating promedio desde `ratings`)
+  - `getPrivateProfile(userId)`: retorna datos privados + ambos perfiles (client/worker)
+  - `updateProfile(userId, data, currentRole)`: crea o actualiza el perfil según el rol activo, con log de auditoría
+
+- [UserController.js](file:///home/thiagox/Documentos/Backend/src/controllers/UserController.js): Controlador con 3 métodos:
+  - `getUserById`: maneja `GET /users/:id` (público, sin auth)
+  - `getMyProfile`: maneja `GET /users/me` (requiere JWT)
+  - `updateProfile`: maneja `PATCH /users/:id`, valida que `req.user.user_id === req.params.id`
+
+- [userRoutes.js](file:///home/thiagox/Documentos/Backend/src/routes/userRoutes.js): Rutas montadas en `/api/v1/users`
+
+- [user.test.js](file:///home/thiagox/Documentos/Backend/tests/user.test.js): 16 tests unitarios (servicio, validación Joi, controlador)
+
+Archivos modificados:
+
+- [app.js](file:///home/thiagox/Documentos/Backend/src/app.js): Monta `userRoutes` en `/api/v1/users`
+- [validation.js](file:///home/thiagox/Documentos/Backend/src/utils/validation.js): Agrega `updateProfileSchema` con validaciones para `full_name` (obligatorio, 1-100), `avatar_url` (URL jpg/png), `bio` (máx 500)
+- [swagger.js](file:///home/thiagox/Documentos/Backend/src/utils/swagger.js): Documenta los 3 endpoints con schemas de request/response
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/users/:id` | No | Perfil público (nombre, avatar, bio, rating) |
+| `GET` | `/api/v1/users/me` | JWT | Perfil privado (email, teléfono, roles) |
+| `PATCH` | `/api/v1/users/:id` | JWT | Actualiza nombre, avatar, bio (solo propio usuario) |
+
+### Validaciones
+- `full_name`: obligatorio, 1-100 caracteres
+- `avatar_url`: opcional, solo URL jpg/jpeg/png
+- `bio`: opcional, máximo 500 caracteres
+- Autorización: `403` si el `user_id` del JWT no coincide con `:id`
+
+### Auditoría
+Cada actualización de perfil registra en Winston:
+```
+[AUDITORIA] Perfil de usuario actualizado
+  user_id, role, profile_id, changes, timestamp
+```
 
 ---
 
@@ -87,5 +140,24 @@ curl -X POST http://localhost:3000/api/v1/auth/verify-otp \
   -d '{"email": "thiago@example.com", "otp_code": "CODIGO_DE_LOS_LOGS"}'
 ```
 
-#### D. Acceder a la Documentación Swagger
+#### D. Ver perfil público
+```bash
+curl -X GET http://localhost:3000/api/v1/users/USER_ID
+```
+
+#### E. Ver perfil privado (autenticado)
+```bash
+curl -X GET http://localhost:3000/api/v1/users/me \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
+#### F. Actualizar perfil
+```bash
+curl -X PATCH http://localhost:3000/api/v1/users/USER_ID \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"full_name": "Juan Pérez", "avatar_url": "https://example.com/avatar.jpg", "bio": "Técnico especialista en reparaciones"}'
+```
+
+#### G. Acceder a la Documentación Swagger
 Visita http://localhost:3000/api/v1/api-docs en tu navegador para ver y probar interactivamente los endpoints mediante Swagger UI.

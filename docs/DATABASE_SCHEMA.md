@@ -378,15 +378,69 @@ Regex: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[símbolos]).{8,}$/
 | `OtpService` | `src/services/OtpService.js` | Generación, almacenamiento y validación de OTP. Delega el envío a `NotificationProvider`. |
 | `NotificationProvider` | `src/services/OtpService.js` | Abstracción de envío de notificaciones. Simulación actual; preparada para Twilio (SMS) y SendGrid (Email). |
 
+---
+
+## 👤 Sistema de Perfiles de Usuario (Issue #7)
+
+Implementa endpoints para obtener y actualizar datos de perfil. Los perfiles se almacenan en las tablas `client_profiles` y `worker_profiles`, y el endpoint selecciona la tabla según el `current_role` del JWT.
+
+### Flujo de Consulta de Perfil
+
+```
+GET /api/v1/users/:id  (público — sin autenticación)
+        ↓  Busca usuario activo en tabla users
+        ↓  Obtiene perfil de client_profiles o worker_profiles
+        ↓  Calcula average_rating desde tabla ratings
+   ← 200 { id, full_name, avatar_url, bio, average_rating, role }
+
+GET /api/v1/users/me  (privado — requiere JWT)
+        ↓  Busca usuario completo en tabla users
+        ↓  Obtiene AMBOS perfiles (client + worker) si existen
+        ↓  Calcula average_rating desde tabla ratings
+   ← 200 { id, email, phone, current_role, is_verified, ...,
+           profile: { client: {...}, worker: {...} } }
+```
+
+### Flujo de Actualización de Perfil
+
+```
+PATCH /api/v1/users/:id  (requiere JWT, solo propio usuario)
+        ↓  Valida: req.user.user_id === req.params.id
+        ↓  Valida body con Joi: full_name (1-100), avatar_url (jpg/png), bio (≤500)
+        ↓  Selecciona tabla según current_role ('client' → client_profiles, 'worker' → worker_profiles)
+        ↓  Crea o actualiza el registro existente
+        ↓  Log de auditoría con Winston
+   ← 200 { message, profile: { id, full_name, avatar_url, bio, updated_at } }
+```
+
+### Validaciones
+- `full_name`: obligatorio, 1-100 caracteres
+- `avatar_url`: opcional, solo URL con extensión `.jpg`/`.jpeg`/`.png`
+- `bio`: opcional, máximo 500 caracteres
+- Autorización: `403` si el `user_id` del JWT no coincide con `:id`
+
+### Auditoría
+Cada actualización genera un log estructurado:
+
+```
+[AUDITORIA] Perfil de usuario actualizado
+  user_id: "uuid", role: "client", profile_id: "uuid",
+  changes: { full_name: "...", avatar_url: "...", bio_length: 150 },
+  timestamp: "2026-07-30T..."
+```
+
+### Servicios implementados
+
+| Servicio | Archivo | Responsabilidad |
+|---|---|---|
+| `UserService` | `src/services/UserService.js` | Consulta de perfil público/privado, actualización con upsert, cálculo de rating promedio |
+
 ### Documentación de la API
 
 Swagger UI disponible en: `http://localhost:3000/api/v1/api-docs`
 
-Documenta los 4 endpoints con esquemas de request, respuestas exitosas y de error:
-
-| Endpoint | Códigos de respuesta |
-|---|---|
-| `POST /auth/register` | `201`, `400` (validación), `409` (conflicto), `429` (rate limit) |
-| `POST /auth/login` | `200`, `400`, `401` (credenciales), `429` |
-| `POST /auth/verify-otp` | `200`, `400` (OTP inválido/expirado), `429` |
-| `POST /auth/refresh-token` | `200`, `400`, `401` (token inválido), `429` |
+| Endpoint | Auth | Códigos de respuesta |
+|---|---|---|
+| `GET /users/:id` | No | `200`, `404` |
+| `GET /users/me` | JWT | `200`, `401`, `403`, `404` |
+| `PATCH /users/:id` | JWT | `200`, `400` (validación), `401`, `403`, `404` |
