@@ -83,3 +83,20 @@ export const resetPasswordSchema = Joi.object({
     'any.required': 'La contraseña es requerida',
   }),
 });
+
+const imageUrlPattern = /\.(jpg|jpeg|png)(\?.*)?$/i;
+
+export const updateProfileSchema = Joi.object({
+  full_name: Joi.string().min(1).max(100).required().messages({
+    'string.empty': 'El nombre no puede estar vacío',
+    'string.min': 'El nombre debe tener al menos 1 caracter',
+    'string.max': 'El nombre no debe exceder los 100 caracteres',
+    'any.required': 'El nombre es requerido',
+  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
+    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
+  }),
+  bio: Joi.string().max(500).allow('', null).messages({
+    'string.max': 'La biografía no debe exceder los 500 caracteres',
+  }),
+});

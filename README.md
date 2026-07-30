@@ -100,6 +100,37 @@ docker-compose down -v
 
 ---
 
+## 📋 Endpoints de la API
+
+### Autenticación (`/api/v1/auth`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/auth/register` | No | Registrar nuevo usuario |
+| `POST` | `/auth/login` | No | Iniciar sesión |
+| `POST` | `/auth/verify-otp` | No | Verificar código OTP (2FA) |
+| `POST` | `/auth/refresh-token` | No | Renovar access token |
+| `POST` | `/auth/forgot-password` | No | Solicitar recuperación de contraseña |
+| `POST` | `/auth/verify-reset-code` | No | Verificar código de recuperación |
+| `POST` | `/auth/reset-password` | No | Restablecer contraseña |
+
+### Usuarios (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id` | No | Perfil público del usuario |
+| `GET` | `/users/me` | JWT | Perfil privado del usuario autenticado |
+| `PATCH` | `/users/:id` | JWT | Actualizar perfil (solo propio usuario) |
+
+### Salud y Documentación
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/health` | No | Health check del servicio |
+| `GET` | `/api/v1/api-docs` | No | Documentación Swagger UI |
+
+---
+
 ## 🚀 Pipeline de CI/CD (GitHub Actions)
 
 El proyecto cuenta con integración y despliegue continuo automatizados mediante GitHub Actions.
