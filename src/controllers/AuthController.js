@@ -8,6 +8,9 @@ import {
   loginSchema,
   verifyOtpSchema,
   refreshTokenSchema,
+  forgotPasswordSchema,
+  verifyResetCodeSchema,
+  resetPasswordSchema,
 } from '../utils/validation.js';
 
 class AuthController {
@@ -211,6 +214,227 @@ class AuthController {
       });
     } catch (err) {
       logger.error('Error al refrescar el token:', err);
+      next(err);
+    }
+  }
+
+  async forgotPassword(req, res, next) {
+    try {
+      const { error, value } = forgotPasswordSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { email, phone } = value;
+
+      // Find user
+      const query = db('users');
+      if (email) {
+        query.where({ email });
+      } else if (phone) {
+        query.where({ phone });
+      }
+
+      const user = await query.first();
+
+      if (!user) {
+        // Return 404 if user doesn't exist
+        return res.status(404).json({
+          error: 'USER_NOT_FOUND',
+          message: 'El correo electrónico o teléfono no está registrado',
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Generate 6-digit code
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const resetExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+
+      // Save code in user record
+      await db('users').where({ id: user.id }).update({
+        reset_code: resetCode,
+        reset_expires_at: resetExpiresAt,
+      });
+
+      // Simulation - log sending the code
+      const message = `Tu código de recuperación es: ${resetCode}. Expira en 30 minutos.`;
+      if (user.email) {
+        logger.info('[PASSWORD_RESET] Email de recuperación enviado (simulación)', {
+          email: user.email,
+          message,
+        });
+      }
+      if (user.phone) {
+        logger.info('[PASSWORD_RESET] SMS de recuperación enviado (simulación)', {
+          phone: user.phone,
+          message,
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Código de recuperación enviado correctamente.',
+      });
+    } catch (err) {
+      logger.error('Error durante la solicitud de recuperación de contraseña:', err);
+      next(err);
+    }
+  }
+
+  async verifyResetCode(req, res, next) {
+    try {
+      const { error, value } = verifyResetCodeSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { email, phone, reset_code } = value;
+
+      // Find user
+      const query = db('users');
+      if (email) {
+        query.where({ email });
+      } else if (phone) {
+        query.where({ phone });
+      }
+
+      const user = await query.first();
+
+      if (!user) {
+        return res.status(400).json({
+          error: 'INVALID_RESET_CODE',
+          message: 'Código de recuperación inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check code and expiration
+      if (!user.reset_code || user.reset_code !== reset_code) {
+        logger.warn('Intento de recuperación fallido: Código incorrecto', {
+          email: user.email,
+          phone: user.phone,
+        });
+        return res.status(400).json({
+          error: 'INVALID_RESET_CODE',
+          message: 'Código de recuperación inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const now = new Date();
+      if (new Date(user.reset_expires_at) < now) {
+        logger.warn('Intento de recuperación fallido: Código expirado', {
+          email: user.email,
+          phone: user.phone,
+        });
+        return res.status(400).json({
+          error: 'EXPIRED_RESET_CODE',
+          message: 'Código de recuperación inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Generate temporal token valid for 10 minutes
+      const tempToken = authService.generateResetPasswordToken(user);
+
+      // Clear reset code fields on successful verification
+      await db('users').where({ id: user.id }).update({
+        reset_code: null,
+        reset_expires_at: null,
+      });
+
+      return res.status(200).json({
+        message: 'Código verificado correctamente.',
+        token: tempToken,
+      });
+    } catch (err) {
+      logger.error('Error al verificar el código de recuperación:', err);
+      next(err);
+    }
+  }
+
+  async resetPassword(req, res, next) {
+    try {
+      const { error, value } = resetPasswordSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { token, password } = value;
+
+      // Decode token without verification first to get the user
+      const decoded = authService.decodeToken(token);
+      if (!decoded || !decoded.user_id || decoded.purpose !== 'password_reset') {
+        return res.status(400).json({
+          error: 'INVALID_TOKEN',
+          message: 'Token temporal inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Fetch user from DB
+      const user = await db('users').where({ id: decoded.user_id }).first();
+      if (!user) {
+        return res.status(400).json({
+          error: 'INVALID_TOKEN',
+          message: 'Token temporal inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Verify signature with current user password hash (single-use check)
+      const verified = authService.verifyResetPasswordToken(token, user);
+      if (!verified) {
+        logger.warn(
+          'Intento de restablecimiento de contraseña fallido: Token inválido o ya utilizado',
+          { user_id: user.id },
+        );
+        return res.status(400).json({
+          error: 'INVALID_TOKEN',
+          message: 'Token temporal inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Hash new password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Update password hash in DB
+      await db('users').where({ id: user.id }).update({
+        password_hash: passwordHash,
+      });
+
+      // Audit log
+      logger.info('Auditoría: Restablecimiento de contraseña completado con éxito', {
+        user_id: user.id,
+      });
+
+      return res.status(200).json({
+        message: 'Contraseña restablecida correctamente.',
+      });
+    } catch (err) {
+      logger.error('Error al restablecer la contraseña:', err);
       next(err);
     }
   }

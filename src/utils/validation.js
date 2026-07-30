@@ -50,3 +50,36 @@ export const refreshTokenSchema = Joi.object({
     'any.required': 'El token de refresco es requerido',
   }),
 });
+
+export const forgotPasswordSchema = Joi.object({
+  email: Joi.string().email().optional(),
+  phone: Joi.string().min(8).max(15).optional(),
+})
+  .or('email', 'phone')
+  .messages({
+    'object.missing': 'Debe proporcionar al menos el correo electrónico o el teléfono',
+  });
+
+export const verifyResetCodeSchema = Joi.object({
+  email: Joi.string().email().optional(),
+  phone: Joi.string().min(8).max(15).optional(),
+  reset_code: Joi.string().length(6).required().messages({
+    'string.length': 'El código de recuperación debe ser de 6 dígitos',
+    'any.required': 'El código de recuperación es requerido',
+  }),
+})
+  .or('email', 'phone')
+  .messages({
+    'object.missing': 'Debe proporcionar el correo electrónico o el teléfono asociado al código',
+  });
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().required().messages({
+    'any.required': 'El token temporal es requerido',
+  }),
+  password: Joi.string().pattern(passwordPattern).required().messages({
+    'string.pattern.base':
+      'La contraseña debe tener al menos 8 caracteres, incluir una mayúscula, una minúscula, un número y un símbolo',
+    'any.required': 'La contraseña es requerida',
+  }),
+});

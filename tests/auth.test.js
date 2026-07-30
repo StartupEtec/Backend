@@ -19,18 +19,15 @@ const mockQueryBuilder = {
 // In Jest's ESM VM module sandbox, jest.fn() loses its configured implementation
 // when accessed from other modules via the mock factory, causing db() → undefined.
 // A plain arrow function always returns mockQueryBuilder reliably.
-const mockKnex = Object.assign(
-  () => mockQueryBuilder,
-  {
-    schema: {
-      alterTable: jest.fn(),
-      createTable: jest.fn(),
-      dropTableIfExists: jest.fn(),
-    },
-    fn: { now: () => new Date() },
-    raw: (val) => val,
+const mockKnex = Object.assign(() => mockQueryBuilder, {
+  schema: {
+    alterTable: jest.fn(),
+    createTable: jest.fn(),
+    dropTableIfExists: jest.fn(),
   },
-);
+  fn: { now: () => new Date() },
+  raw: (val) => val,
+});
 
 // Mock the database module. In ESM, unstable_mockModule intercepts at the module
 // resolution level, so a single mock covers ALL relative-path variations that

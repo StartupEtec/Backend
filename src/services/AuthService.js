@@ -105,6 +105,43 @@ class AuthService {
   }
 
   /**
+   * Generates a 10-minute signed JWT for resetting password.
+   * Uses JWT_RESET_SECRET concatenated with user.password_hash to make the token single-use.
+   */
+  generateResetPasswordToken(user) {
+    const JWT_RESET_SECRET = process.env.JWT_RESET_SECRET || JWT_SECRET;
+    return jwt.sign(
+      { user_id: user.id, email: user.email, purpose: 'password_reset' },
+      JWT_RESET_SECRET + user.password_hash,
+      { expiresIn: '10m' },
+    );
+  }
+
+  /**
+   * Verifies the reset password token signature using user's password_hash.
+   */
+  verifyResetPasswordToken(token, user) {
+    const JWT_RESET_SECRET = process.env.JWT_RESET_SECRET || JWT_SECRET;
+    try {
+      const decoded = jwt.verify(token, JWT_RESET_SECRET + user.password_hash);
+      return decoded.purpose === 'password_reset' ? decoded : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Decodes a token without verifying signature to extract claims.
+   */
+  decodeToken(token) {
+    try {
+      return jwt.decode(token);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Decodes and validates access token (used in middlewares).
    */
   verifyAccessToken(token) {
