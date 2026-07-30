@@ -177,6 +177,13 @@ export const createWorkerProfileSchema = Joi.object({
     }),
 });
 
+export const switchRoleSchema = Joi.object({
+  role: Joi.string().valid('client', 'worker').required().messages({
+    'any.only': 'El rol debe ser client o worker',
+    'any.required': 'El rol es requerido',
+  }),
+});
+
 export const updateWorkerProfileSchema = Joi.object({
   full_name: Joi.string().min(1).max(100).messages({
     'string.empty': 'El nombre no puede estar vacío',

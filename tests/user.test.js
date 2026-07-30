@@ -22,11 +22,16 @@ const mockKnex = Object.assign(() => mockQueryBuilder, {
   raw: (val) => val,
 });
 
+const mockGenerateAccessToken = jest.fn();
+
 jest.unstable_mockModule('../src/database/db.js', () => ({ default: mockKnex }));
+jest.unstable_mockModule('../src/services/AuthService.js', () => ({
+  default: { generateAccessToken: mockGenerateAccessToken },
+}));
 
 const { default: userService } = await import('../src/services/UserService.js');
 const { default: userController } = await import('../src/controllers/UserController.js');
-const { updateProfileSchema } = await import('../src/utils/validation.js');
+const { updateProfileSchema, switchRoleSchema } = await import('../src/utils/validation.js');
 
 describe('User Profile Service', () => {
   beforeEach(() => {
@@ -242,6 +247,130 @@ describe('User Profile Service', () => {
       expect(result.full_name).toBe('New User');
     });
   });
+
+  describe('switchRole', () => {
+    it('should return error if user not found', async () => {
+      mockQueryBuilder.first.mockResolvedValue(null);
+
+      const result = await userService.switchRole('nonexistent-uuid', 'worker');
+
+      expect(result.error).toBe('USER_NOT_FOUND');
+    });
+
+    it('should return error if trying to switch to same role', async () => {
+      mockQueryBuilder.first.mockResolvedValue({ id: 'user-uuid', current_role: 'client' });
+
+      const result = await userService.switchRole('user-uuid', 'client');
+
+      expect(result.error).toBe('SAME_ROLE');
+    });
+
+    it('should return error if client profile is missing', async () => {
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'worker' })
+        .mockResolvedValueOnce(null);
+
+      const result = await userService.switchRole('user-uuid', 'client');
+
+      expect(result.error).toBe('MISSING_CLIENT_PROFILE');
+    });
+
+    it('should return error if worker profile is missing', async () => {
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'client' })
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(null);
+
+      const result = await userService.switchRole('user-uuid', 'worker');
+
+      expect(result.error).toBe('MISSING_WORKER_PROFILE');
+    });
+
+    it('should return error if worker certification is not approved', async () => {
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+      const mockWorkerProfile = {
+        id: 'worker-uuid',
+        user_id: 'user-uuid',
+        certification_status: 'PENDING',
+      };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'client' })
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(mockWorkerProfile);
+
+      const result = await userService.switchRole('user-uuid', 'worker');
+
+      expect(result.error).toBe('WORKER_NOT_CERTIFIED');
+    });
+
+    it('should switch role successfully from client to worker', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        email: 'test@example.com',
+        current_role: 'client',
+      };
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+      const mockWorkerProfile = {
+        id: 'worker-uuid',
+        user_id: 'user-uuid',
+        certification_status: 'APPROVED',
+      };
+      const mockUpdatedUser = {
+        ...mockUser,
+        current_role: 'worker',
+        last_role: 'client',
+      };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(mockWorkerProfile)
+        .mockResolvedValueOnce(mockUpdatedUser);
+
+      const result = await userService.switchRole('user-uuid', 'worker');
+
+      expect(result).toBeDefined();
+      expect(result.user.current_role).toBe('worker');
+      expect(result.user.last_role).toBe('client');
+      expect(result.previousRole).toBe('client');
+      expect(mockQueryBuilder.update).toHaveBeenCalled();
+    });
+
+    it('should switch role successfully from worker to client', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        email: 'test@example.com',
+        current_role: 'worker',
+      };
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+      const mockWorkerProfile = {
+        id: 'worker-uuid',
+        user_id: 'user-uuid',
+        certification_status: 'APPROVED',
+      };
+      const mockUpdatedUser = {
+        ...mockUser,
+        current_role: 'client',
+        last_role: 'worker',
+      };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(mockWorkerProfile)
+        .mockResolvedValueOnce(mockUpdatedUser);
+
+      const result = await userService.switchRole('user-uuid', 'client');
+
+      expect(result).toBeDefined();
+      expect(result.user.current_role).toBe('client');
+      expect(result.user.last_role).toBe('worker');
+      expect(mockQueryBuilder.update).toHaveBeenCalled();
+    });
+  });
 });
 
 describe('User Profile Validation Schema', () => {
@@ -300,6 +429,33 @@ describe('User Profile Validation Schema', () => {
       bio: '',
     });
     expect(error).toBeUndefined();
+  });
+});
+
+describe('Switch Role Validation Schema', () => {
+  it('should accept valid role client', () => {
+    const { error } = switchRoleSchema.validate({ role: 'client' });
+    expect(error).toBeUndefined();
+  });
+
+  it('should accept valid role worker', () => {
+    const { error } = switchRoleSchema.validate({ role: 'worker' });
+    expect(error).toBeUndefined();
+  });
+
+  it('should reject invalid role', () => {
+    const { error } = switchRoleSchema.validate({ role: 'admin' });
+    expect(error).toBeDefined();
+  });
+
+  it('should reject missing role', () => {
+    const { error } = switchRoleSchema.validate({});
+    expect(error).toBeDefined();
+  });
+
+  it('should reject empty role', () => {
+    const { error } = switchRoleSchema.validate({ role: '' });
+    expect(error).toBeDefined();
   });
 });
 
@@ -364,6 +520,48 @@ describe('User Profile Controller', () => {
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN' }));
+    });
+  });
+
+  describe('switchRole', () => {
+    beforeEach(() => {
+      mockGenerateAccessToken.mockReset();
+    });
+
+    it('should return 403 when user tries to switch role of another user', async () => {
+      const req = {
+        params: { id: 'other-user' },
+        user: { user_id: 'current-user' },
+        body: { role: 'worker' },
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await userController.switchRole(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN' }));
+    });
+
+    it('should return 400 for invalid role', async () => {
+      const req = {
+        params: { id: 'same-user' },
+        user: { user_id: 'same-user' },
+        body: { role: 'invalid' },
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await userController.switchRole(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'VALIDATION_ERROR' }));
     });
   });
 });
