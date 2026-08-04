@@ -2,6 +2,7 @@ import { Router } from 'express';
 import userController from '../controllers/UserController.js';
 import clientProfileController from '../controllers/ClientProfileController.js';
 import workerProfileController from '../controllers/WorkerProfileController.js';
+import locationController from '../controllers/LocationController.js';
 import { authenticateToken, requireRole } from '../middlewares/authMiddleware.js';
 
 const router = Router();
@@ -33,6 +34,10 @@ router.patch(
 
 // Ruta de cambio de rol (accesible por cualquier usuario autenticado con ambos perfiles)
 router.post('/:id/switch-role', authenticateToken, userController.switchRole);
+
+// Rutas de ubicaciones del usuario (deben ir ANTES de /:id genérico)
+router.post('/:id/locations', authenticateToken, locationController.create);
+router.get('/:id/locations', authenticateToken, locationController.list);
 
 // Rutas genéricas de usuario
 router.get('/me', authenticateToken, userController.getMyProfile);

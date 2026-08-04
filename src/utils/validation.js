@@ -211,3 +211,67 @@ export const updateWorkerProfileSchema = Joi.object({
   .messages({
     'object.min': 'Debe proporcionar al menos un campo para actualizar',
   });
+
+export const createLocationSchema = Joi.object({
+  address: Joi.string().min(3).max(255).required().messages({
+    'string.empty': 'La dirección no puede estar vacía',
+    'string.min': 'La dirección debe tener al menos 3 caracteres',
+    'string.max': 'La dirección no debe exceder los 255 caracteres',
+    'any.required': 'La dirección es requerida',
+  }),
+  latitude: Joi.number().min(-90).max(90).required().messages({
+    'number.base': 'La latitud debe ser un número',
+    'number.min': 'La latitud debe estar entre -90 y 90',
+    'number.max': 'La latitud debe estar entre -90 y 90',
+    'any.required': 'La latitud es requerida',
+  }),
+  longitude: Joi.number().min(-180).max(180).required().messages({
+    'number.base': 'La longitud debe ser un número',
+    'number.min': 'La longitud debe estar entre -180 y 180',
+    'number.max': 'La longitud debe estar entre -180 y 180',
+    'any.required': 'La longitud es requerida',
+  }),
+  is_primary: Joi.boolean().messages({
+    'boolean.base': 'is_primary debe ser un booleano',
+  }),
+});
+
+export const updateLocationSchema = Joi.object({
+  address: Joi.string().min(3).max(255).messages({
+    'string.empty': 'La dirección no puede estar vacía',
+    'string.min': 'La dirección debe tener al menos 3 caracteres',
+    'string.max': 'La dirección no debe exceder los 255 caracteres',
+  }),
+  latitude: Joi.number().min(-90).max(90).messages({
+    'number.base': 'La latitud debe ser un número',
+    'number.min': 'La latitud debe estar entre -90 y 90',
+    'number.max': 'La latitud debe estar entre -90 y 90',
+  }),
+  longitude: Joi.number().min(-180).max(180).messages({
+    'number.base': 'La longitud debe ser un número',
+    'number.min': 'La longitud debe estar entre -180 y 180',
+    'number.max': 'La longitud debe estar entre -180 y 180',
+  }),
+  is_primary: Joi.boolean().messages({
+    'boolean.base': 'is_primary debe ser un booleano',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
+
+export const listLocationsQuerySchema = Joi.object({
+  lat: Joi.number().min(-90).max(90).messages({
+    'number.base': 'lat debe ser un número',
+    'number.min': 'lat debe estar entre -90 y 90',
+    'number.max': 'lat debe estar entre -90 y 90',
+  }),
+  lng: Joi.number().min(-180).max(180).messages({
+    'number.base': 'lng debe ser un número',
+    'number.min': 'lng debe estar entre -180 y 180',
+    'number.max': 'lng debe estar entre -180 y 180',
+  }),
+})
+  .with('lat', 'lng')
+  .with('lng', 'lat');

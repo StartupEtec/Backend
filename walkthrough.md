@@ -138,6 +138,57 @@ Cada actualización de perfil registra en Winston:
 
 ---
 
+## Issue #21: Endpoints de Ubicaciones (CRUD)
+
+Se ha completado el desarrollo de los endpoints para la gestión de ubicaciones guardadas con geolocalización PostGIS, incluyendo validación de coordenadas, límite por usuario y marcado de ubicación por defecto.
+
+### Cambios Realizados
+
+Archivos creados:
+
+- [LocationService.js](file:///home/thiagox/Documentos/Backend/src/services/LocationService.js): Servicio con 5 métodos:
+  - `createLocation(userId, data)`: crea una ubicación, sin superar el máximo de 10 por usuario. La primera se marca como principal automáticamente.
+  - `listLocations(userId, referenceLat, referenceLng)`: lista ubicaciones. Si se provee `lat`/`lng`, calcula `distance_m` con `ST_Distance` de PostGIS.
+  - `getLocationById(locationId)`: obtiene una ubicación por ID.
+  - `updateLocation(locationId, userId, data)`: actualiza dirección, coordenadas y/o `is_primary`. Al marcar como principal, quita el flag a las demás.
+  - `deleteLocation(locationId, userId)`: elimina una ubicación (validando propiedad).
+
+- [LocationController.js](file:///home/thiagox/Documentos/Backend/src/controllers/LocationController.js): Controlador con 5 métodos (`create`, `list`, `getById`, `update`, `remove`) que valida autorización por JWT y entradas con Joi.
+
+- [locationRoutes.js](file:///home/thiagox/Documentos/Backend/src/routes/locationRoutes.js): Rutas `GET/PATCH/DELETE /locations/:location_id`, montadas en `/api/v1/locations`.
+
+- [location.test.js](file:///home/thiagox/Documentos/Backend/tests/location.test.js): 21 tests (servicio, validación Joi, controlador).
+
+Archivos modificados:
+
+- [validation.js](file:///home/thiagox/Documentos/Backend/src/utils/validation.js): Agrega `createLocationSchema`, `updateLocationSchema` y `listLocationsQuerySchema`.
+- [userRoutes.js](file:///home/thiagox/Documentos/Backend/src/routes/userRoutes.js): Agrega `POST/GET /:id/locations` antes de las rutas genéricas `/:id`.
+- [app.js](file:///home/thiagox/Documentos/Backend/src/app.js): Monta `locationRoutes` en `/api/v1/locations`.
+- [swagger.js](file:///home/thiagox/Documentos/Backend/src/utils/swagger.js): Documenta los 5 endpoints con schemas de request/response.
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/locations` | JWT | Crear ubicación (requiere `address`, `latitude`, `longitude`) |
+| `GET` | `/users/:id/locations` | JWT | Listar ubicaciones (`?lat=&lng=` opcional para distancia) |
+| `GET` | `/locations/:location_id` | JWT | Detalles de una ubicación |
+| `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o `is_primary` |
+| `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación |
+
+### Validaciones
+- `address`: obligatorio en POST, opcional en PATCH, 3-255 caracteres
+- `latitude`: rango `[-90, 90]`
+- `longitude`: rango `[-180, 180]`
+- `is_primary`: booleano opcional
+- Máximo **10 ubicaciones** por usuario (`409 LOCATION_LIMIT_REACHED`)
+- Autorización: `403` en rutas `/users/:id/locations` si el JWT no coincide con `:id`; `404` en `/locations/:location_id` si no existe o no pertenece al usuario
+
+### Base de Datos
+- La tabla `locations` ya existía desde la migración inicial con columna `geography(Point, 4326)` (PostGIS) e índice GiST. No se requirió migración adicional.
+
+---
+
 ## Instrucciones de Ejecución y Verificación
 
 Sigue estos pasos locales para levantar el entorno y comprobar el flujo:

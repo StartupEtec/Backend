@@ -100,6 +100,25 @@ Direcciones geográficas asociadas a los usuarios mediante coordenadas espaciale
     *   B-Tree en `user_id`, `created_at`.
     *   **GiST** en la columna `geography` (optimización espacial para cálculos de distancia/cercanía).
 
+### Endpoints de Ubicaciones (Issue #21)
+
+Implementa el CRUD de ubicaciones guardadas, con lectura optimizada por el índice GiST y cálculo de distancias con PostGIS.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/locations` | JWT | Crear ubicación (`address`, `latitude`, `longitude`, `is_primary`). Máx. 10 por usuario. |
+| `GET` | `/users/:id/locations` | JWT | Listar ubicaciones. Con `?lat=&lng=` retorna `distance_m` vía `ST_Distance`. |
+| `GET` | `/locations/:location_id` | JWT | Detalles de una ubicación. |
+| `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o marcar como principal. |
+| `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación. |
+
+**Comportamientos clave:**
+- Restricción de negocio: máximo **10 ubicaciones** por usuario (`409 LOCATION_LIMIT_REACHED`).
+- La primera ubicación creada por un usuario se marca como `is_primary = true` automáticamente.
+- Al marcar una ubicación como `is_primary = true`, se quita el flag a las demás ubicaciones del mismo usuario.
+- La columna `geography` se llena con `ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography`.
+- `distance_m` se calcula con `ST_Distance(geography, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography)`, aprovechando el índice GiST.
+
 ---
 
 ### 4. `client_profiles`

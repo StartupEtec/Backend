@@ -833,6 +833,130 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
+
+        // ── Location schemas ─────────────────────────────────────────────
+        LocationResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            address: {
+              type: 'string',
+              example: 'Calle Falsa 123, Bogotá',
+              description: 'Dirección formateada en texto plano',
+            },
+            latitude: { type: 'number', example: 4.711 },
+            longitude: { type: 'number', example: -74.0721 },
+            is_primary: {
+              type: 'boolean',
+              example: false,
+              description: 'Si es la ubicación principal del usuario',
+            },
+            distance_m: {
+              type: 'number',
+              example: 1240.5,
+              nullable: true,
+              description:
+                'Distancia en metros desde el punto de referencia (lat/lng). Solo en el listado cuando se provee lat/lng.',
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateLocationRequest: {
+          type: 'object',
+          required: ['address', 'latitude', 'longitude'],
+          properties: {
+            address: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 255,
+              example: 'Calle Falsa 123, Bogotá',
+              description: 'Dirección formateada en texto plano',
+            },
+            latitude: {
+              type: 'number',
+              minimum: -90,
+              maximum: 90,
+              example: 4.711,
+              description: 'Latitud decimal dentro del rango [-90, 90]',
+            },
+            longitude: {
+              type: 'number',
+              minimum: -180,
+              maximum: 180,
+              example: -74.0721,
+              description: 'Longitud decimal dentro del rango [-180, 180]',
+            },
+            is_primary: {
+              type: 'boolean',
+              example: false,
+              description: 'Marcar como ubicación principal (por defecto la primera lo es)',
+            },
+          },
+        },
+        UpdateLocationRequest: {
+          type: 'object',
+          properties: {
+            address: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 255,
+              example: 'Calle Nueva 456, Bogotá',
+              description: 'Nueva dirección',
+            },
+            latitude: { type: 'number', minimum: -90, maximum: 90, example: 4.7 },
+            longitude: { type: 'number', minimum: -180, maximum: 180, example: -74.07 },
+            is_primary: {
+              type: 'boolean',
+              example: true,
+              description: 'Marcar como ubicación principal (quita el flag a las demás)',
+            },
+          },
+          description: 'Todos los campos son opcionales en PATCH',
+        },
+        CreateLocationResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Ubicación creada correctamente' },
+            location: { $ref: '#/components/schemas/LocationResponse' },
+          },
+        },
+        UpdateLocationResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Ubicación actualizada correctamente' },
+            location: { $ref: '#/components/schemas/LocationResponse' },
+          },
+        },
+        ListLocationsResponse: {
+          type: 'object',
+          properties: {
+            locations: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/LocationResponse' },
+            },
+            count: { type: 'integer', example: 3 },
+          },
+        },
+        LocationLimitReachedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'LOCATION_LIMIT_REACHED' },
+            message: { type: 'string', example: 'Máximo de 10 ubicaciones por usuario alcanzado' },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        LocationNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'LOCATION_NOT_FOUND' },
+            message: { type: 'string', example: 'Ubicación no encontrada' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
   },
@@ -1654,4 +1778,256 @@ export const setupSwagger = (app) => {
  *               oneOf:
  *                 - $ref: '#/components/schemas/SwitchRoleSameRoleError'
  *                 - $ref: '#/components/schemas/SwitchRoleMissingProfileError'
+ */
+
+/**
+ * @openapi
+ * /users/{id}/locations:
+ *   post:
+ *     summary: Crear una ubicación para el usuario
+ *     description: |
+ *       Crea una nueva ubicación guardada con dirección y coordenadas (PostGIS).
+ *       Solo el propio usuario puede crear sus ubicaciones (validación por JWT).
+ *       La primera ubicación se marca como principal automáticamente.
+ *       Máximo 10 ubicaciones por usuario.
+ *     tags: [Ubicaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateLocationRequest'
+ *           example:
+ *             address: "Calle Falsa 123, Bogotá"
+ *             latitude: 4.711
+ *             longitude: -74.0721
+ *             is_primary: false
+ *     responses:
+ *       201:
+ *         description: Ubicación creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateLocationResponse'
+ *       400:
+ *         description: Error de validación (coordenadas fuera de rango, etc.)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para crear ubicaciones de otro usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       409:
+ *         description: Máximo de 10 ubicaciones por usuario alcanzado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LocationLimitReachedError'
+ *   get:
+ *     summary: Listar las ubicaciones del usuario
+ *     description: |
+ *       Retorna todas las ubicaciones guardadas del usuario.
+ *       Si se proveen los query params `lat` y `lng`, cada ubicación incluye
+ *       `distance_m` (metros) calculado con PostGIS desde ese punto de referencia.
+ *       Solo el propio usuario puede listar sus ubicaciones.
+ *     tags: [Ubicaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *       - in: query
+ *         name: lat
+ *         required: false
+ *         schema:
+ *           type: number
+ *         description: Latitud del punto de referencia (requiere lng)
+ *       - in: query
+ *         name: lng
+ *         required: false
+ *         schema:
+ *           type: number
+ *         description: Longitud del punto de referencia (requiere lat)
+ *     responses:
+ *       200:
+ *         description: Lista de ubicaciones del usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListLocationsResponse'
+ *       400:
+ *         description: Error de validación de los query params
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para listar ubicaciones de otro usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ */
+
+/**
+ * @openapi
+ * /locations/{location_id}:
+ *   get:
+ *     summary: Obtener detalles de una ubicación
+ *     description: |
+ *       Retorna los detalles de una ubicación por su ID.
+ *       Solo el propietario de la ubicación puede acceder.
+ *       Si no existe o no pertenece al usuario, retorna 404.
+ *     tags: [Ubicaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: location_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la ubicación
+ *     responses:
+ *       200:
+ *         description: Detalles de la ubicación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LocationResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Ubicación no encontrada o no pertenece al usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LocationNotFoundError'
+ *   patch:
+ *     summary: Actualizar una ubicación
+ *     description: |
+ *       Actualiza dirección, coordenadas y/o el marcado como principal.
+ *       Todos los campos son opcionales. Al marcar `is_primary: true`,
+ *       se quita el flag a las demás ubicaciones del usuario.
+ *       Solo el propietario de la ubicación puede modificarla.
+ *     tags: [Ubicaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: location_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la ubicación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateLocationRequest'
+ *           example:
+ *             is_primary: true
+ *             address: "Calle Nueva 456, Bogotá"
+ *     responses:
+ *       200:
+ *         description: Ubicación actualizada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateLocationResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Ubicación no encontrada o no pertenece al usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LocationNotFoundError'
+ *   delete:
+ *     summary: Eliminar una ubicación
+ *     description: |
+ *       Elimina una ubicación del usuario.
+ *       Solo el propietario de la ubicación puede eliminarla.
+ *     tags: [Ubicaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: location_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la ubicación
+ *     responses:
+ *       200:
+ *         description: Ubicación eliminada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Ubicación eliminada correctamente
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Ubicación no encontrada o no pertenece al usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LocationNotFoundError'
  */
