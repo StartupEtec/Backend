@@ -140,6 +140,12 @@ docker-compose down -v
 | `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o marcado como principal |
 | `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación |
 
+### Búsqueda de Trabajadores (`/api/v1/workers`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/workers/nearby` | JWT | Trabajadores disponibles en un radio (`latitude`, `longitude`, `radius_km`, `category_id?`, `limit?`, `offset?`) |
+
 ### Salud y Documentación
 
 | Método | Ruta | Auth | Descripción |

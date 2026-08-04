@@ -119,6 +119,29 @@ Implementa el CRUD de ubicaciones guardadas, con lectura optimizada por el índi
 - La columna `geography` se llena con `ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography`.
 - `distance_m` se calcula con `ST_Distance(geography, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography)`, aprovechando el índice GiST.
 
+### Búsqueda de Trabajadores por Geolocalización (Issue #22)
+
+Implementa el endpoint `GET /workers/nearby` que retorna trabajadores disponibles dentro de un radio usando PostGIS. Reutiliza la columna `locations.geography` y su índice GiST; no requiere migración adicional.
+
+**Query espacial:**
+- Radio: `ST_DWithin(locations.geography, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, radio_metros)` → aprovecha el índice GiST.
+- Distancia: `ST_DistanceSphere(locations.geography::geometry, ST_MakePoint(lng, lat)::geometry)` → metros devueltos como `distance_km`.
+
+**Filtros:**
+- `worker_profiles.availability_status = 'AVAILABLE'`.
+- `worker_profiles.certification_status = 'APPROVED'` (el "ACTIVE" del issue equivale a `APPROVED` en el schema actual).
+- `users.active = true`.
+- Ubicación principal del trabajador: `locations.is_primary = true`.
+- `category_id` opcional por `worker_profiles.category_id`.
+
+**Ordenamiento y paginación:**
+- Orden por distancia ascendente (`distance_m ASC`).
+- `limit` máximo 100, default 20; `offset` para paginación.
+
+**Rating promedio:** subquery sobre `ratings` por `ratee_id = worker_profiles.user_id`.
+
+**Caché (Redis):** resultados cacheados con TTL de 5 minutos; clave basada en los parámetros normalizados. Degrada a caché en memoria si Redis no está disponible (`REDIS_URL`).
+
 ---
 
 ### 4. `client_profiles`
