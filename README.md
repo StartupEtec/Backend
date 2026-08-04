@@ -130,6 +130,16 @@ docker-compose down -v
 | `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente |
 | `PATCH` | `/users/:id/client-profile` | JWT | Actualizar perfil de cliente |
 
+### Ubicaciones (`/api/v1/locations`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/locations` | JWT | Crear ubicación (address, latitude, longitude) |
+| `GET` | `/users/:id/locations` | JWT | Listar ubicaciones del usuario (`?lat=&lng=` para distancia) |
+| `GET` | `/locations/:location_id` | JWT | Detalles de una ubicación |
+| `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o marcado como principal |
+| `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación |
+
 ### Salud y Documentación
 
 | Método | Ruta | Auth | Descripción |
