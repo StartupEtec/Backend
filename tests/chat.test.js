@@ -19,6 +19,10 @@ const makeBuilder = () => {
     leftJoin: jest.fn().mockReturnThis(),
     joinRaw: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    andWhereRaw: jest.fn().mockReturnThis(),
+    whereExists: jest.fn(function (cb) {
+      return this;
+    }),
     limit: jest.fn().mockReturnThis(),
     offset: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue([{ total: '0' }]),
@@ -202,6 +206,71 @@ describe('ChatService', () => {
       await chatService.listChats(UUID1, { limit: 999, offset: 0 });
       expect(builders['chats as c'].limit).toHaveBeenCalledWith(100);
     });
+
+    it('should include is_favorite and is_archived in the response', async () => {
+      builders['chats as c'] = makeBuilder();
+      builders['chats as c'].offset.mockResolvedValue([
+        {
+          chat_id: CHAT_ID,
+          order_id: null,
+          last_message_at: new Date(),
+          is_favorite: true,
+          is_archived: false,
+          other_user_id: UUID2,
+          other_full_name: 'Carlos García',
+          other_avatar_url: null,
+          last_message_content: null,
+          last_message_sender_id: null,
+          last_message_created_at: null,
+          unread_count: '0',
+        },
+      ]);
+
+      const result = await chatService.listChats(UUID1, {});
+      expect(result.chats[0].is_favorite).toBe(true);
+      expect(result.chats[0].is_archived).toBe(false);
+    });
+
+    it('should order favorites first, then by last_message_at desc', async () => {
+      builders['chats as c'] = makeBuilder();
+      await chatService.listChats(UUID1, {});
+      expect(builders['chats as c'].orderBy).toHaveBeenNthCalledWith(1, 'me.is_favorite', 'desc');
+      expect(builders['chats as c'].orderBy).toHaveBeenNthCalledWith(
+        2,
+        'c.last_message_at',
+        'desc',
+      );
+    });
+
+    it('should filter favorites and exclude archived chats', async () => {
+      builders['chats as c'] = makeBuilder();
+      await chatService.listChats(UUID1, { status: 'favorites' });
+      expect(builders['chats as c'].where).toHaveBeenCalledWith('me.is_favorite', true);
+      expect(builders['chats as c'].where).toHaveBeenCalledWith('me.is_archived', false);
+    });
+
+    it('should filter chats with an active order', async () => {
+      builders['chats as c'] = makeBuilder();
+      await chatService.listChats(UUID1, { status: 'active' });
+      expect(builders['chats as c'].whereExists).toHaveBeenCalled();
+      expect(builders['chats as c'].where).toHaveBeenCalledWith('me.is_archived', false);
+    });
+
+    it('should filter archived chats and not exclude archived', async () => {
+      builders['chats as c'] = makeBuilder();
+      await chatService.listChats(UUID1, { status: 'archived' });
+      expect(builders['chats as c'].where).toHaveBeenCalledWith('me.is_archived', true);
+      expect(builders['chats as c'].where).not.toHaveBeenCalledWith('me.is_archived', false);
+    });
+
+    it('should apply the search filter by other user full_name', async () => {
+      builders['chats as c'] = makeBuilder();
+      await chatService.listChats(UUID1, { search: 'carlos' });
+      expect(builders['chats as c'].andWhereRaw).toHaveBeenCalledWith(
+        'COALESCE(owp.full_name, ocp.full_name) ILIKE ?',
+        ['%carlos%'],
+      );
+    });
   });
 
   describe('getChat', () => {
@@ -326,6 +395,30 @@ describe('Chat Validation Schema', () => {
     it('should reject negative offset', () => {
       const { error } = listChatsQuerySchema.validate({ offset: -1 });
       expect(error).toBeDefined();
+    });
+
+    it('should accept a valid status filter', () => {
+      const { error, value } = listChatsQuerySchema.validate({ status: 'active' });
+      expect(error).toBeUndefined();
+      expect(value.status).toBe('active');
+    });
+
+    it('should reject an unknown status value', () => {
+      const { error } = listChatsQuerySchema.validate({ status: 'pinned' });
+      expect(error).toBeDefined();
+    });
+
+    it('should accept and trim a search term', () => {
+      const { error, value } = listChatsQuerySchema.validate({ search: '  carlos ' });
+      expect(error).toBeUndefined();
+      expect(value.search).toBe('carlos');
+    });
+
+    it('should not require status nor search by default', () => {
+      const { error, value } = listChatsQuerySchema.validate({});
+      expect(error).toBeUndefined();
+      expect(value.status).toBeUndefined();
+      expect(value.search).toBeUndefined();
     });
   });
 });

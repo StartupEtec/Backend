@@ -296,6 +296,13 @@ export const listChatsQuerySchema = Joi.object({
     'number.base': 'offset debe ser un número entero',
     'number.min': 'offset no puede ser negativo',
   }),
+  status: Joi.string().valid('all', 'favorites', 'active', 'archived').messages({
+    'any.only': 'status debe ser all, favorites, active o archived',
+  }),
+  search: Joi.string().trim().max(100).messages({
+    'string.base': 'search debe ser un texto',
+    'string.max': 'search no debe exceder los 100 caracteres',
+  }),
 });
 
 export const createMessageSchema = Joi.object({
