@@ -275,3 +275,36 @@ export const listLocationsQuerySchema = Joi.object({
 })
   .with('lat', 'lng')
   .with('lng', 'lat');
+
+export const nearbyWorkersQuerySchema = Joi.object({
+  latitude: Joi.number().min(-90).max(90).required().messages({
+    'number.base': 'latitude debe ser un número',
+    'number.min': 'latitude debe estar entre -90 y 90',
+    'number.max': 'latitude debe estar entre -90 y 90',
+    'any.required': 'latitude es requerida',
+  }),
+  longitude: Joi.number().min(-180).max(180).required().messages({
+    'number.base': 'longitude debe ser un número',
+    'number.min': 'longitude debe estar entre -180 y 180',
+    'number.max': 'longitude debe estar entre -180 y 180',
+    'any.required': 'longitude es requerida',
+  }),
+  radius_km: Joi.number().min(1).max(100).required().messages({
+    'number.base': 'radius_km debe ser un número',
+    'number.min': 'radius_km debe ser al menos 1 km',
+    'number.max': 'radius_km no debe exceder los 100 km',
+    'any.required': 'radius_km es requerido',
+  }),
+  category_id: Joi.string().pattern(uuidPattern).messages({
+    'string.pattern.base': 'category_id debe ser un UUID válido',
+  }),
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+});

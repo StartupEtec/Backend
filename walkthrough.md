@@ -189,6 +189,60 @@ Archivos modificados:
 
 ---
 
+## Issue #22: Búsqueda de Trabajadores por Geolocalización
+
+Se ha completado el desarrollo del endpoint que retorna trabajadores disponibles dentro de un radio desde una ubicación, usando PostGIS para queries espaciales eficientes, filtrado por categoría, ordenamiento por distancia y paginación, con caché en Redis (TTL 5 min).
+
+### Cambios Realizados
+
+Archivos creados:
+
+- [cache.js](file:///home/thiagox/Documentos/Backend/src/utils/cache.js): Servicio de caché con `redis` (vía `REDIS_URL`) y degradación automática a caché en memoria con el mismo comportamiento de TTL si Redis no está disponible.
+- [WorkerSearchService.js](file:///home/thiagox/Documentos/Backend/src/services/WorkerSearchService.js): Servicio con `findNearby({ latitude, longitude, radius_km, category_id, limit, offset })`. Consulta PostGIS (ST_DWithin para el radio + ST_DistanceSphere para la distancia), filtra por `availability_status = 'AVAILABLE'` y `certification_status = 'APPROVED'`, ordena por distancia ascendente y cachea resultados en Redis con TTL de 300 s.
+- [WorkerSearchController.js](file:///home/thiagox/Documentos/Backend/src/controllers/WorkerSearchController.js): Controlador que valida los query params con Joi y delega en el servicio.
+- [workerRoutes.js](file:///home/thiagox/Documentos/Backend/src/routes/workerRoutes.js): Ruta `GET /nearby`, montada en `/api/v1/workers`.
+- [workerSearch.test.js](file:///home/thiagox/Documentos/Backend/tests/workerSearch.test.js): 12 tests (servicio, validación Joi, controlador).
+
+Archivos modificados:
+
+- [validation.js](file:///home/thiagox/Documentos/Backend/src/utils/validation.js): Agrega `nearbyWorkersQuerySchema` (radius_km 1-100, limit máx. 100 default 20, offset).
+- [app.js](file:///home/thiagox/Documentos/Backend/src/app.js): Monta `workerRoutes` en `/api/v1/workers`.
+- [server.js](file:///home/thiagox/Documentos/Backend/src/server.js): Conecta la caché al iniciar y la desconecta en el shutdown.
+- [swagger.js](file:///home/thiagox/Documentos/Backend/src/utils/swagger.js): Documenta el endpoint con schemas de request/response.
+- [package.json](file:///home/thiagox/Documentos/Backend/package.json): Agrega dependencia `redis`.
+- [docker-compose.yml](file:///home/thiagox/Documentos/Backend/docker-compose.yml): Agrega servicio `redis` (redis:7-alpine).
+- [.env.example](file:///home/thiagox/Documentos/Backend/.env.example): Documenta `REDIS_URL`.
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/workers/nearby` | JWT | Buscar trabajadores en un radio |
+
+### Parámetros de Query
+
+| Parámetro | Tipo | Obligatorio | Restricciones |
+|-----------|------|-------------|---------------|
+| `latitude` | number | Sí | `[-90, 90]` |
+| `longitude` | number | Sí | `[-180, 180]` |
+| `radius_km` | number | Sí | `[1, 100]` |
+| `category_id` | uuid | No | Filtro por categoría |
+| `limit` | integer | No | `[1, 100]`, default 20 |
+| `offset` | integer | No | `>= 0`, default 0 |
+
+### Comportamiento de la Query
+- Filtra `worker_profiles.availability_status = 'AVAILABLE'` y `certification_status = 'APPROVED'` (el "ACTIVE" del issue equivale a `APPROVED` en el schema actual).
+- Usa la ubicación principal (`locations.is_primary = true`) de cada trabajador.
+- Radio con `ST_DWithin(geography, punto, metros)` (aprovecha el índice GiST).
+- Distancia con `ST_DistanceSphere` (metros → `distance_km` en la respuesta).
+- Rating promedio desde `ratings` (subquery por `ratee_id`).
+- Caché en Redis con TTL de 5 minutos, clave basada en los parámetros normalizados.
+
+### Base de Datos
+- No se requirió migración; se reutiliza `locations.geography` y el índice GiST existentes.
+
+---
+
 ## Instrucciones de Ejecución y Verificación
 
 Sigue estos pasos locales para levantar el entorno y comprobar el flujo:

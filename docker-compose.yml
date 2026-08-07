@@ -37,17 +37,30 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres_secure_password
       - DB_NAME=ondemand_db
+      - REDIS_URL=redis://redis:6379
     volumes:
       - .:/app
       - /app/node_modules
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
 
+  redis:
+    image: redis:7-alpine
+    container_name: ondemand_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
 volumes:
   postgres_data:
+  redis_data:

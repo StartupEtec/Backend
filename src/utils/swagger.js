@@ -957,6 +957,42 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
+
+        // ── Worker Search schemas ────────────────────────────────────────
+        NearbyWorker: {
+          type: 'object',
+          properties: {
+            worker_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            full_name: { type: 'string', example: 'Carlos García' },
+            avatar_url: {
+              type: 'string',
+              example: 'https://example.com/avatar.jpg',
+              nullable: true,
+            },
+            category_id: { type: 'string', format: 'uuid', nullable: true },
+            category_name: { type: 'string', example: 'Plomería', nullable: true },
+            hourly_rate: { type: 'number', example: 35.5 },
+            availability_status: { type: 'string', example: 'AVAILABLE' },
+            certification_status: { type: 'string', example: 'APPROVED' },
+            average_rating: { type: 'string', example: '4.5', nullable: true },
+            distance_km: { type: 'number', example: 1.24 },
+            latitude: { type: 'number', example: 4.711 },
+            longitude: { type: 'number', example: -74.0721 },
+          },
+        },
+        NearbyWorkersResponse: {
+          type: 'object',
+          properties: {
+            workers: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/NearbyWorker' },
+            },
+            count: { type: 'integer', example: 3 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
       },
     },
   },
@@ -2030,4 +2066,82 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/LocationNotFoundError'
+ */
+
+/**
+ * @openapi
+ * /workers/nearby:
+ *   get:
+ *     summary: Buscar trabajadores disponibles cercanos a un punto
+ *     description: |
+ *       Retorna trabajadores con perfil certificado (APPROVED) y disponible
+ *       (AVAILABLE) dentro de un radio desde una ubicación geográfica.
+ *       Usa PostGIS (ST_DistanceSphere + ST_DWithin) para queries espaciales
+ *       eficientes y ordena los resultados por distancia ascendente.
+ *       Los resultados se cachean en Redis con TTL de 5 minutos.
+ *     tags: [Trabajadores]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: latitude
+ *         required: true
+ *         schema: { type: number, minimum: -90, maximum: 90 }
+ *         description: Latitud del punto de referencia
+ *       - in: query
+ *         name: longitude
+ *         required: true
+ *         schema: { type: number, minimum: -180, maximum: 180 }
+ *         description: Longitud del punto de referencia
+ *       - in: query
+ *         name: radius_km
+ *         required: true
+ *         schema: { type: number, minimum: 1, maximum: 100 }
+ *         description: Radio de búsqueda en kilómetros (1 a 100)
+ *       - in: query
+ *         name: category_id
+ *         required: false
+ *         schema: { type: string, format: uuid }
+ *         description: Filtrar por categoría de servicio
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         description: Número máximo de resultados (máx. 100, por defecto 20)
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema: { type: integer, minimum: 0, default: 0 }
+ *         description: Desplazamiento para paginación
+ *     responses:
+ *       200:
+ *         description: Lista de trabajadores cercanos ordenados por distancia
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NearbyWorkersResponse'
+ *             example:
+ *               workers:
+ *                 - worker_id: "a1b2c3d4-..."
+ *                   full_name: "Carlos García"
+ *                   avatar_url: "https://example.com/avatar.jpg"
+ *                   category_name: "Plomería"
+ *                   hourly_rate: 35.5
+ *                   average_rating: "4.5"
+ *                   distance_km: 1.24
+ *               count: 1
+ *               limit: 20
+ *               offset: 0
+ *       400:
+ *         description: Error de validación de parámetros
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
  */
