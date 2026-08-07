@@ -135,6 +135,7 @@ class ChatService {
            SELECT content, sender_id, created_at
            FROM messages
            WHERE chat_id = c.id
+             AND deleted_at IS NULL
            ORDER BY created_at DESC, id DESC
            LIMIT 1
          ) lm ON TRUE`,
@@ -156,6 +157,7 @@ class ChatService {
           `(SELECT COUNT(*) FROM messages m
             WHERE m.chat_id = c.id
               AND m.sender_id != ?
+              AND m.deleted_at IS NULL
               AND (me.last_read_at IS NULL OR m.created_at > me.last_read_at)) as unread_count`,
           [userId],
         ),
@@ -197,6 +199,7 @@ class ChatService {
 
       const messageRows = await trx('messages')
         .where({ chat_id: chatId })
+        .whereNull('deleted_at')
         .orderBy('created_at', 'desc')
         .orderBy('id', 'desc')
         .limit(MESSAGES_LIMIT)
@@ -204,7 +207,10 @@ class ChatService {
 
       const me = await trx('chat_participants').where({ chat_id: chatId, user_id: userId }).first();
 
-      let unreadQuery = trx('messages').where({ chat_id: chatId }).where('sender_id', '<>', userId);
+      let unreadQuery = trx('messages')
+        .where({ chat_id: chatId })
+        .where('sender_id', '<>', userId)
+        .whereNull('deleted_at');
       if (me && me.last_read_at) {
         unreadQuery = unreadQuery.where('created_at', '>', me.last_read_at);
       }

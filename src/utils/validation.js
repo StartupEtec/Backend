@@ -298,6 +298,33 @@ export const listChatsQuerySchema = Joi.object({
   }),
 });
 
+export const createMessageSchema = Joi.object({
+  message_type: Joi.string().valid('TEXT', 'IMAGE', 'QUOTE').default('TEXT').messages({
+    'any.only': 'message_type debe ser TEXT, IMAGE o QUOTE',
+  }),
+  content: Joi.string().max(5000).allow(null, '').messages({
+    'string.base': 'content debe ser un texto',
+    'string.max': 'content no debe exceder los 5000 caracteres',
+  }),
+}).custom((value, helpers) => {
+  if (value.message_type !== 'IMAGE' && !value.content) {
+    return helpers.message(`content es requerido para mensajes de tipo ${value.message_type}`);
+  }
+  return value;
+});
+
+export const listMessagesQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(50).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+});
+
 export const nearbyWorkersQuerySchema = Joi.object({
   latitude: Joi.number().min(-90).max(90).required().messages({
     'number.base': 'latitude debe ser un número',

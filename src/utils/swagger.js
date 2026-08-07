@@ -1041,6 +1041,54 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             created_at: { type: 'string', format: 'date-time' },
           },
         },
+        CreateMessageRequest: {
+          type: 'object',
+          properties: {
+            message_type: {
+              type: 'string',
+              enum: ['TEXT', 'IMAGE', 'QUOTE'],
+              default: 'TEXT',
+              description: 'Tipo de contenido del mensaje',
+            },
+            content: {
+              type: 'string',
+              maxLength: 5000,
+              description: 'Contenido del mensaje. Requerido para TEXT y QUOTE',
+            },
+          },
+          description:
+            'Para mensajes de tipo IMAGE el mensaje se envía como multipart/form-data con el campo file (JPG/PNG, máx 5MB)',
+        },
+        CreateMessageResponse: {
+          type: 'object',
+          properties: {
+            message: { $ref: '#/components/schemas/MessageResponse' },
+          },
+          description:
+            'Al crear un mensaje se emite por WebSocket el evento message:new a los demás participantes del chat',
+        },
+        ListMessagesResponse: {
+          type: 'object',
+          properties: {
+            messages: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/MessageResponse' },
+              description: 'Mensajes de la página en orden cronológico',
+            },
+            count: { type: 'integer', example: 50 },
+            limit: { type: 'integer', example: 50 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+        MessageNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'MESSAGE_NOT_FOUND' },
+            message: { type: 'string', example: 'Mensaje no encontrado' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
         ChatDetailResponse: {
           type: 'object',
           properties: {
@@ -2486,4 +2534,197 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ForbiddenError'
+ */
+/**
+ * @openapi
+ * /chats/{chat_id}/messages:
+ *   post:
+ *     summary: Enviar un mensaje en un chat
+ *     description: |
+ *       Crea un mensaje en el chat. El usuario autenticado debe ser participante
+ *       activo del chat. Soporta `TEXT`, `QUOTE` (JSON) e `IMAGE`
+ *       (`multipart/form-data` con el campo `file`, JPG/PNG, máx 5MB; la imagen
+ *       se comprime y valida antes de almacenarse en `/uploads/messages/`).
+ *       Al crearse, se emite por WebSocket el evento `message:new` a los demás
+ *       participantes. Cada mensaje incluye su timestamp (`created_at`).
+ *     tags: [Mensajes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chat_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del chat
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateMessageRequest'
+ *           example:
+ *             message_type: "TEXT"
+ *             content: "Hola, ¿cuándo puedes comenzar?"
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message_type: { type: string, enum: [TEXT, IMAGE, QUOTE], default: TEXT }
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Imagen JPG/PNG (máx 5MB), obligatoria para IMAGE
+ *     responses:
+ *       201:
+ *         description: Mensaje creado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateMessageResponse'
+ *       400:
+ *         description: Validación, archivo faltante/inválido o excede 5MB
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Chat no encontrado o el usuario no participa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatNotFoundError'
+ *   get:
+ *     summary: Listar mensajes de un chat (paginado)
+ *     description: |
+ *       Obtiene los mensajes del chat de forma paginada (default 50 por página,
+ *       máx 100). Al cargar la conversación, los mensajes del usuario se marcan
+ *       como leídos (`chat_participants.last_read_at`). Los mensajes eliminados
+ *       no se incluyen.
+ *     tags: [Mensajes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chat_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del chat
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+ *         description: Número máximo de mensajes por página
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema: { type: integer, minimum: 0, default: 0 }
+ *         description: Desplazamiento para paginación
+ *     responses:
+ *       200:
+ *         description: Lista paginada de mensajes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListMessagesResponse'
+ *       400:
+ *         description: Parámetros de paginación inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Chat no encontrado o el usuario no participa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatNotFoundError'
+ */
+/**
+ * @openapi
+ * /messages/{message_id}:
+ *   delete:
+ *     summary: Eliminar un mensaje
+ *     description: |
+ *       Elimina (soft delete) un mensaje. Solo el autor del mensaje puede
+ *       eliminarlo. Al eliminarse, se emite por WebSocket el evento
+ *       `message:deleted` a los demás participantes del chat.
+ *     tags: [Mensajes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: message_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del mensaje a eliminar
+ *     responses:
+ *       200:
+ *         description: Mensaje eliminado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: Mensaje eliminado correctamente }
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: Solo el autor puede eliminar el mensaje
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Mensaje no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageNotFoundError'
+ */
+/**
+ * @openapi
+ * /ws:
+ *   get:
+ *     summary: Conexión WebSocket en tiempo real
+ *     description: |
+ *       Conexión WebSocket para real-time messaging. El cliente se conecta al
+ *       iniciar la aplicación con el access token como query param:
+ *       `ws://<host>/ws?token=<accessToken>`. Al autenticarse recibe
+ *       `{ "event": "connected", "payload": { "user_id": "..." } }`.
+ *
+ *       Eventos enviados por el servidor al cliente:
+ *       - `message:new` → `{ event, payload: { chat_id, message } }` cuando hay
+ *         un nuevo mensaje en un chat del usuario.
+ *       - `message:deleted` → `{ event, payload: { chat_id, message_id } }`
+ *         cuando un mensaje del chat es eliminado.
+ *       - `user:typing` → `{ event, payload: { chat_id, user_id, is_typing } }`
+ *         cuando otro usuario escribe.
+ *
+ *       Evento que el cliente envía al servidor:
+ *       - `user:typing` → `{ type: "user:typing", chat_id, is_typing }` para
+ *         notificar que está escribiendo (el servidor lo reenvía a los demás
+ *         participantes del chat).
+ *     tags: [Mensajes]
  */
