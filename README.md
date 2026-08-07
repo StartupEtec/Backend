@@ -155,6 +155,41 @@ docker-compose down -v
 | `GET` | `/chats/:chat_id` | JWT | Detalle del chat + últimos 50 mensajes. Marca los mensajes como leídos |
 | `DELETE` | `/chats/:chat_id` | JWT | Eliminar chat (soft delete: lo oculta solo para el usuario) |
 
+### Mensajería (`/api/v1/chats/:chat_id/messages` y `/api/v1/messages`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats/:chat_id/messages` | JWT | Enviar mensaje. `message_type`: `TEXT`, `IMAGE`, `QUOTE` (default `TEXT`). `content` obligatorio para `TEXT`/`QUOTE` (máx 5000). Para `IMAGE`, adjuntar `file` (multipart, JPG/PNG, máx 5MB); se redimensiona a 1600px y se comprime. Emite `message:new` por WS |
+| `GET` | `/chats/:chat_id/messages` | JWT | Listar mensajes (`?limit=&offset=`; default 50, máx 100, más recientes al final). Marca la conversación como leída |
+| `DELETE` | `/messages/:message_id` | JWT | Eliminar mensaje (solo el autor, soft delete). Emite `message:deleted` por WS |
+
+### WebSocket (real-time messaging)
+
+El servidor expone un WebSocket en `ws://<host>/ws`. El cliente se conecta pasando el
+access token en el query string del handshake:
+
+```
+ws://<host>/ws?token=<accessToken>
+```
+
+Eventos que el servidor envía al cliente:
+
+| Evento | Payload | Cuándo ocurre |
+|--------|---------|---------------|
+| `connected` | `{ user_id }` | Al autenticarse la conexión |
+| `message:new` | `{ chat_id, message }` | Cuando hay un nuevo mensaje en un chat del usuario |
+| `message:deleted` | `{ chat_id, message_id }` | Cuando un mensaje del chat es eliminado por su autor |
+| `user:typing` | `{ chat_id, user_id, is_typing }` | Cuando otro participante del chat escribe |
+
+Evento que el cliente envía al servidor:
+
+| Tipo | Payload | Cuándo ocurre |
+|------|---------|---------------|
+| `user:typing` | `{ chat_id, is_typing }` | Para notificar que el usuario está escribiendo (el servidor lo reenvía a los demás participantes) |
+
+Adjuntos: las imágenes de mensajes se guardan en `<UPLOAD_DIR>/messages/` (default `uploads/`,
+ver `.env.example`) y se sirven desde `GET /uploads/...`.
+
 ### Salud y Documentación
 
 | Método | Ruta | Auth | Descripción |

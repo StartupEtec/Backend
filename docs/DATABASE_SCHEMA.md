@@ -289,10 +289,15 @@ Mensajes individuales dentro de un chat.
 | `id` | `UUID` | `PRIMARY KEY` | Identificador único. |
 | `chat_id` | `UUID` | `FOREIGN KEY` (Cascade) | Chat al que pertenece. |
 | `sender_id` | `UUID` | `FOREIGN KEY` (Cascade) | Usuario emisor del mensaje. |
-| `content` | `TEXT` | `NOT NULL` | Contenido del mensaje. |
+| `content` | `TEXT` | `NULLABLE` | Contenido del mensaje. `NULL` para mensajes de tipo `IMAGE` sin texto. |
 | `message_type` | `VARCHAR` | `DEFAULT 'TEXT'` | Tipos: `TEXT`, `IMAGE`, `QUOTE` (Cotizaciones compartidas). |
-| `attachment_url` | `VARCHAR` | - | Enlace a imágenes/documentos adjuntos. |
+| `attachment_url` | `VARCHAR` | - | URL del archivo adjunto (imágenes comprimidas en `/uploads/messages/`). |
+| `deleted_at` | `TIMESTAMP` | `NULLABLE` | Soft delete: si no es `NULL`, el mensaje está eliminado (solo el autor puede borrarlo). |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha y hora de envío. |
+
+*   **Índices**: B-Tree compuesto `(chat_id, created_at DESC)` (`messages_chat_created_idx`) para la paginación de mensajes por chat.
+*   **`content` NOT NULL**: la restricción se elimina para admitir mensajes solo-imagen (`20260808010000_messages_content_nullable.js`).
+*   **Soft delete**: `deleted_at` agregado en `20260808000000_add_message_soft_delete.js`. Los mensajes borrados se excluyen de listados, del último mensaje del chat y de `unread_count`.
 
 ---
 
@@ -595,3 +600,50 @@ Las operaciones de creación y eliminación emiten logs estructurados de `[AUDIT
 | `ChatService` | `src/services/ChatService.js` | Canonicalización de parejas, creación/deduplicación, listado con paginación, detalle con marcado de leídos y soft delete |
 | `ChatController` | `src/controllers/ChatController.js` | Manejo HTTP (400/401/403/404) y delegación a `ChatService` |
 | `chatRoutes` | `src/routes/chatRoutes.js` | Rutas `/api/v1/chats` + `GET /users/:id/chats` con `authenticateToken` |
+
+---
+
+## 💬 Sistema de Mensajería y WebSocket (Issue #27)
+
+Implementa el envío, listado paginado y eliminación de mensajes dentro de un chat,
+con subida y compresión de imágenes y notificaciones en tiempo real por WebSocket.
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats/:chat_id/messages` | JWT | Enviar mensaje. `message_type`: `TEXT`, `IMAGE`, `QUOTE` (default `TEXT`). `content` (≤5000) obligatorio para `TEXT`/`QUOTE`; para `IMAGE`, adjuntar `file` (multipart, JPG/PNG, ≤5MB). Emite `message:new` por WS a los demás participantes. `404` si no participas; `400` si falta el archivo o el tipo es inválido. |
+| `GET` | `/chats/:chat_id/messages` | JWT | Listar mensajes no borrados (`?limit=&offset=`; default 50, máx 100; orden más recientes al final). Marca la conversación como leída (`last_read_at`). `404` si no participas. |
+| `DELETE` | `/messages/:message_id` | JWT | Eliminar mensaje (soft delete). `403 FORBIDDEN` si no eres el autor; `404 MESSAGE_NOT_FOUND` si no existe o ya fue borrado. Emite `message:deleted` por WS. |
+
+### Eventos WebSocket
+
+Conexión: `ws://<host>/ws?token=<accessToken>` (auth JWT en el query string del handshake;
+cierra con `1008` si el token es inválido).
+
+| Evento | Dirección | Payload | Descripción |
+|--------|-----------|---------|-------------|
+| `connected` | servidor → cliente | `{ user_id }` | Confirmación de autenticación de la conexión |
+| `message:new` | servidor → cliente | `{ chat_id, message }` | Nuevo mensaje en un chat del usuario |
+| `message:deleted` | servidor → cliente | `{ chat_id, message_id }` | Mensaje eliminado por su autor |
+| `user:typing` | servidor → cliente | `{ chat_id, user_id, is_typing }` | Otro participante está escribiendo |
+| `user:typing` | cliente → servidor | `{ chat_id, is_typing }` | Notifica al resto de participantes que el usuario escribe |
+
+### Almacenamiento de imágenes
+
+- Subida con `multer` (memoryStorage): solo `image/jpeg` y `image/png`, máx 5MB.
+- Compresión con `sharp`: redimensión a máx 1600px y re-codificación JPEG q80.
+- Archivo guardado en `<UPLOAD_DIR>/messages/<uuid>.jpg` (default `uploads/`) y servido en
+  `GET /uploads/...` vía `express.static`. Si la transacción de BD falla, el archivo se elimina.
+- Columna `messages.attachment_url` almacena la URL; `messages.content` es `NULL` para
+  mensajes solo-imagen (migración `20260808010000_messages_content_nullable.js`).
+
+### Servicios implementados
+
+| Servicio | Archivo | Responsabilidad |
+|---|---|---|
+| `MessageService` | `src/services/MessageService.js` | `createMessage` (validación de participación, compresión de imagen, transacción + `last_message_at`, emisión `message:new`, log `[AUDITORIA]`), `listMessages` (paginación, exclusión de borrados, marcado de leído), `deleteMessage` (autorización, soft delete, emisión `message:deleted`) |
+| `ImageService` | `src/services/ImageService.js` | Validación y compresión de imágenes con `sharp`; `deleteStoredFile` para revertir en fallos |
+| `websocketHub` | `src/utils/websocket.js` | Hub WS singleton: `Map<user_id, Set<socket>>` (multi-dispositivo), auth por token, relay de `user:typing`, `sendToUser`/`sendToUsers` |
+| `MessageController` | `src/controllers/MessageController.js` | Manejo HTTP (201/400/403/404) y delegación a `MessageService` |
+| `upload.js` | `src/middlewares/upload.js` | Multer para imagen única + `handleUploadError` (traduce errores de multer a `400 UPLOAD_ERROR`) |

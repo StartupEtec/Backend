@@ -24,12 +24,15 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
+    "multer": "^2.2.0",
     "pg": "^8.12.0",
     "redis": "^4.7.1",
+    "sharp": "^0.35.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^10.0.0",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "jest": "^29.7.0",

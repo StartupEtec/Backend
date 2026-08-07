@@ -170,3 +170,70 @@ POST /chats  { user_id_2: uuid, order_id?: uuid }  (JWT)
   ```
 - Swagger: `GET /api/v1/api-docs` (los paths de chats están documentados).
 - Archivos temporales de pruebas (`e2e-chat.tmp.mjs`) fueron eliminados al finalizar.
+
+---
+
+## 8. Mensajería y WebSocket (Issue #27)
+
+Amplía el sistema de chats con mensajes real-time: envío, listado paginado,
+eliminación (soft delete) y notificaciones por WebSocket.
+
+### 8.1 Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/chats/:chat_id/messages` | JWT | Enviar mensaje (`message_type` `TEXT`/`IMAGE`/`QUOTE`; `content` ≤5000 para TEXT/QUOTE; `file` multipart JPG/PNG ≤5MB para IMAGE). `201` → `{ message }`. Emite `message:new`. |
+| `GET` | `/api/v1/chats/:chat_id/messages` | JWT | Listar mensajes (`?limit=&offset=`; default 50, máx 100). Excluye borrados; más recientes al final. Marca como leído. |
+| `DELETE` | `/api/v1/messages/:message_id` | JWT | Eliminar (solo autor). `403 FORBIDDEN`, `404 MESSAGE_NOT_FOUND`. Emite `message:deleted`. |
+
+### 8.2 WebSocket hub (`src/utils/websocket.js`)
+
+- `WebSocketServer({ server, path: '/ws' })` montado en `server.js` con el mismo HTTP server.
+- Auth: access token en `?token=` del handshake (los WebSocket nativos no envían headers);
+  token inválido → cierre `1008`.
+- `clients: Map<user_id, Set<socket>>` permite múltiples dispositivos por usuario.
+- Al autenticarse se envía `{ event: 'connected', payload: { user_id } }`.
+- `user:typing` del cliente → verifica participación activa en `chat_participants` y
+  reenvía `{ event: 'user:typing', payload: { chat_id, user_id, is_typing } }` a los demás.
+
+### 8.3 Mensajes (`src/services/MessageService.js`)
+
+- `createMessage`: valida participación activa (`404 CHAT_NOT_FOUND`); para `IMAGE` comprime
+  con `sharp` (máx 1600px, JPEG q80, `uploads/messages/`); inserta en transacción +
+  `chats.last_message_at = now()`; si la transacción falla, elimina el archivo del disco;
+  emite `message:new` a los demás participantes; log `[AUDITORIA]`.
+- `listMessages`: solo mensajes con `deleted_at IS NULL`, orden `created_at DESC, id DESC` +
+  `reverse()` (más recientes al final); actualiza `last_read_at`.
+- `deleteMessage`: verifica existencia (`404`), autoría (`403`), soft delete + emite
+  `message:deleted`.
+
+### 8.4 Imágenes
+
+- `src/middlewares/upload.js`: multer memoryStorage, 5MB, fileFilter JPG/PNG
+  (`INVALID_FILE_TYPE`). `handleUploadError` traduce errores de multer a `400 UPLOAD_ERROR`
+  (ocurren en el middleware, antes del controller).
+- `src/services/ImageService.js`: `compressAndStoreImage` (valida, redimensiona, comprime,
+  guarda con UUID) y `deleteStoredFile`.
+- `src/app.js`: `express.static` en `/uploads` + `.env.example` `UPLOAD_DIR=uploads` +
+  `.gitignore` `uploads/`.
+
+### 8.5 Migraciones nuevas
+
+- `20260808000000_add_message_soft_delete.js`: `messages.deleted_at` + índice compuesto
+  `(chat_id, created_at DESC)`.
+- `20260808010000_messages_content_nullable.js`: `messages.content` pasa a `NULLABLE`
+  (mensajes solo-imagen). Requerida porque `content` era `NOT NULL` en el schema inicial.
+
+### 8.6 Verificación
+
+| Verificación | Resultado |
+|---|---|
+| `npm run format:check` | ✅ "All matched files use Prettier code style!" |
+| `npm test` | ✅ 12 suites, **224/224 tests** (38 nuevos: `messageService`, `messageController`, `websocket`) |
+| Swagger | ✅ `GET /api/v1/api-docs` compila; incluye paths `/chats/{chat_id}/messages`, `/messages/{message_id}`, `/ws` y schemas de mensajes |
+| Suite E2E real (DB `ondemand_db`) | ✅ **26/26 checks**: TEXT 201, IMAGE 201 + redimensión a 1600px y compresión, QUOTE/validación 400, multipart inválido y >5MB → 400, listado paginado, marca de leído, DELETE autor 200 / no-autor 403, WS `connected`/`message:new`/`user:typing`/`message:deleted`, WS sin token rechazado con `1008`, acceso 404 fuera del chat |
+
+**Bugs detectados por E2E y corregidos:** mensajes IMAGE fallaban con 500
+(`content NOT NULL`) → migración `content_nullable`; errores de multer (tipo inválido y
+>5MB) llegaban al error handler central como 500 → nuevo middleware `handleUploadError`
+que responde `400 UPLOAD_ERROR`.
