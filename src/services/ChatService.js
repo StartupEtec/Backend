@@ -42,6 +42,8 @@ class ChatService {
       chat_id: row.chat_id,
       order_id: row.order_id,
       last_message_at: row.last_message_at,
+      is_favorite: Boolean(row.is_favorite),
+      is_archived: Boolean(row.is_archived),
       last_message:
         row.last_message_content != null
           ? {
@@ -122,10 +124,11 @@ class ChatService {
     }
   }
 
-  async listChats(userId, { limit = DEFAULT_LIMIT, offset = 0 } = {}) {
+  async listChats(userId, { limit = DEFAULT_LIMIT, offset = 0, status = 'all', search = '' } = {}) {
     const safeLimit = Math.min(Math.max(limit, 1), MAX_LIMIT);
+    const activeOrderStatuses = ['PENDING', 'ACCEPTED', 'IN_PROGRESS'];
 
-    const rows = await db('chats as c')
+    const query = db('chats as c')
       .join('chat_participants as me', 'me.chat_id', 'c.id')
       .join('chat_participants as p2', 'p2.chat_id', 'c.id')
       .leftJoin('worker_profiles as owp', 'owp.user_id', 'p2.user_id')
@@ -147,6 +150,8 @@ class ChatService {
         'c.id as chat_id',
         'c.order_id',
         'c.last_message_at',
+        'me.is_favorite',
+        'me.is_archived',
         'p2.user_id as other_user_id',
         db.raw('COALESCE(owp.full_name, ocp.full_name) as other_full_name'),
         db.raw('COALESCE(owp.avatar_url, ocp.avatar_url) as other_avatar_url'),
@@ -161,7 +166,31 @@ class ChatService {
               AND (me.last_read_at IS NULL OR m.created_at > me.last_read_at)) as unread_count`,
           [userId],
         ),
-      )
+      );
+
+    if (status === 'favorites') {
+      query.where('me.is_favorite', true);
+    } else if (status === 'active') {
+      // Chats con una orden vinculada en curso (no finalizada)
+      query.whereExists(function activeOrder() {
+        this.select('o')
+          .from('orders as o')
+          .whereRaw('o.id = c.order_id')
+          .whereIn('o.status', activeOrderStatuses);
+      });
+    }
+    if (status !== 'archived') {
+      // El archivo es un estado excluyente: solo se muestra con status=archived
+      query.where('me.is_archived', false);
+    } else {
+      query.where('me.is_archived', true);
+    }
+    if (search) {
+      query.andWhereRaw('COALESCE(owp.full_name, ocp.full_name) ILIKE ?', [`%${search}%`]);
+    }
+
+    const rows = await query
+      .orderBy('me.is_favorite', 'desc')
       .orderBy('c.last_message_at', 'desc')
       .limit(safeLimit)
       .offset(offset);

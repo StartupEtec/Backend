@@ -1121,6 +1121,16 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             chat_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             order_id: { type: 'string', format: 'uuid', nullable: true },
             last_message_at: { type: 'string', format: 'date-time' },
+            is_favorite: {
+              type: 'boolean',
+              example: false,
+              description: 'Si el usuario marcó este chat como favorito',
+            },
+            is_archived: {
+              type: 'boolean',
+              example: false,
+              description: 'Si el usuario archivó este chat',
+            },
             last_message: {
               type: 'object',
               nullable: true,
@@ -2466,12 +2476,22 @@ export const setupSwagger = (app) => {
  *
  * /users/{id}/chats:
  *   get:
- *     summary: Listar chats del usuario con paginación
+ *     summary: Listar chats del usuario con filtros y paginación
  *     description: |
- *       Lista los chats activos del usuario autenticado (no eliminados por él),
- *       ordenados por `last_message_at` descendente (más recientes primero).
- *       Incluye el último mensaje, la información del otro usuario y el conteo
- *       de mensajes no leídos. Paginación con `limit` (default 20, máx 100) y `offset`.
+ *       Lista los chats del usuario autenticado (no eliminados por él), ordenados primero
+ *       por favoritos y luego por `last_message_at` descendente (más recientes primero).
+ *       Incluye el último mensaje, la información del otro usuario, el conteo de no leídos
+ *       y el estado de favorito/archivado. Permite filtrar por estado y buscar por nombre.
+ *
+ *       Filtros de estado (`status`):
+ *       - `all` (default): todos los chats no archivados.
+ *       - `favorites`: solo chats marcados como favoritos y no archivados.
+ *       - `active`: solo chats con una orden vinculada en curso
+ *         (`PENDING`, `ACCEPTED`, `IN_PROGRESS`).
+ *       - `archived`: solo chats archivados por el usuario.
+ *
+ *       `search` filtra por nombre del otro usuario (ILIKE). Paginación con `limit`
+ *       (default 20, máx 100) y `offset`.
  *     tags: [Chats]
  *     security:
  *       - bearerAuth: []
@@ -2483,6 +2503,19 @@ export const setupSwagger = (app) => {
  *           type: string
  *           format: uuid
  *         description: UUID del usuario (debe coincidir con el token)
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [all, favorites, active, archived]
+ *           default: all
+ *         description: Filtro por estado del chat
+ *       - in: query
+ *         name: search
+ *         required: false
+ *         schema: { type: string, maxLength: 100 }
+ *         description: Busca por nombre del otro usuario del chat
  *       - in: query
  *         name: limit
  *         required: false
@@ -2504,6 +2537,8 @@ export const setupSwagger = (app) => {
  *               chats:
  *                 - chat_id: "a1b2c3d4-..."
  *                   last_message_at: "2026-08-07T13:00:00Z"
+ *                   is_favorite: true
+ *                   is_archived: false
  *                   last_message:
  *                     content: "Hola, ¿estás disponible?"
  *                     sender_id: "b2c3d4e5-..."
@@ -2517,7 +2552,7 @@ export const setupSwagger = (app) => {
  *               limit: 20
  *               offset: 0
  *       400:
- *         description: Error de validación de parámetros de paginación
+ *         description: Error de validación de parámetros de paginación o filtros
  *         content:
  *           application/json:
  *             schema:

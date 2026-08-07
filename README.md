@@ -151,7 +151,7 @@ docker-compose down -v
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
 | `POST` | `/chats` | JWT | Crear chat con otro usuario (`user_id_2`, `order_id?`). Idempotente: devuelve el chat existente (`200`, `created: false`) |
-| `GET` | `/users/:id/chats` | JWT | Listar chats del usuario (solo propio). `?limit=&offset=` para paginación; incluye `unread_count` y último mensaje |
+| `GET` | `/users/:id/chats` | JWT | Listar chats del usuario (solo propio). Filtros: `status` (`all`, `favorites`, `active`, `archived`), `search` (por nombre del otro usuario). `?limit=&offset=` para paginación; incluye `unread_count`, último mensaje, `is_favorite` e `is_archived`. Orden: primero favoritos, luego por `last_message_at` |
 | `GET` | `/chats/:chat_id` | JWT | Detalle del chat + últimos 50 mensajes. Marca los mensajes como leídos |
 | `DELETE` | `/chats/:chat_id` | JWT | Eliminar chat (soft delete: lo oculta solo para el usuario) |
 
