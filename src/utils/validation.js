@@ -276,6 +276,28 @@ export const listLocationsQuerySchema = Joi.object({
   .with('lat', 'lng')
   .with('lng', 'lat');
 
+export const createChatSchema = Joi.object({
+  user_id_2: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'user_id_2 debe ser un UUID válido',
+    'any.required': 'user_id_2 es requerido',
+  }),
+  order_id: Joi.string().pattern(uuidPattern).allow(null).messages({
+    'string.pattern.base': 'order_id debe ser un UUID válido',
+  }),
+});
+
+export const listChatsQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+});
+
 export const nearbyWorkersQuerySchema = Joi.object({
   latitude: Joi.number().min(-90).max(90).required().messages({
     'number.base': 'latitude debe ser un número',

@@ -18,6 +18,7 @@ Este documento detalla el esquema de base de datos relacional implementado en Po
 - `locations` (1) ── (N) `orders`
 - `orders` (1) ── (N) `quotes`
 - `orders` (1) ── (1) `chats` ── (N) `messages`
+- `chats` (1) ── (N) `chat_participants` ── (1) `users` _(soft delete y `last_read_at` por usuario)_
 - `orders` (1) ── (N) `transactions` (Escrow / Pagos)
 - `orders` (1) ── (N) `ratings`
 - `orders` (1) ── (N) `disputes`
@@ -246,17 +247,37 @@ Propuesta de tarifa y agenda enviada por el proveedor ante una solicitud o negoc
 ---
 
 ### 10. `chats`
-Canal de mensajería asociado a una orden/negociación.
+Canal de mensajería asociado a una orden/negociación. Se garantiza **un único chat por pareja** mediante la canonicalización `user_id_1 < user_id_2` y el índice `UNIQUE (user_id_1, user_id_2)`.
 
 | Campo | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | `id` | `UUID` | `PRIMARY KEY` | Identificador único. |
-| `user_id_1` | `UUID` | `FOREIGN KEY` (Cascade) | ID del participante 1. |
-| `user_id_2` | `UUID` | `FOREIGN KEY` (Cascade) | ID del participante 2. |
+| `user_id_1` | `UUID` | `FOREIGN KEY` (Cascade) | ID del participante 1 (canónico: menor de la pareja). |
+| `user_id_2` | `UUID` | `FOREIGN KEY` (Cascade) | ID del participante 2 (canónico: mayor de la pareja). |
 | `order_id` | `UUID` | `FOREIGN KEY` (Set Null) | Orden asociada (opcional). |
 | `last_message_at`| `TIMESTAMP` | `DEFAULT Now()` | Timestamp del último mensaje enviado. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Creación del chat. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
+
+*   **Índices**: `UNIQUE (user_id_1, user_id_2)` (deduplicación por pareja).
+*   **Agregado en**: Migración `20260724000000_add_chats_and_messages.js` (tabla base) y `20260807000000_add_chat_participants_and_dedup.js` (canonicalización + UNIQUE + tabla `chat_participants`).
+
+---
+
+### 10b. `chat_participants`
+Registro por usuario dentro de cada chat. Permite el **soft delete individual** y el seguimiento de **mensajes no leídos** sin afectar al otro participante.
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `chat_id` | `UUID` | `FOREIGN KEY` (Cascade), `PRIMARY KEY` | Chat al que pertenece la participación. |
+| `user_id` | `UUID` | `FOREIGN KEY` (Cascade), `PRIMARY KEY` | Usuario participante. |
+| `last_read_at` | `TIMESTAMP` | `NULLABLE` | Última vez que el usuario abrió el chat (los mensajes posteriores se consideran no leídos). |
+| `deleted_at` | `TIMESTAMP` | `NULLABLE` | Si no es `NULL`, el chat está oculto para este usuario (soft delete). |
+
+*   **Índices**: B-Tree en `user_id` (listado de chats por usuario).
+*   **Cascade DELETE**: Al eliminar un chat o un usuario, sus participaciones se eliminan automáticamente.
+*   **Reactiva** una participación eliminada (`deleted_at = NULL`) cuando el usuario vuelve a llamar a `POST /chats` con la misma pareja.
+*   **Agregado en**: Migración `20260807000000_add_chat_participants_and_dedup.js`.
 
 ---
 
@@ -528,3 +549,49 @@ Swagger UI disponible en: `http://localhost:3000/api/v1/api-docs`
 | `GET /users/:id` | No | `200`, `404` |
 | `GET /users/me` | JWT | `200`, `401`, `403`, `404` |
 | `PATCH /users/:id` | JWT | `200`, `400` (validación), `401`, `403`, `404` |
+
+---
+
+## 💬 Sistema de Chats (Issue #4)
+
+Implementa la gestión de conversaciones entre dos usuarios con deduplicación por pareja, soft delete individual y contador de mensajes no leídos.
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats` | JWT | Crear chat con otro usuario (`user_id_2`, `order_id?`). **Idempotente**: si la pareja ya tiene chat, devuelve `200` con el mismo `chat_id` y `created: false`. `400` si `user_id_2` es el propio usuario. |
+| `GET` | `/users/:id/chats` | JWT | Listar chats del usuario (`?limit=`, `?offset=`; default 20, máx 100). `403` si `:id` no coincide con el JWT. Orden por `last_message_at DESC`. |
+| `GET` | `/chats/:chat_id` | JWT | Detalle del chat + últimos 50 mensajes (más recientes al final). Marca como leídos los mensajes del usuario. `unread_count` refleja los no-leídos al momento de abrir. |
+| `DELETE` | `/chats/:chat_id` | JWT | **Soft delete**: setea `chat_participants.deleted_at` solo para el usuario autenticado; el chat se oculta únicamente en su listado. |
+
+### Flujo de creación
+
+```
+POST /chats  { user_id_2: uuid, order_id?: uuid }  (requiere JWT)
+        ↓  Valida Joi + verifica que user_id_2 != req.user.user_id
+        ↓  Canonicaliza la pareja: user_id_1 = MIN, user_id_2 = MAX
+        ↓  SELECT chat por (user_id_1, user_id_2)
+        ↓  ¿Existe? ── sí → 200 { chat_id, created: false }  (reactiva participación si fue eliminada)
+        ↓  no → INSERT en chats + chat_participants (transacción)
+        ↓  ¿Conflicto UNIQUE (23505) por concurrencia? → re-consulta el chat existente
+   ← 201 { chat_id, created: true }
+```
+
+### Semántica de no-leídos
+
+- `chat_participants.last_read_at` guarda cuándo el usuario abrió el chat por última vez.
+- `unread_count` = mensajes del chat con `sender_id != user_id` y `created_at > last_read_at` (o todos los ajenos si `last_read_at IS NULL`).
+- Los mensajes enviados por el propio usuario **no** cuentan como no leídos para él.
+
+### Auditoría
+
+Las operaciones de creación y eliminación emiten logs estructurados de `[AUDITORIA]` con `chat_id`, `user_id` y `timestamp`.
+
+### Servicios implementados
+
+| Servicio | Archivo | Responsabilidad |
+|---|---|---|
+| `ChatService` | `src/services/ChatService.js` | Canonicalización de parejas, creación/deduplicación, listado con paginación, detalle con marcado de leídos y soft delete |
+| `ChatController` | `src/controllers/ChatController.js` | Manejo HTTP (400/401/403/404) y delegación a `ChatService` |
+| `chatRoutes` | `src/routes/chatRoutes.js` | Rutas `/api/v1/chats` + `GET /users/:id/chats` con `authenticateToken` |

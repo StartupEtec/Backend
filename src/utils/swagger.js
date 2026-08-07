@@ -993,6 +993,146 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             offset: { type: 'integer', example: 0 },
           },
         },
+
+        // ── Chat schemas ────────────────────────────────────────────────
+        CreateChatRequest: {
+          type: 'object',
+          required: ['user_id_2'],
+          properties: {
+            user_id_2: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-...',
+              description: 'UUID del otro usuario con quien se inicia el chat',
+            },
+            order_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'c3d4e5f6-...',
+              nullable: true,
+              description: 'UUID de la orden asociada al chat (opcional)',
+            },
+          },
+        },
+        CreateChatResponse: {
+          type: 'object',
+          properties: {
+            chat_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            created: {
+              type: 'boolean',
+              example: true,
+              description: 'true si el chat se creó, false si ya existía para la pareja',
+            },
+            message: { type: 'string', example: 'Chat creado correctamente' },
+          },
+        },
+        MessageResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            sender_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            content: { type: 'string', example: 'Hola, ¿estás disponible?' },
+            message_type: {
+              type: 'string',
+              example: 'TEXT',
+              enum: ['TEXT', 'IMAGE', 'QUOTE'],
+            },
+            attachment_url: { type: 'string', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        ChatDetailResponse: {
+          type: 'object',
+          properties: {
+            chat: {
+              type: 'object',
+              properties: {
+                chat_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+                user_id_1: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+                user_id_2: { type: 'string', format: 'uuid', example: 'b2c3d4e5-...' },
+                order_id: { type: 'string', format: 'uuid', nullable: true },
+                last_message_at: { type: 'string', format: 'date-time' },
+                created_at: { type: 'string', format: 'date-time' },
+              },
+            },
+            messages: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/MessageResponse' },
+              description: 'Últimos 50 mensajes del chat en orden cronológico',
+            },
+            unread_count: {
+              type: 'integer',
+              example: 3,
+              description: 'Mensajes no leídos del usuario antes de abrir el chat',
+            },
+          },
+        },
+        ChatListItem: {
+          type: 'object',
+          properties: {
+            chat_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            order_id: { type: 'string', format: 'uuid', nullable: true },
+            last_message_at: { type: 'string', format: 'date-time' },
+            last_message: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                content: { type: 'string', example: 'Hola, ¿estás disponible?' },
+                sender_id: { type: 'string', format: 'uuid' },
+                created_at: { type: 'string', format: 'date-time' },
+              },
+            },
+            other_user: {
+              type: 'object',
+              properties: {
+                user_id: { type: 'string', format: 'uuid' },
+                full_name: { type: 'string', example: 'Carlos García', nullable: true },
+                avatar_url: { type: 'string', nullable: true },
+              },
+            },
+            unread_count: {
+              type: 'integer',
+              example: 2,
+              description: 'Mensajes no leídos del usuario en este chat',
+            },
+          },
+        },
+        ListChatsResponse: {
+          type: 'object',
+          properties: {
+            chats: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ChatListItem' },
+            },
+            count: { type: 'integer', example: 20 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+        ChatNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'CHAT_NOT_FOUND' },
+            message: { type: 'string', example: 'Chat no encontrado o no tienes acceso a él' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ChatSameUserError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'SAME_USER' },
+            message: { type: 'string', example: 'No puedes crear un chat contigo mismo' },
+            statusCode: { type: 'integer', example: 400 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        DeleteChatResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Chat eliminado correctamente' },
+          },
+        },
       },
     },
   },
@@ -2144,4 +2284,206 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/UnauthorizedError'
+ */
+/**
+ * @openapi
+ * /chats:
+ *   post:
+ *     summary: Crear o recuperar un chat entre dos usuarios
+ *     description: |
+ *       Crea un chat entre el usuario autenticado y `user_id_2`. Solo se permite
+ *       un chat por pareja: si el chat ya existe, se devuelve el mismo `chat_id`
+ *       con `created: false` y se reactiva el chat si el usuario lo había eliminado.
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateChatRequest'
+ *           example:
+ *             user_id_2: "b2c3d4e5-..."
+ *             order_id: "c3d4e5f6-..."
+ *     responses:
+ *       201:
+ *         description: Chat creado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateChatResponse'
+ *       200:
+ *         description: El chat de la pareja ya existía, se retorna el existente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateChatResponse'
+ *             example:
+ *               chat_id: "a1b2c3d4-..."
+ *               created: false
+ *               message: "El chat ya existe"
+ *       400:
+ *         description: Error de validación o intento de chat consigo mismo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatSameUserError'
+ *       404:
+ *         description: Uno de los usuarios no existe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *
+ * /chats/{chat_id}:
+ *   get:
+ *     summary: Obtener un chat con sus últimos 50 mensajes
+ *     description: |
+ *       Retorna el chat y los últimos 50 mensajes en orden cronológico.
+ *       Marca como leídos los mensajes del otro participante (`last_read_at` se actualiza).
+ *       El usuario debe ser participante del chat.
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chat_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del chat
+ *     responses:
+ *       200:
+ *         description: Detalle del chat con mensajes y no-leídos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatDetailResponse'
+ *       404:
+ *         description: Chat no encontrado o sin acceso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatNotFoundError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *   delete:
+ *     summary: Eliminar un chat (soft delete)
+ *     description: |
+ *       Marca `deleted_at` en la participación del usuario autenticado.
+ *       El chat deja de aparecer solo en el listado de quien lo elimina;
+ *       el otro participante puede seguir viéndolo.
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chat_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del chat
+ *     responses:
+ *       200:
+ *         description: Chat eliminado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DeleteChatResponse'
+ *       404:
+ *         description: Chat no encontrado o sin acceso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatNotFoundError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *
+ * /users/{id}/chats:
+ *   get:
+ *     summary: Listar chats del usuario con paginación
+ *     description: |
+ *       Lista los chats activos del usuario autenticado (no eliminados por él),
+ *       ordenados por `last_message_at` descendente (más recientes primero).
+ *       Incluye el último mensaje, la información del otro usuario y el conteo
+ *       de mensajes no leídos. Paginación con `limit` (default 20, máx 100) y `offset`.
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario (debe coincidir con el token)
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         description: Número máximo de chats por página
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema: { type: integer, minimum: 0, default: 0 }
+ *         description: Desplazamiento para paginación
+ *     responses:
+ *       200:
+ *         description: Lista paginada de chats del usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListChatsResponse'
+ *             example:
+ *               chats:
+ *                 - chat_id: "a1b2c3d4-..."
+ *                   last_message_at: "2026-08-07T13:00:00Z"
+ *                   last_message:
+ *                     content: "Hola, ¿estás disponible?"
+ *                     sender_id: "b2c3d4e5-..."
+ *                     created_at: "2026-08-07T13:00:00Z"
+ *                   other_user:
+ *                     user_id: "b2c3d4e5-..."
+ *                     full_name: "Carlos García"
+ *                     avatar_url: null
+ *                   unread_count: 2
+ *               count: 1
+ *               limit: 20
+ *               offset: 0
+ *       400:
+ *         description: Error de validación de parámetros de paginación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para ver los chats de otro usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
  */
