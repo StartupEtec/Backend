@@ -146,6 +146,15 @@ docker-compose down -v
 |--------|------|------|-------------|
 | `GET` | `/workers/nearby` | JWT | Trabajadores disponibles en un radio (`latitude`, `longitude`, `radius_km`, `category_id?`, `limit?`, `offset?`) |
 
+### Chats (`/api/v1/chats`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats` | JWT | Crear chat con otro usuario (`user_id_2`, `order_id?`). Idempotente: devuelve el chat existente (`200`, `created: false`) |
+| `GET` | `/users/:id/chats` | JWT | Listar chats del usuario (solo propio). `?limit=&offset=` para paginación; incluye `unread_count` y último mensaje |
+| `GET` | `/chats/:chat_id` | JWT | Detalle del chat + últimos 50 mensajes. Marca los mensajes como leídos |
+| `DELETE` | `/chats/:chat_id` | JWT | Eliminar chat (soft delete: lo oculta solo para el usuario) |
+
 ### Salud y Documentación
 
 | Método | Ruta | Auth | Descripción |
