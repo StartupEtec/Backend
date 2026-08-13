@@ -240,9 +240,12 @@ Propuesta de tarifa y agenda enviada por el proveedor ante una solicitud o negoc
 | `proposed_price` | `DECIMAL(10,2)`| `NOT NULL` | Precio total de la propuesta. |
 | `proposed_date` | `DATE` | `NOT NULL` | Fecha estimada del servicio. |
 | `proposed_time` | `TIME` | `NOT NULL` | Hora estimada. |
-| `status` | `VARCHAR` | `DEFAULT 'PENDING'` | Estados de la cotización: `PENDING`, `ACCEPTED`, `REJECTED`. |
+| `status` | `VARCHAR` | `DEFAULT 'PENDING'`, `CHECK` | Máquina de estados: `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`. Solo se transiciona desde `PENDING`. |
+| `rejection_reason` | `TEXT` | `NULL` | Motivo opcional registrado al rechazar/cancelar (útil para renegociación). |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de envío. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
+
+**Nota**: `transactions` tiene índice `UNIQUE (order_id)` para garantizar una sola transacción (pago/escrow) por orden.
 
 ---
 

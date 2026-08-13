@@ -364,3 +364,54 @@ export const nearbyWorkersQuerySchema = Joi.object({
     'number.min': 'offset no puede ser negativo',
   }),
 });
+
+const timePattern = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
+export const createQuoteSchema = Joi.object({
+  proposed_price: Joi.number().positive().precision(2).max(99999999.99).required().messages({
+    'number.base': 'El precio propuesto debe ser un número',
+    'number.positive': 'El precio propuesto debe ser un valor positivo',
+    'number.max': 'El precio propuesto no debe exceder los 99,999,999.99',
+    'any.required': 'El precio propuesto es requerido',
+  }),
+  proposed_date: Joi.date()
+    .iso()
+    .custom((value, helpers) => {
+      // Joi interpreta 'YYYY-MM-DD' como medianoche UTC; comparamos fechas de
+      // calendario para no rechazar el día de hoy en zonas horarias detrás de UTC.
+      const today = new Date();
+      const todayStr = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
+      if (value.toISOString().slice(0, 10) < todayStr) {
+        return helpers.message('La fecha propuesta debe ser hoy o una fecha futura');
+      }
+      return value;
+    })
+    .required()
+    .messages({
+      'date.base': 'La fecha propuesta debe ser una fecha válida',
+      'date.iso': 'La fecha propuesta debe tener formato ISO (YYYY-MM-DD)',
+      'any.required': 'La fecha propuesta es requerida',
+    }),
+  proposed_time: Joi.string().pattern(timePattern).required().messages({
+    'string.pattern.base': 'La hora propuesta debe tener formato HH:mm',
+    'any.required': 'La hora propuesta es requerida',
+  }),
+});
+
+export const updateQuoteStatusSchema = Joi.object({
+  status: Joi.string().valid('ACCEPTED', 'REJECTED', 'CANCELLED').required().messages({
+    'any.only': 'El estado solo puede cambiarse a ACCEPTED, REJECTED o CANCELLED',
+    'any.required': 'El estado es requerido',
+  }),
+  rejection_reason: Joi.string().trim().max(1000).allow('', null).messages({
+    'string.max': 'El motivo no debe exceder los 1000 caracteres',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });

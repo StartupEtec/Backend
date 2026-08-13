@@ -163,6 +163,86 @@ docker-compose down -v
 | `GET` | `/chats/:chat_id/messages` | JWT | Listar mensajes (`?limit=&offset=`; default 50, máx 100, más recientes al final). Marca la conversación como leída |
 | `DELETE` | `/messages/:message_id` | JWT | Eliminar mensaje (solo el autor, soft delete). Emite `message:deleted` por WS |
 
+### Cotizaciones (`/api/v1/orders/:order_id/quotes` y `/api/v1/quotes`)
+
+Gestión de cotizaciones (propuestas de tarifa y agenda) que el trabajador envía sobre una orden.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/orders/:order_id/quotes` | JWT (worker) | Crear cotización (`proposed_price`, `proposed_date`, `proposed_time`). Solo el trabajador de la orden y si la orden está activa. Crea la quote en `PENDING` |
+| `GET` | `/orders/:order_id/quotes` | JWT | Listar cotizaciones de la orden en orden cronológico (solo cliente o trabajador de la orden) |
+| `GET` | `/quotes/:quote_id` | JWT | Detalle de una cotización (solo participantes de la orden) |
+| `PATCH` | `/quotes/:quote_id` | JWT | Cambiar estado: `ACCEPTED`/`REJECTED` (solo cliente, con `rejection_reason` opcional) o `CANCELLED` (solo trabajador) |
+| `DELETE` | `/quotes/:quote_id` | JWT | Eliminar cotización (solo trabajador y si está en `PENDING`) |
+
+**Máquina de estados de cotizaciones:** `PENDING → ACCEPTED | REJECTED | CANCELLED` (solo se transiciona desde `PENDING`). Cualquier otra transición devuelve `409 INVALID_TRANSITION`.
+
+**Reglas y validaciones:**
+
+- `proposed_price`: número obligatorio, positivo, máx. `99,999,999.99` (2 decimales).
+- `proposed_date`: obligatoria, formato ISO `YYYY-MM-DD`; debe ser hoy o una fecha futura.
+- `proposed_time`: obligatoria, formato `HH:mm`.
+- Solo el **trabajador asignado** a la orden puede crear cotizaciones y solo si la orden está `PENDING`, `ACCEPTED` o `IN_PROGRESS` (si no, `409 ORDER_NOT_ACTIVE`).
+- Solo el **cliente** puede aceptar/rechazar (`PATCH`); solo el **trabajador** puede cancelar su propuesta (`CANCELLED`) o eliminar la cotización.
+- El motivo de rechazo (`rejection_reason`, opcional, máx. 1000 caracteres) se guarda para permitir renegociación.
+- Al **aceptar** una cotización se ejecuta de forma atómica: la cotización pasa a `ACCEPTED`, las demás cotizaciones pendientes de la orden pasan a `REJECTED`, la orden pasa a `ACCEPTED` y se **inicia el proceso de pago** creando la transacción (escrow) en estado `PENDING`. Un índice `UNIQUE (order_id)` en `transactions` garantiza un solo pago por orden (`409 PAYMENT_ALREADY_STARTED`).
+
+**Ejemplo — crear cotización:**
+
+```json
+POST /api/v1/orders/:order_id/quotes
+Authorization: Bearer <accessToken>
+{
+  "proposed_price": 35000,
+  "proposed_date": "2026-08-20",
+  "proposed_time": "14:30"
+}
+```
+
+Respuesta `201 Created`:
+
+```json
+{
+  "message": "Cotización creada correctamente",
+  "quote": {
+    "id": "a1b2c3d4-...",
+    "order_id": "c3d4e5f6-...",
+    "proposed_price": 35000,
+    "proposed_date": "2026-08-20",
+    "proposed_time": "14:30:00",
+    "status": "PENDING",
+    "rejection_reason": null,
+    "created_at": "2026-08-13T12:00:00.000Z",
+    "updated_at": "2026-08-13T12:00:00.000Z"
+  }
+}
+```
+
+**Ejemplo — rechazar con motivo (renegociación):**
+
+```json
+PATCH /api/v1/quotes/:quote_id
+Authorization: Bearer <accessToken>
+{
+  "status": "REJECTED",
+  "rejection_reason": "El precio supera mi presupuesto"
+}
+```
+
+**Ejemplo — aceptar (inicia el pago):**
+
+```json
+PATCH /api/v1/quotes/:quote_id
+Authorization: Bearer <accessToken>
+{ "status": "ACCEPTED" }
+```
+
+**Cambios de base de datos (migración `20260811000000_add_quote_rejection_reason.js`):**
+
+- Columna `rejection_reason` (`TEXT`, nullable) en `quotes`.
+- Constraint `quotes_status_check` que restringe `status` a `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`.
+- Índice `UNIQUE (order_id)` en `transactions` para garantizar una sola transacción (pago/escrow) por orden.
+
 ### WebSocket (real-time messaging)
 
 El servidor expone un WebSocket en `ws://<host>/ws`. El cliente se conecta pasando el
