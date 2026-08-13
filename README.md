@@ -232,8 +232,6 @@ Authorization: Bearer <accessToken>
 **Ejemplo — aceptar (inicia el pago):**
 
 ```json
-PATCH /api/v1/quotes/:quote_id
-Authorization: Bearer <accessToken>
 { "status": "ACCEPTED" }
 ```
 
@@ -242,6 +240,28 @@ Authorization: Bearer <accessToken>
 - Columna `rejection_reason` (`TEXT`, nullable) en `quotes`.
 - Constraint `quotes_status_check` que restringe `status` a `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`.
 - Índice `UNIQUE (order_id)` en `transactions` para garantizar una sola transacción (pago/escrow) por orden.
+
+### Órdenes (`/api/v1/orders`)
+
+Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máquina de estados.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/orders/:id` | JWT | Detalles de una orden |
+| `PATCH` | `/orders/:id/status` | JWT | Actualizar estado de la orden (sigue reglas de la máquina de estados) |
+| `GET` | `/orders/:id/history` | JWT | Historial de auditoría de la orden (cambios de estado) |
+
+**Máquina de estados de órdenes:** `PENDING → ACCEPTED | REJECTED`, `ACCEPTED → IN_PROGRESS | CANCELLED`, `IN_PROGRESS → COMPLETED | CANCELLED`.
+
+**Reglas y validaciones:**
+- `PENDING -> ACCEPTED` y `PENDING -> REJECTED` solo pueden ser solicitados por el **cliente**.
+- `ACCEPTED -> IN_PROGRESS` y `IN_PROGRESS -> COMPLETED` solo pueden ser solicitados por el **trabajador**.
+- `CANCELLED` en estado `ACCEPTED` o `IN_PROGRESS` puede ser solicitado por cualquiera de los dos (**cliente o trabajador**).
+- Cada transición exitosa inserta un registro en la tabla `order_events` y emite el evento en tiempo real `order:status_changed` a los participantes vía WebSocket.
+
+**Cambios de base de datos (migración `20260813122916_create_order_events.js`):**
+- Nueva tabla `order_events` (`id`, `order_id`, `user_id`, `from_state`, `to_state`, `created_at`).
+- Constraint `orders_status_check` que restringe los estados permitidos a `PENDING`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `REJECTED`, `CANCELLED`.
 
 ### WebSocket (real-time messaging)
 
