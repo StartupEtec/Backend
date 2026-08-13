@@ -415,3 +415,14 @@ export const updateQuoteStatusSchema = Joi.object({
   .messages({
     'object.min': 'Debe proporcionar al menos un campo para actualizar',
   });
+
+export const updateOrderStatusSchema = Joi.object({
+  status: Joi.string()
+    .valid('ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED')
+    .required()
+    .messages({
+      'any.only':
+        'El estado debe ser uno de: ACCEPTED, IN_PROGRESS, COMPLETED, REJECTED, CANCELLED',
+      'any.required': 'El estado es requerido',
+    }),
+});
