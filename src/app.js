@@ -8,6 +8,7 @@ import locationRoutes from './routes/locationRoutes.js';
 import workerRoutes from './routes/workerRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
+import quoteRoutes from './routes/quoteRoutes.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/workers', workerRoutes);
 app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/messages', messageRoutes);
+app.use('/api/v1', quoteRoutes);
 
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));

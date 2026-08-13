@@ -1191,6 +1191,149 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             message: { type: 'string', example: 'Chat eliminado correctamente' },
           },
         },
+
+        // ── Quote schemas ────────────────────────────────────────────────
+        QuoteResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            order_id: { type: 'string', format: 'uuid', example: 'c3d4e5f6-...' },
+            proposed_price: { type: 'number', example: 35000 },
+            proposed_date: { type: 'string', format: 'date', example: '2026-08-20' },
+            proposed_time: { type: 'string', example: '14:30' },
+            status: {
+              type: 'string',
+              example: 'PENDING',
+              enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'],
+            },
+            rejection_reason: {
+              type: 'string',
+              example: 'El precio supera mi presupuesto',
+              nullable: true,
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateQuoteRequest: {
+          type: 'object',
+          required: ['proposed_price', 'proposed_date', 'proposed_time'],
+          properties: {
+            proposed_price: {
+              type: 'number',
+              example: 35000,
+              description: 'Precio total de la propuesta (valor positivo)',
+            },
+            proposed_date: {
+              type: 'string',
+              format: 'date',
+              example: '2026-08-20',
+              description: 'Fecha estimada del servicio (hoy o futura)',
+            },
+            proposed_time: {
+              type: 'string',
+              example: '14:30',
+              description: 'Hora estimada en formato HH:mm',
+            },
+          },
+        },
+        UpdateQuoteStatusRequest: {
+          type: 'object',
+          required: ['status'],
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
+              description:
+                'ACCEPTED o REJECTED (solo cliente), CANCELLED (solo el trabajador de la orden)',
+            },
+            rejection_reason: {
+              type: 'string',
+              maxLength: 1000,
+              example: 'El precio supera mi presupuesto',
+              nullable: true,
+              description: 'Motivo opcional de rechazo (útil para renegociación)',
+            },
+          },
+        },
+        CreateQuoteResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Cotización creada correctamente' },
+            quote: { $ref: '#/components/schemas/QuoteResponse' },
+          },
+        },
+        UpdateQuoteStatusResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Estado de cotización actualizado correctamente' },
+            quote: { $ref: '#/components/schemas/QuoteResponse' },
+          },
+        },
+        ListQuotesResponse: {
+          type: 'object',
+          properties: {
+            quotes: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/QuoteResponse' },
+            },
+            count: { type: 'integer', example: 2 },
+          },
+        },
+        QuoteNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'QUOTE_NOT_FOUND' },
+            message: {
+              type: 'string',
+              example: 'Cotización no encontrada o no tienes acceso a ella',
+            },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        InvalidTransitionError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'INVALID_TRANSITION' },
+            message: { type: 'string', example: 'No se puede pasar de ACCEPTED a REJECTED' },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        QuoteNotPendingError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'QUOTE_NOT_PENDING' },
+            message: {
+              type: 'string',
+              example: 'Solo se pueden eliminar cotizaciones en estado PENDING',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        PaymentAlreadyStartedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'PAYMENT_ALREADY_STARTED' },
+            message: { type: 'string', example: 'Ya existe un pago iniciado para esta orden' },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        OrderNotActiveError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'ORDER_NOT_ACTIVE' },
+            message: {
+              type: 'string',
+              example: 'La orden no está en un estado en el que se pueda cotizar',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
   },
@@ -2762,4 +2905,280 @@ export const setupSwagger = (app) => {
  *         notificar que está escribiendo (el servidor lo reenvía a los demás
  *         participantes del chat).
  *     tags: [Mensajes]
+ */
+/**
+ * @openapi
+ * /orders/{order_id}/quotes:
+ *   post:
+ *     summary: Crear una cotización para una orden
+ *     description: |
+ *       Permite al trabajador asignado a la orden enviar una propuesta de tarifa
+ *       y agenda (`proposed_price`, `proposed_date`, `proposed_time`).
+ *       Solo el trabajador de la orden puede crear cotizaciones y la orden debe
+ *       estar activa (PENDING, ACCEPTED o IN_PROGRESS). La cotización se crea
+ *       en estado `PENDING`.
+ *     tags: [Cotizaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: order_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateQuoteRequest'
+ *           example:
+ *             proposed_price: 35000
+ *             proposed_date: "2026-08-20"
+ *             proposed_time: "14:30"
+ *     responses:
+ *       201:
+ *         description: Cotización creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateQuoteResponse'
+ *       400:
+ *         description: Error de validación (precio no positivo, fecha pasada o hora inválida)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (no es el trabajador asignado o rol incorrecto)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *       409:
+ *         description: La orden no está activa para cotizar
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotActiveError'
+ *   get:
+ *     summary: Listar las cotizaciones de una orden
+ *     description: |
+ *       Retorna todas las cotizaciones de la orden en orden cronológico.
+ *       Accesible solo para el cliente o el trabajador de la orden.
+ *     tags: [Cotizaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: order_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     responses:
+ *       200:
+ *         description: Lista de cotizaciones de la orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListQuotesResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para ver las cotizaciones de esta orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *
+ * /quotes/{quote_id}:
+ *   get:
+ *     summary: Obtener detalles de una cotización
+ *     description: |
+ *       Retorna el detalle de una cotización. Accesible solo para el cliente o
+ *       el trabajador de la orden asociada.
+ *     tags: [Cotizaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quote_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la cotización
+ *     responses:
+ *       200:
+ *         description: Detalle de la cotización
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/QuoteResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Cotización no encontrada o sin acceso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/QuoteNotFoundError'
+ *   patch:
+ *     summary: Aceptar, rechazar o cancelar una cotización
+ *     description: |
+ *       Cambia el estado de una cotización `PENDING`. Máquina de estados:
+ *       - `PENDING → ACCEPTED` o `PENDING → REJECTED`: solo el cliente de la
+ *         orden. Al aceptar, la orden pasa a `ACCEPTED`, las demás cotizaciones
+ *         pendientes se rechazan y se inicia el proceso de pago creando la
+ *         transacción (escrow) en estado `PENDING`.
+ *       - `PENDING → CANCELLED`: solo el trabajador de la orden (retira su propuesta).
+ *
+ *       `rejection_reason` es opcional y se guarda al rechazar (permite renegociar).
+ *     tags: [Cotizaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quote_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la cotización
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateQuoteStatusRequest'
+ *           examples:
+ *             aceptar:
+ *               summary: Aceptar la cotización
+ *               value:
+ *                 status: ACCEPTED
+ *             rechazar:
+ *               summary: Rechazar con motivo (renegociación)
+ *               value:
+ *                 status: REJECTED
+ *                 rejection_reason: "El precio supera mi presupuesto"
+ *     responses:
+ *       200:
+ *         description: Estado de cotización actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateQuoteStatusResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (cliente solo acepta/rechaza, trabajador solo cancela)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Cotización no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/QuoteNotFoundError'
+ *       409:
+ *         description: Transición inválida o pago ya iniciado para la orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/InvalidTransitionError'
+ *                 - $ref: '#/components/schemas/PaymentAlreadyStartedError'
+ *   delete:
+ *     summary: Eliminar una cotización
+ *     description: |
+ *       Elimina una cotización. Solo el trabajador de la orden puede eliminarla
+ *       y únicamente mientras esté en estado `PENDING`.
+ *     tags: [Cotizaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quote_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la cotización
+ *     responses:
+ *       200:
+ *         description: Cotización eliminada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Cotización eliminada correctamente
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (no es el trabajador de la orden)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Cotización no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/QuoteNotFoundError'
+ *       409:
+ *         description: La cotización no está en estado PENDING
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/QuoteNotPendingError'
  */
