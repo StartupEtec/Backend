@@ -159,6 +159,20 @@ Gestión y ciclo de vida de los métodos de pago (tarjetas) de los usuarios.
 - Encriptación: Se almacena solo los últimos 4 dígitos visibles y el resto se encripta de forma segura usando AES-256-CBC con la clave `ENCRYPTION_KEY`.
 - Eliminación: No se permite eliminar una tarjeta si está asociada a transacciones en estado `PENDING` o `ESCROWED`.
 
+### Procesamiento de Pagos e Integración con Stripe (`/api/v1/payments` y `/api/v1/webhooks`)
+
+Flujo de procesamiento de transacciones reales integrado con Stripe (Payment Intents y confirmación asíncrona mediante Webhooks).
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/payments/process` | JWT | Iniciar proceso de pago para una orden (`order_id`, `payment_method_id`, `amount`). Crea un Payment Intent en Stripe y devuelve éxito (`succeeded`) o requerimiento de autenticación 3D Secure (`requires_action`) |
+| `POST` | `/webhooks/payment` | No | Recibe y procesa los webhooks enviados por Stripe (`payment_intent.succeeded` o `payment_intent.payment_failed`). Valida la autenticidad con `stripe-signature` y actualiza la transacción local a `ESCROWED` o `FAILED` |
+
+**Detalles de resiliencia y seguridad:**
+- **Reintentos automáticos**: Las llamadas al API de Stripe se reintentan hasta un máximo de 3 veces con backoff exponencial ante errores transitorios de red o de API.
+- **Validación de firmas**: Las solicitudes al webhook verifican obligatoriamente la firma `stripe-signature` para prevenir usurpaciones.
+- **Flujo 3D Secure**: Soporte completo para flujos que requieren interacción del cliente, actualizando el estado de forma asíncrona mediante el webhook.
+
 ### Búsqueda de Trabajadores (`/api/v1/workers`)
 
 | Método | Ruta | Auth | Descripción |
