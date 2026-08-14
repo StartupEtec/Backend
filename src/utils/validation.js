@@ -526,3 +526,19 @@ export const updatePaymentMethodSchema = Joi.object({
   .messages({
     'object.min': 'Debe proporcionar al menos un campo para actualizar',
   });
+
+export const processPaymentSchema = Joi.object({
+  order_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'El ID de la orden debe ser un UUID válido',
+    'any.required': 'El ID de la orden es requerido',
+  }),
+  payment_method_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'El ID del método de pago debe ser un UUID válido',
+    'any.required': 'El ID del método de pago es requerido',
+  }),
+  amount: Joi.number().positive().required().messages({
+    'number.base': 'El monto debe ser un número',
+    'number.positive': 'El monto debe ser un valor positivo',
+    'any.required': 'El monto es requerido',
+  }),
+});
