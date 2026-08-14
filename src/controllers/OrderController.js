@@ -62,8 +62,16 @@ class OrderController {
             result.message || 'No autorizado para realizar esta acción',
           );
         }
-        if (result.error === 'INVALID_TRANSITION') {
+        if (result.error === 'INVALID_TRANSITION' || result.error === 'TRANSACTION_NOT_FOUND') {
           return errorResponse(res, 409, 'INVALID_TRANSITION', result.message);
+        }
+        if (result.error === 'REFUND_FAILED') {
+          return errorResponse(
+            res,
+            502,
+            'REFUND_FAILED',
+            result.message || 'No se pudo reembolsar a la tarjeta del cliente',
+          );
         }
         return errorResponse(res, 500, 'INTERNAL_SERVER_ERROR', 'Ocurrió un error inesperado');
       }

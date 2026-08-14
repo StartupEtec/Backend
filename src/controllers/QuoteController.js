@@ -135,6 +135,14 @@ class QuoteController {
           'Ya existe un pago iniciado para esta orden',
         );
       }
+      if (result.error === 'PAYMENT_FAILED') {
+        return errorResponse(
+          res,
+          402,
+          'PAYMENT_FAILED',
+          result.message || 'No se pudo procesar el pago; la orden fue cancelada',
+        );
+      }
       if (result.error === 'MISSING_ORDER_PARTICIPANTS') {
         return errorResponse(
           res,

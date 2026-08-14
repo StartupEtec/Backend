@@ -1,6 +1,16 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
 import websocketHub from '../utils/websocket.js';
+import escrowService from './EscrowService.js';
+
+// Error de escrow lanzado dentro de una transacción para abortar la operación.
+class EscrowOperationError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'EscrowOperationError';
+    this.code = code;
+  }
+}
 
 export const ORDER_STATUS = {
   PENDING: 'PENDING',
@@ -102,28 +112,40 @@ class OrderService {
       return { error: 'FORBIDDEN', message: 'Solo el trabajador puede completar la orden' };
     }
 
-    // Actualización transaccional de estado y registro de auditoría
-    await db.transaction(async (trx) => {
-      await trx('orders').where({ id: orderId }).update({
-        status: nextStatus,
-        updated_at: trx.fn.now(),
-      });
+    // Actualización transaccional de estado, auditoría y escrow
+    try {
+      await db.transaction(async (trx) => {
+        await trx('orders').where({ id: orderId }).update({
+          status: nextStatus,
+          updated_at: trx.fn.now(),
+        });
 
-      await trx('order_events').insert({
-        order_id: orderId,
-        user_id: userId,
-        from_state: order.status,
-        to_state: nextStatus,
-      });
+        await trx('order_events').insert({
+          order_id: orderId,
+          user_id: userId,
+          from_state: order.status,
+          to_state: nextStatus,
+        });
 
-      logger.info('[AUDITORIA] Estado de orden actualizado', {
-        order_id: orderId,
-        actor_user_id: userId,
-        from_state: order.status,
-        to_state: nextStatus,
-        timestamp: new Date().toISOString(),
+        const escrowError = await this.handleEscrowTransition(trx, orderId, nextStatus, userId);
+        if (escrowError) {
+          throw new EscrowOperationError(escrowError.error, escrowError.message);
+        }
+
+        logger.info('[AUDITORIA] Estado de orden actualizado', {
+          order_id: orderId,
+          actor_user_id: userId,
+          from_state: order.status,
+          to_state: nextStatus,
+          timestamp: new Date().toISOString(),
+        });
       });
-    });
+    } catch (err) {
+      if (err instanceof EscrowOperationError) {
+        return { error: err.code, message: err.message };
+      }
+      throw err;
+    }
 
     const updatedOrder = await db('orders').where({ id: orderId }).first();
 
@@ -157,6 +179,39 @@ class OrderService {
       .orderBy('created_at', 'asc');
 
     return { events };
+  }
+
+  /**
+   * Acciones de escrow disparadas por una transición de estado de la orden.
+   * Devuelve un error (o null) para abortar la transacción en caso de fallo.
+   */
+  async handleEscrowTransition(trx, orderId, nextStatus, actorUserId) {
+    if (nextStatus !== ORDER_STATUS.COMPLETED && nextStatus !== ORDER_STATUS.CANCELLED) {
+      return null;
+    }
+
+    const transaction = await trx('transactions').where({ order_id: orderId }).first();
+    if (!transaction) {
+      // Sin transacción asociada: la orden nunca llegó a pagarse, no hay escrow.
+      return null;
+    }
+
+    if (nextStatus === ORDER_STATUS.COMPLETED) {
+      const result = await escrowService.releaseFunds(trx, {
+        transactionId: transaction.id,
+        actorUserId,
+      });
+      if (result.error) return result;
+      return null;
+    }
+
+    const result = await escrowService.refund(trx, {
+      transactionId: transaction.id,
+      actorUserId,
+      reason: 'Orden cancelada',
+    });
+    if (result.error) return result;
+    return null;
   }
 }
 
