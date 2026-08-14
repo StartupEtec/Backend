@@ -140,6 +140,25 @@ docker-compose down -v
 | `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o marcado como principal |
 | `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación |
 
+### Métodos de Pago (`/api/v1/users/:id/payment-methods` y `/api/v1/payment-methods`)
+
+Gestión y ciclo de vida de los métodos de pago (tarjetas) de los usuarios.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/payment-methods` | JWT | Registrar un nuevo método de pago (tarjeta de crédito/débito). Valida Luhn, enmascara el PAN y encripta con AES-256 |
+| `GET` | `/users/:id/payment-methods` | JWT | Listar los métodos de pago guardados del usuario (números enmascarados) |
+| `PATCH` | `/payment-methods/:id` | JWT | Actualizar expiración, titular o estado predeterminado de un método de pago |
+| `DELETE` | `/payment-methods/:id` | JWT | Eliminar un método de pago (valida que no existan transacciones pendientes) |
+
+**Reglas y validaciones:**
+- `card_number`: Validador Luhn obligatorio, longitud de 13 a 19 dígitos.
+- `cvv`: Obligatorio, longitud de 3 a 4 dígitos. No se almacena en la base de datos (cumplimiento PCI-DSS).
+- `is_primary`: Flag para marcar la tarjeta predeterminada del usuario. Si es la primera tarjeta o se establece explícitamente en `true`, se desmarca automáticamente el resto.
+- Límite: Máximo de 10 métodos de pago por usuario.
+- Encriptación: Se almacena solo los últimos 4 dígitos visibles y el resto se encripta de forma segura usando AES-256-CBC con la clave `ENCRYPTION_KEY`.
+- Eliminación: No se permite eliminar una tarjeta si está asociada a transacciones en estado `PENDING` o `ESCROWED`.
+
 ### Búsqueda de Trabajadores (`/api/v1/workers`)
 
 | Método | Ruta | Auth | Descripción |

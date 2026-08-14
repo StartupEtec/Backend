@@ -4,6 +4,7 @@ import clientProfileController from '../controllers/ClientProfileController.js';
 import workerProfileController from '../controllers/WorkerProfileController.js';
 import locationController from '../controllers/LocationController.js';
 import chatController from '../controllers/ChatController.js';
+import paymentController from '../controllers/PaymentController.js';
 import { authenticateToken, requireRole } from '../middlewares/authMiddleware.js';
 
 const router = Router();
@@ -39,6 +40,10 @@ router.post('/:id/switch-role', authenticateToken, userController.switchRole);
 // Rutas de ubicaciones del usuario (deben ir ANTES de /:id genérico)
 router.post('/:id/locations', authenticateToken, locationController.create);
 router.get('/:id/locations', authenticateToken, locationController.list);
+
+// Rutas de métodos de pago del usuario (deben ir ANTES de /:id genérico)
+router.post('/:id/payment-methods', authenticateToken, paymentController.create);
+router.get('/:id/payment-methods', authenticateToken, paymentController.list);
 
 // Ruta de chats del usuario (debe ir ANTES de /:id genérico)
 router.get('/:id/chats', authenticateToken, chatController.list);
