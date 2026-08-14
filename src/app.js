@@ -10,6 +10,7 @@ import chatRoutes from './routes/chatRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import quoteRoutes from './routes/quoteRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -47,6 +48,7 @@ app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/messages', messageRoutes);
 app.use('/api/v1', quoteRoutes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/payment-methods', paymentRoutes);
 
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));

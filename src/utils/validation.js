@@ -426,3 +426,103 @@ export const updateOrderStatusSchema = Joi.object({
       'any.required': 'El estado es requerido',
     }),
 });
+
+const luhnCheck = (val) => {
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = val.length - 1; i >= 0; i--) {
+    let digit = parseInt(val.charAt(i), 10);
+    if (shouldDouble) {
+      if ((digit *= 2) > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+};
+
+export const createPaymentMethodSchema = Joi.object({
+  card_number: Joi.string()
+    .trim()
+    .pattern(/^\d{13,19}$/)
+    .required()
+    .custom((value, helpers) => {
+      if (!luhnCheck(value)) {
+        return helpers.message('El número de tarjeta no es válido (Fallo en verificación Luhn)');
+      }
+      return value;
+    })
+    .messages({
+      'string.pattern.base': 'El número de tarjeta debe contener entre 13 y 19 dígitos numéricos',
+      'any.required': 'El número de tarjeta es requerido',
+    }),
+  cvv: Joi.string()
+    .trim()
+    .pattern(/^\d{3,4}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'El CVV debe tener 3 o 4 dígitos',
+      'any.required': 'El CVV es requerido',
+    }),
+  exp_month: Joi.number().integer().min(1).max(12).required().messages({
+    'number.base': 'El mes de expiración debe ser un número',
+    'number.min': 'El mes de expiración debe estar entre 1 y 12',
+    'number.max': 'El mes de expiración debe estar entre 1 y 12',
+    'any.required': 'El mes de expiración es requerido',
+  }),
+  exp_year: Joi.number()
+    .integer()
+    .min(new Date().getFullYear())
+    .max(new Date().getFullYear() + 20)
+    .required()
+    .messages({
+      'number.base': 'El año de expiración debe ser un número',
+      'number.min': 'El año de expiración no puede ser en el pasado',
+      'any.required': 'El año de expiración es requerido',
+    }),
+  cardholder_name: Joi.string().trim().min(3).max(150).required().messages({
+    'string.empty': 'El nombre del titular no puede estar vacío',
+    'string.min': 'El nombre del titular debe tener al menos 3 caracteres',
+    'string.max': 'El nombre del titular no debe exceder los 150 caracteres',
+    'any.required': 'El nombre del titular es requerido',
+  }),
+  is_primary: Joi.boolean().default(false).messages({
+    'boolean.base': 'is_primary debe ser un booleano',
+  }),
+}).custom((value, helpers) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  if (value.exp_year === currentYear && value.exp_month < currentMonth) {
+    return helpers.message('La tarjeta de pago ya ha expirado');
+  }
+  return value;
+});
+
+export const updatePaymentMethodSchema = Joi.object({
+  exp_month: Joi.number().integer().min(1).max(12).optional().messages({
+    'number.min': 'El mes de expiración debe estar entre 1 y 12',
+    'number.max': 'El mes de expiración debe estar entre 1 y 12',
+  }),
+  exp_year: Joi.number()
+    .integer()
+    .min(new Date().getFullYear())
+    .max(new Date().getFullYear() + 20)
+    .optional()
+    .messages({
+      'number.min': 'El año de expiración no puede ser en el pasado',
+    }),
+  cardholder_name: Joi.string().trim().min(3).max(150).optional().messages({
+    'string.empty': 'El nombre del titular no puede estar vacío',
+    'string.min': 'El nombre del titular debe tener al menos 3 caracteres',
+    'string.max': 'El nombre del titular no debe exceder los 150 caracteres',
+  }),
+  is_primary: Joi.boolean().optional().messages({
+    'boolean.base': 'is_primary debe ser un booleano',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
