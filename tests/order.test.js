@@ -55,6 +55,14 @@ jest.unstable_mockModule('../src/utils/websocket.js', () => ({
   },
 }));
 
+const escrowServiceMock = {
+  releaseFunds: jest.fn(),
+  refund: jest.fn(),
+};
+jest.unstable_mockModule('../src/services/EscrowService.js', () => ({
+  default: escrowServiceMock,
+}));
+
 const { default: orderService } = await import('../src/services/OrderService.js');
 const { default: orderController } = await import('../src/controllers/OrderController.js');
 
@@ -82,6 +90,8 @@ const WORKER_PROFILE_ROW = { id: WORKER_PROFILE_ID, user_id: WORKER_USER_ID };
 
 const resetBuilders = () => {
   Object.keys(builders).forEach((key) => delete builders[key]);
+  escrowServiceMock.releaseFunds.mockReset();
+  escrowServiceMock.refund.mockReset();
   setupMockKnex();
 };
 
@@ -194,6 +204,106 @@ describe('OrderService', () => {
       const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'IN_PROGRESS');
       expect(res.error).toBeUndefined();
       expect(res.order).toBeDefined();
+    });
+
+    it('should release escrow funds when transitioning IN_PROGRESS -> COMPLETED', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'IN_PROGRESS' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'COMPLETED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({ transaction: { id: 'tx-uuid' } });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'COMPLETED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('COMPLETED');
+      expect(escrowServiceMock.releaseFunds).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ transactionId: 'tx-uuid', actorUserId: WORKER_USER_ID }),
+      );
+    });
+
+    it('should abort COMPLETED transition if escrow release fails', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue({ ...ORDER_ROW, status: 'IN_PROGRESS' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'PENDING',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({
+        error: 'INVALID_TRANSITION',
+        message: 'No se pueden liberar fondos desde PENDING',
+      });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'COMPLETED');
+
+      expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should refund escrow funds when cancelling an ACCEPTED order', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'ACCEPTED' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'CANCELLED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.refund.mockResolvedValue({ transaction: { id: 'tx-uuid' } });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, CLIENT_USER_ID, 'CANCELLED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('CANCELLED');
+      expect(escrowServiceMock.refund).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ transactionId: 'tx-uuid', actorUserId: CLIENT_USER_ID }),
+      );
+    });
+
+    it('should cancel an ACCEPTED order without transaction as a safe no-op (no refund)', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'ACCEPTED' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'CANCELLED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue(null);
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'CANCELLED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('CANCELLED');
+      expect(escrowServiceMock.refund).not.toHaveBeenCalled();
     });
   });
 

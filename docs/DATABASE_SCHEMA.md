@@ -20,6 +20,8 @@ Este documento detalla el esquema de base de datos relacional implementado en Po
 - `orders` (1) ── (1) `chats` ── (N) `messages`
 - `chats` (1) ── (N) `chat_participants` ── (1) `users` _(soft delete y `last_read_at` por usuario)_
 - `orders` (1) ── (N) `transactions` (Escrow / Pagos)
+- `transactions` (1) ── (N) `transaction_logs` (auditoría de estados)
+- `users` (1) ── (1) `user_wallets` (saldos: disponible y retenido)
 - `orders` (1) ── (N) `ratings`
 - `orders` (1) ── (N) `disputes`
 
@@ -310,14 +312,48 @@ Registros financieros con soporte para **Escrow**.
 | Campo | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | `id` | `UUID` | `PRIMARY KEY` | Identificador único. |
-| `order_id` | `UUID` | `FOREIGN KEY` (Restrict) | Orden correspondiente. |
+| `order_id` | `UUID` | `FOREIGN KEY` (Restrict), `UNIQUE` | Orden correspondiente (una transacción por orden). |
 | `payer_id` | `UUID` | `FOREIGN KEY` (Restrict) | Usuario emisor del pago (Cliente). |
 | `receiver_id` | `UUID` | `FOREIGN KEY` (Restrict) | Usuario receptor final (Proveedor). |
 | `amount` | `DECIMAL(10,2)`| `NOT NULL` | Monto bruto. |
-| `status` | `VARCHAR` | `DEFAULT 'PENDING'` | Estados: `PENDING`, `ESCROWED` (retenido en garantía), `COMPLETED` (liberado), `REFUNDED` (devuelto al cliente). |
+| `status` | `VARCHAR` | `DEFAULT 'PENDING'`, `CHECK` | Estados: `PENDING`, `ESCROWED` (retenido en garantía), `COMPLETED` (liberado), `REFUNDED` (devuelto al cliente), `FAILED` (cargo rechazado). |
 | `payment_method_id`| `UUID` | `FOREIGN KEY` (Set Null) | Método de pago utilizado. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de transacción. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
+
+*   **Índices**: B-Tree en `order_id` (UNIQUE), `payer_id`, `receiver_id`, `status`, `created_at`.
+*   **CHECK**: `transactions_status_check` restringe `status` a los 5 estados del escrow (agregado en `20260815000000_create_escrow_system.js`).
+
+---
+
+### 12b. `user_wallets`
+Saldos por usuario para el sistema de escrow (migración `20260815000000_create_escrow_system.js`).
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY` | Identificador único. |
+| `user_id` | `UUID` | `FOREIGN KEY` (Cascade), `UNIQUE` | Usuario propietario de la wallet. |
+| `current_balance` | `DECIMAL(12,2)` | `DEFAULT 0`, `NOT NULL` | Fondos **disponibles** (acreditados al trabajador al completar). |
+| `escrowed_balance` | `DECIMAL(12,2)` | `DEFAULT 0`, `NOT NULL` | Fondos **retenidos en escrow** (del cliente). |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación. |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
+
+---
+
+### 12c. `transaction_logs`
+Auditoría completa de cada cambio de estado de una transacción (migración `20260815000000_create_escrow_system.js`).
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY` | Identificador único. |
+| `transaction_id` | `UUID` | `FOREIGN KEY` (Cascade), `NOT NULL` | Transacción auditada. |
+| `from_status` | `VARCHAR` | `NOT NULL` | Estado anterior. |
+| `to_status` | `VARCHAR` | `NOT NULL` | Estado nuevo. |
+| `changed_by_id` | `UUID` | `FOREIGN KEY` (Set Null) | Usuario que ejecutó el cambio. |
+| `reason` | `TEXT` | - | Motivo del cambio (opcional). |
+| `created_at` | `TIMESTAMP` | `DEFAULT Now()` | Fecha del evento. |
+
+*   **Índices**: B-Tree en `transaction_id`, `created_at`.
 
 ---
 

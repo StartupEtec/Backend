@@ -1,5 +1,6 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import escrowService from './EscrowService.js';
 
 // Estados de la máquina de estados de cotizaciones.
 const QUOTE_STATUS = {
@@ -237,7 +238,8 @@ class QuoteService {
    * 1) marca la cotización como ACCEPTED,
    * 2) rechaza las demás cotizaciones pendientes de la orden,
    * 3) pasa la orden a ACCEPTED,
-   * 4) inicia el proceso de pago creando la transacción (escrow) en estado PENDING.
+   * 4) inicia el escrow cargando la tarjeta del cliente (ESCROWED) o, si el
+   *    cargo falla, deja la transacción en FAILED y cancela la orden.
    */
   async acceptQuote(quote) {
     const [clientProfile, workerProfile] = await Promise.all([
@@ -249,7 +251,11 @@ class QuoteService {
       return { error: 'MISSING_ORDER_PARTICIPANTS' };
     }
 
-    return db.transaction(async (trx) => {
+    const primaryPaymentMethod = await db('payment_methods')
+      .where({ user_id: clientProfile.user_id, is_primary: true })
+      .first();
+
+    const escrowResult = await db.transaction(async (trx) => {
       await trx('quotes').where({ id: quote.id }).update({
         status: QUOTE_STATUS.ACCEPTED,
         rejection_reason: null,
@@ -270,24 +276,39 @@ class QuoteService {
         updated_at: trx.fn.now(),
       });
 
-      await trx('transactions').insert({
-        order_id: quote.order_id,
-        payer_id: clientProfile.user_id,
-        receiver_id: workerProfile.user_id,
+      return escrowService.startEscrow(trx, {
+        orderId: quote.order_id,
+        payerId: clientProfile.user_id,
+        receiverId: workerProfile.user_id,
         amount: quote.proposed_price,
-        status: 'PENDING',
+        paymentMethodId: primaryPaymentMethod ? primaryPaymentMethod.id : null,
+        actorUserId: clientProfile.user_id,
       });
+    });
 
-      logger.info('[AUDITORIA] Cotización aceptada y pago iniciado', {
+    if (!escrowResult.success) {
+      logger.warn('[AUDITORIA] Cotización aceptada pero el pago falló; orden cancelada', {
         quote_id: quote.id,
         order_id: quote.order_id,
-        amount: quote.proposed_price,
+        reason: escrowResult.reason,
         timestamp: new Date().toISOString(),
       });
 
-      const updated = await trx('quotes').where({ id: quote.id }).first();
-      return this.formatQuote(updated);
+      return {
+        error: 'PAYMENT_FAILED',
+        message: 'No se pudo cargar el pago a la tarjeta del cliente; la orden fue cancelada',
+      };
+    }
+
+    logger.info('[AUDITORIA] Cotización aceptada y escrow iniciado', {
+      quote_id: quote.id,
+      order_id: quote.order_id,
+      amount: quote.proposed_price,
+      timestamp: new Date().toISOString(),
     });
+
+    const updated = await db('quotes').where({ id: quote.id }).first();
+    return this.formatQuote(updated);
   }
 
   async deleteQuote(quoteId, userId) {

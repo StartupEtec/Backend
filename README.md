@@ -204,7 +204,7 @@ Gestión de cotizaciones (propuestas de tarifa y agenda) que el trabajador enví
 - Solo el **trabajador asignado** a la orden puede crear cotizaciones y solo si la orden está `PENDING`, `ACCEPTED` o `IN_PROGRESS` (si no, `409 ORDER_NOT_ACTIVE`).
 - Solo el **cliente** puede aceptar/rechazar (`PATCH`); solo el **trabajador** puede cancelar su propuesta (`CANCELLED`) o eliminar la cotización.
 - El motivo de rechazo (`rejection_reason`, opcional, máx. 1000 caracteres) se guarda para permitir renegociación.
-- Al **aceptar** una cotización se ejecuta de forma atómica: la cotización pasa a `ACCEPTED`, las demás cotizaciones pendientes de la orden pasan a `REJECTED`, la orden pasa a `ACCEPTED` y se **inicia el proceso de pago** creando la transacción (escrow) en estado `PENDING`. Un índice `UNIQUE (order_id)` en `transactions` garantiza un solo pago por orden (`409 PAYMENT_ALREADY_STARTED`).
+- Al **aceptar** una cotización se ejecuta de forma atómica: la cotización pasa a `ACCEPTED`, las demás cotizaciones pendientes de la orden pasan a `REJECTED`, la orden pasa a `ACCEPTED` y se **inicia el escrow**: se carga la tarjeta primaria del cliente y la transacción nace en `ESCROWED` (fondos retenidos). Si el cargo falla, la transacción pasa a `FAILED` y la orden se **cancela automáticamente** (`402 PAYMENT_FAILED`). Un índice `UNIQUE (order_id)` en `transactions` garantiza un solo pago por orden (`409 PAYMENT_ALREADY_STARTED`).
 
 **Ejemplo — crear cotización:**
 
@@ -260,6 +260,23 @@ Authorization: Bearer <accessToken>
 - Constraint `quotes_status_check` que restringe `status` a `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`.
 - Índice `UNIQUE (order_id)` en `transactions` para garantizar una sola transacción (pago/escrow) por orden.
 
+### Sistema de Escrow (`docs/ESCROW_SYSTEM.md`)
+
+Retención, liberación y reembolso de fondos sobre las transacciones:
+
+- **Estados de transacción**: `PENDING`, `ESCROWED`, `COMPLETED`, `REFUNDED`, `FAILED` (constraint `transactions_status_check`).
+- **Al aceptar cotización**: cargo simulado a la tarjeta del cliente → transacción `ESCROWED` y monto retenido en `user_wallets.escrowed_balance`. Si el cargo falla → `FAILED` y la orden se cancela (`402 PAYMENT_FAILED`).
+- **Al completar orden**: `releaseFunds` debita `escrowed_balance` del cliente y acredita `current_balance` del trabajador; transacción → `COMPLETED`.
+- **Al cancelar orden** (desde `ACCEPTED`/`IN_PROGRESS`): `refund` reembolsa a la tarjeta; transacción → `REFUNDED`.
+- **Auditoría**: `transaction_logs` registra cada cambio de estado (`from_status`, `to_status`, `changed_by_id`, `reason`).
+- **Tablas nuevas**: `user_wallets` (saldo disponible y retenido) y `transaction_logs`.
+- **Simulación**: el proveedor de pagos es simulado. `SIMULATE_CHARGE_FAILURE=true` en `.env` fuerza el fallo del cargo para probar la cancelación automática.
+
+**Cambios de base de datos (migración `20260815000000_create_escrow_system.js`):**
+- Constraint `transactions_status_check` (incluye `FAILED`).
+- Tabla `user_wallets` (`user_id` UNIQUE, `current_balance`, `escrowed_balance`).
+- Tabla `transaction_logs` (auditoría de estados).
+
 ### Órdenes (`/api/v1/orders`)
 
 Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máquina de estados.
@@ -277,6 +294,7 @@ Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máq
 - `ACCEPTED -> IN_PROGRESS` y `IN_PROGRESS -> COMPLETED` solo pueden ser solicitados por el **trabajador**.
 - `CANCELLED` en estado `ACCEPTED` o `IN_PROGRESS` puede ser solicitado por cualquiera de los dos (**cliente o trabajador**).
 - Cada transición exitosa inserta un registro en la tabla `order_events` y emite el evento en tiempo real `order:status_changed` a los participantes vía WebSocket.
+- Las transiciones a `COMPLETED` y `CANCELLED` disparan la lógica de escrow: `COMPLETED` libera los fondos retenidos al trabajador (`releaseFunds`), y `CANCELLED` reembolsa a la tarjeta del cliente y marca la transacción como `REFUNDED` (ver `docs/ESCROW_SYSTEM.md`).
 
 **Cambios de base de datos (migración `20260813122916_create_order_events.js`):**
 - Nueva tabla `order_events` (`id`, `order_id`, `user_id`, `from_state`, `to_state`, `created_at`).

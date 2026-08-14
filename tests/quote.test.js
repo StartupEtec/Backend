@@ -51,6 +51,11 @@ setupMockKnex();
 
 jest.unstable_mockModule('../src/database/db.js', () => ({ default: mockKnex }));
 
+const escrowServiceMock = { startEscrow: jest.fn() };
+jest.unstable_mockModule('../src/services/EscrowService.js', () => ({
+  default: escrowServiceMock,
+}));
+
 const { default: quoteService } = await import('../src/services/QuoteService.js');
 const { default: quoteController } = await import('../src/controllers/QuoteController.js');
 const { createQuoteSchema, updateQuoteStatusSchema } = await import('../src/utils/validation.js');
@@ -93,6 +98,7 @@ const QUOTE_ROW_WITH_ORDER = {
 
 const resetBuilders = () => {
   Object.keys(builders).forEach((key) => delete builders[key]);
+  escrowServiceMock.startEscrow.mockReset();
   setupMockKnex();
 };
 
@@ -343,18 +349,23 @@ describe('QuoteService', () => {
       expect(result.status).toBe('CANCELLED');
     });
 
-    it('should accept a quote atomically: reject siblings, accept order and start payment', async () => {
+    it('should accept a quote atomically: reject siblings, accept order and start escrow', async () => {
       builders['quotes as q'] = makeBuilder();
       builders['quotes as q'].first.mockResolvedValue(QUOTE_ROW_WITH_ORDER);
       builders.client_profiles = makeBuilder();
       builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
       builders.worker_profiles = makeBuilder();
       builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.payment_methods = makeBuilder();
+      builders.payment_methods.first.mockResolvedValue({ id: 'pm-uuid' });
 
       builders.quotes = makeBuilder();
       builders.quotes.first.mockResolvedValue({ ...QUOTE_ROW, status: 'ACCEPTED' });
       builders.orders = makeBuilder();
-      builders.transactions = makeBuilder();
+      escrowServiceMock.startEscrow.mockResolvedValue({
+        success: true,
+        transaction: { id: 'tx-uuid' },
+      });
 
       const result = await quoteService.updateQuoteStatus(QUOTE_ID, CLIENT_USER_ID, {
         status: 'ACCEPTED',
@@ -372,13 +383,40 @@ describe('QuoteService', () => {
       expect(builders.orders.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'ACCEPTED' }),
       );
-      expect(builders.transactions.insert).toHaveBeenCalledWith({
-        order_id: ORDER_ID,
-        payer_id: CLIENT_USER_ID,
-        receiver_id: WORKER_USER_ID,
-        amount: '35000.00',
-        status: 'PENDING',
+      expect(escrowServiceMock.startEscrow).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          orderId: ORDER_ID,
+          payerId: CLIENT_USER_ID,
+          receiverId: WORKER_USER_ID,
+          amount: '35000.00',
+          paymentMethodId: 'pm-uuid',
+          actorUserId: CLIENT_USER_ID,
+        }),
+      );
+    });
+
+    it('should return PAYMENT_FAILED when the escrow charge fails', async () => {
+      builders['quotes as q'] = makeBuilder();
+      builders['quotes as q'].first.mockResolvedValue(QUOTE_ROW_WITH_ORDER);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.payment_methods = makeBuilder();
+      builders.payment_methods.first.mockResolvedValue({ id: 'pm-uuid' });
+      builders.orders = makeBuilder();
+      escrowServiceMock.startEscrow.mockResolvedValue({
+        success: false,
+        transaction: { id: 'tx-uuid' },
+        reason: 'CARD_DECLINED',
       });
+
+      const result = await quoteService.updateQuoteStatus(QUOTE_ID, CLIENT_USER_ID, {
+        status: 'ACCEPTED',
+      });
+
+      expect(result.error).toBe('PAYMENT_FAILED');
     });
   });
 
