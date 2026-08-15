@@ -574,3 +574,59 @@ export const updateCertificationStatusSchema = Joi.object({
       'string.max': 'El motivo del rechazo no debe exceder los 1000 caracteres',
     }),
 });
+
+export const createOrderSchema = Joi.object({
+  client_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'client_id debe ser un UUID válido',
+    'any.required': 'client_id es requerido',
+  }),
+  worker_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'worker_id debe ser un UUID válido',
+    'any.required': 'worker_id es requerido',
+  }),
+  category_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'category_id debe ser un UUID válido',
+    'any.required': 'category_id es requerido',
+  }),
+  location_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'location_id debe ser un UUID válido',
+    'any.required': 'location_id es requerido',
+  }),
+  description: Joi.string().max(2000).allow('', null).messages({
+    'string.max': 'La descripción no debe exceder los 2000 caracteres',
+  }),
+}).custom((value, helpers) => {
+  if (value.client_id === value.worker_id) {
+    return helpers.message('El cliente y el trabajador no pueden ser el mismo usuario');
+  }
+  return value;
+});
+
+export const listUserOrdersQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+  status: Joi.string()
+    .valid('PENDING', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED')
+    .messages({
+      'any.only':
+        'El estado debe ser uno de: PENDING, ACCEPTED, IN_PROGRESS, COMPLETED, REJECTED, CANCELLED',
+    }),
+  role: Joi.string().valid('MINE_AS_CLIENT', 'MINE_AS_WORKER').messages({
+    'any.only': 'El rol debe ser MINE_AS_CLIENT o MINE_AS_WORKER',
+  }),
+  date_from: Joi.date().iso().messages({
+    'date.base': 'date_from debe ser una fecha válida',
+    'date.iso': 'date_from debe tener formato ISO (YYYY-MM-DD)',
+  }),
+  date_to: Joi.date().iso().messages({
+    'date.base': 'date_to debe ser una fecha válida',
+    'date.iso': 'date_to debe tener formato ISO (YYYY-MM-DD)',
+  }),
+});

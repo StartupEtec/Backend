@@ -1313,6 +1313,191 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
+        // ── Order schemas ──────────────────────────────────────────────────────
+        CreateOrderRequest: {
+          type: 'object',
+          required: ['client_id', 'worker_id', 'category_id', 'location_id'],
+          properties: {
+            client_id: {
+              type: 'string',
+              format: 'uuid',
+              example: '55555555-5555-5555-5555-555555555555',
+              description: 'UUID del perfil de cliente (se resuelve desde el usuario autenticado)',
+            },
+            worker_id: {
+              type: 'string',
+              format: 'uuid',
+              example: '66666666-6666-6666-6666-666666666666',
+              description: 'UUID del perfil de trabajador',
+            },
+            category_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-...',
+              description: 'UUID de la categoría del servicio',
+            },
+            location_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a1b2c3d4-...',
+              description: 'UUID de la ubicación del cliente',
+            },
+            description: {
+              type: 'string',
+              maxLength: 2000,
+              example: 'Reparar fuga de agua en la cocina',
+              description: 'Descripción opcional del trabajo solicitado',
+              nullable: true,
+            },
+          },
+        },
+        CreateOrderResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Orden creada correctamente' },
+            order: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  format: 'uuid',
+                  example: '33333333-3333-3333-3333-333333333333',
+                },
+                client_id: { type: 'string', format: 'uuid' },
+                worker_id: { type: 'string', format: 'uuid' },
+                category_id: { type: 'string', format: 'uuid' },
+                location_id: { type: 'string', format: 'uuid' },
+                description: { type: 'string', nullable: true },
+                status: {
+                  type: 'string',
+                  example: 'PENDING',
+                  enum: [
+                    'PENDING',
+                    'ACCEPTED',
+                    'IN_PROGRESS',
+                    'COMPLETED',
+                    'REJECTED',
+                    'CANCELLED',
+                  ],
+                },
+                created_at: { type: 'string', format: 'date-time' },
+                updated_at: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+        },
+        OrderResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: '33333333-3333-3333-3333-333333333333' },
+            client_id: { type: 'string', format: 'uuid' },
+            worker_id: { type: 'string', format: 'uuid' },
+            category_id: { type: 'string', format: 'uuid' },
+            location_id: { type: 'string', format: 'uuid' },
+            description: { type: 'string', nullable: true },
+            status: {
+              type: 'string',
+              example: 'PENDING',
+              enum: ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            client: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                user_id: { type: 'string', format: 'uuid' },
+                full_name: { type: 'string' },
+                avatar_url: { type: 'string', nullable: true },
+              },
+            },
+            worker: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                user_id: { type: 'string', format: 'uuid' },
+                full_name: { type: 'string' },
+                avatar_url: { type: 'string', nullable: true },
+              },
+            },
+            quotes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  order_id: { type: 'string', format: 'uuid' },
+                  proposed_price: { type: 'number', example: 150000 },
+                  proposed_date: { type: 'string', format: 'date', example: '2026-08-20' },
+                  proposed_time: {
+                    type: 'string',
+                    pattern: '^([01]\\d|2[0-3]):[0-5]\\d',
+                    example: '14:30',
+                  },
+                  status: {
+                    type: 'string',
+                    example: 'PENDING',
+                    enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'],
+                  },
+                  rejection_reason: { type: 'string', nullable: true },
+                  created_at: { type: 'string', format: 'date-time' },
+                  updated_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+        },
+        OrderDetailResponse: {
+          type: 'object',
+          properties: {
+            order: { $ref: '#/components/schemas/OrderResponse' },
+          },
+        },
+        ListOrdersResponse: {
+          type: 'object',
+          properties: {
+            orders: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/OrderResponse' },
+            },
+            count: { type: 'integer', example: 42 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+        OrderNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'ORDER_NOT_FOUND' },
+            message: { type: 'string', example: 'Orden no encontrada o no tienes acceso a ella' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        SameUserError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'SAME_USER' },
+            message: {
+              type: 'string',
+              example: 'El cliente y el trabajador no pueden ser el mismo usuario',
+            },
+            statusCode: { type: 'integer', example: 400 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        UpdateOrderStatusRequest: {
+          type: 'object',
+          required: ['status'],
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+              example: 'ACCEPTED',
+              description: 'Nuevo estado de la orden',
+            },
+          },
+        },
         PaymentAlreadyStartedError: {
           type: 'object',
           properties: {
@@ -3181,4 +3366,298 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/QuoteNotPendingError'
+ */
+
+/**
+ * @openapi
+ * /orders:
+ *   post:
+ *     summary: Crear una nueva orden
+ *     description: |
+ *       Crea una orden de servicio con estado PENDING. El usuario autenticado debe
+ *       tener perfil de cliente y será el cliente de la orden. Valida que:
+ *       - `worker_id` corresponde a un perfil de trabajador válido.
+ *       - `category_id` existe y está activa.
+ *       - `location_id` pertenece al cliente que crea la orden.
+ *       - `client_id` (perfil del cliente) y `worker_id` no sean el mismo usuario.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateOrderRequest'
+ *           example:
+ *             client_id: "55555555-5555-5555-5555-555555555555"
+ *             worker_id: "66666666-6666-6666-6666-666666666666"
+ *             category_id: "b2c3d4e5-..."
+ *             location_id: "a1b2c3d4-..."
+ *             description: "Reparar fuga de agua en la cocina"
+ *     responses:
+ *       201:
+ *         description: Orden creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateOrderResponse'
+ *       400:
+ *         description: Error de validación o el cliente y trabajador son el mismo usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/ValidationError'
+ *                 - $ref: '#/components/schemas/SameUserError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Trabajador, categoría o ubicación no encontrados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
+ *   get:
+ *     summary: Listar órdenes del usuario autenticado
+ *     description: |
+ *       Retorna las órdenes donde el usuario participa como cliente o trabajador,
+ *       ordenadas por `created_at` descendente. Soporta paginación
+ *       (`limit` default 20, máx 100; `offset` default 0) y filtros:
+ *       - `status`: filtra por estado de la orden.
+ *       - `role`: `MINE_AS_CLIENT` o `MINE_AS_WORKER` para acotar por rol del usuario.
+ *       - `date_from` / `date_to`: rango de fechas de creación (ISO `YYYY-MM-DD`).
+ *       Cada orden incluye info del cliente/trabajador y sus cotizaciones.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         description: Número máximo de órdenes por página
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema: { type: integer, minimum: 0, default: 0 }
+ *         description: Desplazamiento para paginación
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, ACCEPTED, IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
+ *         description: Filtrar por estado de la orden
+ *       - in: query
+ *         name: role
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [MINE_AS_CLIENT, MINE_AS_WORKER]
+ *         description: Filtrar por rol del usuario en la orden
+ *       - in: query
+ *         name: date_from
+ *         required: false
+ *         schema: { type: string, format: date }
+ *         description: Fecha mínima de creación (ISO YYYY-MM-DD)
+ *       - in: query
+ *         name: date_to
+ *         required: false
+ *         schema: { type: string, format: date }
+ *         description: Fecha máxima de creación (ISO YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Lista paginada de órdenes del usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListOrdersResponse'
+ *       400:
+ *         description: Parámetros de consulta inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *
+ * /orders/{id}:
+ *   get:
+ *     summary: Obtener detalles de una orden
+ *     description: |
+ *       Retorna el detalle de una orden si el usuario autenticado participa en ella
+ *       (como cliente o trabajador). Incluye información del cliente, del trabajador
+ *       y la lista de cotizaciones asociadas.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     responses:
+ *       200:
+ *         description: Detalle de la orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderDetailResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       404:
+ *         description: Orden no encontrada o sin acceso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotFoundError'
+ *
+ * /orders/{id}/status:
+ *   patch:
+ *     summary: Actualizar el estado de una orden (máquina de estados)
+ *     description: |
+ *       Cambia el estado de la orden respetando la máquina de estados:
+ *       `PENDING → ACCEPTED | REJECTED`, `ACCEPTED → IN_PROGRESS | CANCELLED`,
+ *       `IN_PROGRESS → COMPLETED | CANCELLED`.
+ *       Solo usuarios permitidos pueden cambiar estado: el cliente acepta/rechaza,
+ *       el trabajador inicia/completa, y ambos pueden cancelar. Cada transición
+ *       exitosa registra un evento en `order_events` y emite `order:status_changed`
+ *       vía WebSocket. Las transiciones a COMPLETED/CANCELLED disparan la lógica de escrow.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateOrderStatusRequest'
+ *           example:
+ *             status: ACCEPTED
+ *     responses:
+ *       200:
+ *         description: Estado de orden actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Estado de orden actualizado correctamente
+ *                 order:
+ *                   $ref: '#/components/schemas/OrderDetailResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para realizar esta transición
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotFoundError'
+ *       409:
+ *         description: Transición de estado inválida
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InvalidTransitionError'
+ *
+ * /orders/{id}/history:
+ *   get:
+ *     summary: Obtener el historial de una orden
+ *     description: |
+ *       Retorna el historial de auditoría (cambios de estado) de una orden.
+ *       Accesible solo para el cliente o el trabajador de la orden.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     responses:
+ *       200:
+ *         description: Historial de la orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       order_id:
+ *                         type: string
+ *                         format: uuid
+ *                       user_id:
+ *                         type: string
+ *                         format: uuid
+ *                       from_state:
+ *                         type: string
+ *                       to_state:
+ *                         type: string
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado para ver el historial de esta orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotFoundError'
  */

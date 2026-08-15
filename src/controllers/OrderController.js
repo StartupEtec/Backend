@@ -1,6 +1,10 @@
 import orderService from '../services/OrderService.js';
 import logger from '../utils/logger.js';
-import { updateOrderStatusSchema } from '../utils/validation.js';
+import {
+  updateOrderStatusSchema,
+  createOrderSchema,
+  listUserOrdersQuerySchema,
+} from '../utils/validation.js';
 
 const errorResponse = (res, statusCode, error, message) =>
   res.status(statusCode).json({
@@ -11,6 +15,69 @@ const errorResponse = (res, statusCode, error, message) =>
   });
 
 class OrderController {
+  async create(req, res, next) {
+    try {
+      const { error, value } = createOrderSchema.validate(req.body);
+      if (error) {
+        return errorResponse(res, 400, 'VALIDATION_ERROR', error.details[0].message);
+      }
+
+      const result = await orderService.createOrder(req.user.user_id, value);
+
+      if (result.error) {
+        if (result.error === 'CLIENT_PROFILE_REQUIRED') {
+          return errorResponse(res, 400, 'CLIENT_PROFILE_REQUIRED', result.message);
+        }
+        if (result.error === 'WORKER_NOT_FOUND') {
+          return errorResponse(res, 404, 'WORKER_NOT_FOUND', result.message);
+        }
+        if (result.error === 'CATEGORY_NOT_FOUND') {
+          return errorResponse(res, 404, 'CATEGORY_NOT_FOUND', result.message);
+        }
+        if (result.error === 'LOCATION_NOT_FOUND') {
+          return errorResponse(res, 404, 'LOCATION_NOT_FOUND', result.message);
+        }
+        if (result.error === 'SAME_USER') {
+          return errorResponse(res, 400, 'SAME_USER', result.message);
+        }
+        return errorResponse(res, 500, 'INTERNAL_SERVER_ERROR', 'Ocurrió un error inesperado');
+      }
+
+      return res.status(201).json({
+        message: 'Orden creada correctamente',
+        order: result,
+      });
+    } catch (err) {
+      logger.error('Error al crear orden:', err);
+      next(err);
+    }
+  }
+
+  async listUserOrders(req, res, next) {
+    try {
+      const { id } = req.params;
+      if (id !== req.user.user_id) {
+        return errorResponse(
+          res,
+          403,
+          'FORBIDDEN',
+          'No autorizado para listar órdenes de otro usuario',
+        );
+      }
+
+      const { error, value } = listUserOrdersQuerySchema.validate(req.query);
+      if (error) {
+        return errorResponse(res, 400, 'VALIDATION_ERROR', error.details[0].message);
+      }
+
+      const result = await orderService.listUserOrders(req.user.user_id, value);
+      return res.status(200).json(result);
+    } catch (err) {
+      logger.error('Error al listar órdenes del usuario:', err);
+      next(err);
+    }
+  }
+
   async getById(req, res, next) {
     try {
       const { id } = req.params;
