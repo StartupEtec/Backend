@@ -173,6 +173,24 @@ Flujo de procesamiento de transacciones reales integrado con Stripe (Payment Int
 - **Validación de firmas**: Las solicitudes al webhook verifican obligatoriamente la firma `stripe-signature` para prevenir usurpaciones.
 - **Flujo 3D Secure**: Soporte completo para flujos que requieren interacción del cliente, actualizando el estado de forma asíncrona mediante el webhook.
 
+### Certificaciones de Trabajadores (`/api/v1/workers/:id/certifications` y `/api/v1/certifications`)
+
+Gestión y validación de documentos oficiales presentados por los proveedores para habilitar sus perfiles.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/workers/:id/certifications` | JWT | Subir un nuevo documento de certificación (`BACKGROUND_CHECK`, `ID_VERIFICATION`, o `PROFESSIONAL_LICENSE`). Admite PDF/imagen hasta 10MB |
+| `GET` | `/workers/:id/certifications` | JWT | Listar todas las certificaciones subidas por el proveedor asociado |
+| `GET` | `/certifications/:id` | JWT | Detalles de una certificación específica (solo accesible por el propio proveedor o admin) |
+| `PATCH` | `/certifications/:id` | JWT | Reenviar archivo para una certificación previamente rechazada, restableciendo su estado a `PENDING` |
+| `PATCH` | `/certifications/:id/status` | JWT | Actualizar estado de verificación (`APPROVED` o `REJECTED`). Si es `REJECTED`, exige un `rejected_reason` |
+
+**Reglas de negocio y estados:**
+- **Estados de verificación**: `PENDING` (esperando revisión), `APPROVED` (aprobado), `REJECTED` (rechazado).
+- **Subida**: Límite de tamaño estricto de 10MB. Tipos de archivo permitidos: `.pdf`, `.png`, `.jpg`, `.jpeg`.
+- **Integridad de perfil**: Si todas las certificaciones asociadas a un proveedor son aprobadas (`APPROVED`), el estado de certificación del perfil del trabajador se actualiza automáticamente a `APPROVED` (permitiéndole alternar al rol de trabajador). Si alguna es rechazada, el perfil pasa a `REJECTED`.
+- **Auditoría**: Cada cambio de estado genera un log de auditoría detallado y envía una notificación simulada por correo/push al trabajador.
+
 ### Búsqueda de Trabajadores (`/api/v1/workers`)
 
 | Método | Ruta | Auth | Descripción |

@@ -542,3 +542,35 @@ export const processPaymentSchema = Joi.object({
     'any.required': 'El monto es requerido',
   }),
 });
+
+export const createCertificationSchema = Joi.object({
+  document_type: Joi.string()
+    .valid('BACKGROUND_CHECK', 'ID_VERIFICATION', 'PROFESSIONAL_LICENSE')
+    .required()
+    .messages({
+      'any.only':
+        'El tipo de documento debe ser BACKGROUND_CHECK, ID_VERIFICATION o PROFESSIONAL_LICENSE',
+      'any.required': 'El tipo de documento es requerido',
+    }),
+});
+
+export const updateCertificationStatusSchema = Joi.object({
+  verification_status: Joi.string().valid('PENDING', 'APPROVED', 'REJECTED').required().messages({
+    'any.only': 'El estado debe ser PENDING, APPROVED o REJECTED',
+    'any.required': 'El estado de verificación es requerido',
+  }),
+  rejected_reason: Joi.string()
+    .trim()
+    .min(5)
+    .max(1000)
+    .when('verification_status', {
+      is: 'REJECTED',
+      then: Joi.required(),
+      otherwise: Joi.optional().allow(null, ''),
+    })
+    .messages({
+      'any.required': 'Debe proporcionar un motivo para rechazar la certificación',
+      'string.min': 'El motivo del rechazo debe tener al menos 5 caracteres',
+      'string.max': 'El motivo del rechazo no debe exceder los 1000 caracteres',
+    }),
+});
