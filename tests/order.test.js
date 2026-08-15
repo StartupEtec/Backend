@@ -8,6 +8,7 @@ const makeBuilder = () => {
     whereNot: jest.fn().mockReturnThis(),
     orWhere: jest.fn().mockReturnThis(),
     whereIn: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     first: jest.fn().mockResolvedValue(null),
     insert: jest.fn().mockReturnThis(),
@@ -16,7 +17,8 @@ const makeBuilder = () => {
     del: jest.fn().mockResolvedValue(1),
     join: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
-    orderBy: jest.fn().mockResolvedValue([]),
+    orderBy: jest.fn().mockReturnThis(),
+    count: jest.fn().mockResolvedValue([{ count: 0 }]),
     limit: jest.fn().mockReturnThis(),
     offset: jest.fn().mockResolvedValue([]),
   };
@@ -101,6 +103,7 @@ describe('OrderService', () => {
   describe('getOrderById', () => {
     it('should return null if order does not exist', async () => {
       builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
       builders.orders.first.mockResolvedValue(null);
 
       const order = await orderService.getOrderById(ORDER_ID, CLIENT_USER_ID);
@@ -109,6 +112,7 @@ describe('OrderService', () => {
 
     it('should return null if user is not a participant', async () => {
       builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
       builders.orders.first.mockResolvedValue(ORDER_ROW);
       builders.client_profiles = makeBuilder();
       builders.client_profiles.first.mockResolvedValue(null);
@@ -121,6 +125,7 @@ describe('OrderService', () => {
 
     it('should return order if user is client', async () => {
       builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
       builders.orders.first.mockResolvedValue(ORDER_ROW);
       builders.client_profiles = makeBuilder();
       builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
@@ -130,6 +135,164 @@ describe('OrderService', () => {
       const order = await orderService.getOrderById(ORDER_ID, CLIENT_USER_ID);
       expect(order).not.toBeNull();
       expect(order.id).toBe(ORDER_ID);
+    });
+  });
+
+  describe('createOrder', () => {
+    const payload = {
+      client_id: CLIENT_PROFILE_ID,
+      worker_id: WORKER_PROFILE_ID,
+      category_id: 'cat-id',
+      location_id: 'loc-id',
+      description: 'Reparar fuga de agua',
+    };
+
+    it('should return CLIENT_PROFILE_REQUIRED if user has no client profile', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('CLIENT_PROFILE_REQUIRED');
+    });
+
+    it('should return WORKER_NOT_FOUND if worker profile does not exist', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('WORKER_NOT_FOUND');
+    });
+
+    it('should return CATEGORY_NOT_FOUND if category is inactive or missing', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('CATEGORY_NOT_FOUND');
+    });
+
+    it('should return LOCATION_NOT_FOUND if location does not belong to the client', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('LOCATION_NOT_FOUND');
+    });
+
+    it('should return SAME_USER if client and worker are the same user', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      // worker profile belongs to the same user (CLIENT_USER_ID)
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue({
+        id: WORKER_PROFILE_ID,
+        user_id: CLIENT_USER_ID,
+      });
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue({ id: 'loc-id', user_id: CLIENT_USER_ID });
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('SAME_USER');
+    });
+
+    it('should create the order with PENDING status and return it', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue({ id: 'loc-id', user_id: CLIENT_USER_ID });
+      builders.orders = makeBuilder();
+      builders.orders.returning.mockResolvedValue([
+        { ...ORDER_ROW, description: 'Reparar fuga de agua' },
+      ]);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBe(ORDER_ID);
+      expect(res.status).toBe('PENDING');
+      expect(res.description).toBe('Reparar fuga de agua');
+    });
+  });
+
+  describe('listUserOrders', () => {
+    const baseQuery = { limit: 20, offset: 0 };
+
+    it('should return empty result if user has no client/worker profiles', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.listUserOrders(OTHER_USER_ID, baseQuery);
+      expect(res.orders).toEqual([]);
+      expect(res.count).toBe(0);
+    });
+
+    it('should return matching orders with count when user is a client', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, baseQuery);
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+      expect(res.orders[0].id).toBe(ORDER_ID);
+    });
+
+    it('should filter by MINE_AS_WORKER role', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, {
+        ...baseQuery,
+        role: 'MINE_AS_WORKER',
+      });
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+    });
+
+    it('should return empty list when MINE_AS_CLIENT is requested but user is only a worker', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.listUserOrders(WORKER_USER_ID, {
+        ...baseQuery,
+        role: 'MINE_AS_CLIENT',
+      });
+      expect(res.orders).toEqual([]);
+      expect(res.count).toBe(0);
     });
   });
 
