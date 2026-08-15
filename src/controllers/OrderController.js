@@ -4,6 +4,7 @@ import {
   updateOrderStatusSchema,
   createOrderSchema,
   listUserOrdersQuerySchema,
+  completeOrderSchema,
 } from '../utils/validation.js';
 
 const errorResponse = (res, statusCode, error, message) =>
@@ -178,6 +179,53 @@ class OrderController {
       });
     } catch (err) {
       logger.error('Error al obtener historial de la orden:', err);
+      next(err);
+    }
+  }
+
+  async complete(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const { error, value } = completeOrderSchema.validate(req.body);
+      if (error) {
+        return errorResponse(res, 400, 'VALIDATION_ERROR', error.details[0].message);
+      }
+
+      const result = await orderService.completeOrder(id, req.user.user_id, value);
+
+      if (result.error) {
+        if (result.error === 'ORDER_NOT_FOUND') {
+          return errorResponse(res, 404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+        }
+        if (result.error === 'FORBIDDEN') {
+          return errorResponse(
+            res,
+            403,
+            'FORBIDDEN',
+            'No autorizado para confirmar la finalización de esta orden',
+          );
+        }
+        if (result.error === 'INVALID_TRANSITION') {
+          return errorResponse(res, 409, 'INVALID_TRANSITION', result.message);
+        }
+        if (result.error === 'ALREADY_CONFIRMED') {
+          return errorResponse(res, 409, 'ALREADY_CONFIRMED', result.message);
+        }
+        return errorResponse(res, 500, 'INTERNAL_SERVER_ERROR', 'Ocurrió un error inesperado');
+      }
+
+      return res.status(200).json({
+        message: result.bothConfirmed
+          ? 'Servicio completado y escrow liberado'
+          : 'Confirmación registrada. Se requiere la confirmación de ambas partes',
+        order: result.order,
+        bothConfirmed: result.bothConfirmed,
+        clientConfirmed: result.clientConfirmed,
+        workerConfirmed: result.workerConfirmed,
+      });
+    } catch (err) {
+      logger.error('Error al confirmar finalización del servicio:', err);
       next(err);
     }
   }

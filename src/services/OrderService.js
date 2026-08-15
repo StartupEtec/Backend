@@ -434,6 +434,143 @@ class OrderService {
   }
 
   /**
+   * Confirma la finalización del servicio por parte del cliente o trabajador.
+   * Requiere confirmación del cliente (obligatoria) y del trabajador (opcional).
+   * Cuando ambos confirman, se transiciona a COMPLETED y se libera el escrow.
+   *
+   * @param {string} orderId - ID de la orden
+   * @param {string} userId - ID del usuario que confirma
+   * @param {object} data - Datos de confirmación (confirm: boolean)
+   * @returns {Promise<object>} - Resultado de la confirmación
+   */
+  async completeOrder(orderId, userId, data = {}) {
+    const order = await db('orders').where({ id: orderId }).first();
+    if (!order) {
+      return { error: 'ORDER_NOT_FOUND' };
+    }
+
+    // Validar que el usuario es cliente o trabajador de la orden
+    const { isClient, isWorker } = await this.getParticipation(
+      order.client_id,
+      order.worker_id,
+      userId,
+    );
+    if (!isClient && !isWorker) {
+      return { error: 'FORBIDDEN' };
+    }
+
+    // Validar que la orden está en progreso
+    if (order.status !== ORDER_STATUS.IN_PROGRESS) {
+      return {
+        error: 'INVALID_TRANSITION',
+        message: `No se puede confirmar la finalización de una orden en estado ${order.status}`,
+      };
+    }
+
+    // Determinar si confirma o revoca confirmación
+    const confirm = data.confirm !== false;
+
+    // Si está confirmando (no revocando), evitar doble confirmación
+    if (confirm) {
+      if (isClient && order.client_confirmed) {
+        return { error: 'ALREADY_CONFIRMED', message: 'El cliente ya confirmó la finalización' };
+      }
+      if (isWorker && order.worker_confirmed) {
+        return { error: 'ALREADY_CONFIRMED', message: 'El trabajador ya confirmó la finalización' };
+      }
+    }
+
+    const updateData = {};
+    if (isClient) {
+      updateData.client_confirmed = confirm;
+      updateData.client_confirmed_by = confirm ? userId : null;
+      updateData.client_confirmed_at = confirm ? new Date() : null;
+    } else if (isWorker) {
+      updateData.worker_confirmed = confirm;
+      updateData.worker_confirmed_by = confirm ? userId : null;
+      updateData.worker_confirmed_at = confirm ? new Date() : null;
+    }
+
+    // Actualizar confirmación
+    await db('orders').where({ id: orderId }).update(updateData);
+
+    // Obtener orden actualizada
+    const updatedOrder = await db('orders').where({ id: orderId }).first();
+
+    // Si ambos confirmaron, transicionar a COMPLETED y liberar escrow
+    const bothConfirmed = updatedOrder.client_confirmed && updatedOrder.worker_confirmed;
+
+    if (bothConfirmed && updatedOrder.status === ORDER_STATUS.IN_PROGRESS) {
+      try {
+        await db.transaction(async (trx) => {
+          await trx('orders').where({ id: orderId }).update({
+            status: ORDER_STATUS.COMPLETED,
+            updated_at: trx.fn.now(),
+          });
+
+          await trx('order_events').insert({
+            order_id: orderId,
+            user_id: userId,
+            from_state: ORDER_STATUS.IN_PROGRESS,
+            to_state: ORDER_STATUS.COMPLETED,
+          });
+
+          const escrowError = await this.handleEscrowTransition(
+            trx,
+            orderId,
+            ORDER_STATUS.COMPLETED,
+            userId,
+          );
+          if (escrowError) {
+            throw new EscrowOperationError(escrowError.error, escrowError.message);
+          }
+
+          logger.info('[AUDITORIA] Orden completada y escrow liberado', {
+            order_id: orderId,
+            actor_user_id: userId,
+            client_confirmed_by: updatedOrder.client_confirmed_by,
+            worker_confirmed_by: updatedOrder.worker_confirmed_by,
+            timestamp: new Date().toISOString(),
+          });
+        });
+      } catch (err) {
+        if (err instanceof EscrowOperationError) {
+          return { error: err.code, message: err.message };
+        }
+        throw err;
+      }
+    }
+
+    // Re-leer la orden solo si hubo transición para reflejar el estado final (COMPLETED)
+    const finalOrder =
+      bothConfirmed && updatedOrder.status === ORDER_STATUS.IN_PROGRESS
+        ? await db('orders').where({ id: orderId }).first()
+        : updatedOrder;
+
+    // Notificar vía WebSocket a ambos participantes (cliente y trabajador)
+    const [clientProf, workerProf] = await Promise.all([
+      db('client_profiles').where({ id: order.client_id }).first(),
+      db('worker_profiles').where({ id: order.worker_id }).first(),
+    ]);
+    const userIds = [clientProf?.user_id, workerProf?.user_id].filter(Boolean);
+    if (userIds.length > 0) {
+      websocketHub.sendToUsers(userIds, 'order:completion_confirmed', {
+        order_id: orderId,
+        client_confirmed: finalOrder.client_confirmed,
+        worker_confirmed: finalOrder.worker_confirmed,
+        status: finalOrder.status,
+      });
+    }
+
+    return {
+      order: this.formatOrder(finalOrder),
+      bothConfirmed,
+      clientConfirmed: finalOrder.client_confirmed,
+      workerConfirmed: finalOrder.worker_confirmed,
+    };
+  }
+
+  /**
    * Acciones de escrow disparadas por una transición de estado de la orden.
    * Devuelve un error (o null) para abortar la transacción en caso de fallo.
    */

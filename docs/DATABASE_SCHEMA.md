@@ -227,6 +227,12 @@ Representa el contrato/orden de servicio pactada entre un cliente y un proveedor
 | `category_id` | `UUID` | `FOREIGN KEY` (Restrict) | Categoría del trabajo solicitado. |
 | `location_id` | `UUID` | `FOREIGN KEY` (Restrict) | Dirección pactada de entrega. |
 | `status` | `VARCHAR` | `DEFAULT 'PENDING'` | Estados: `PENDING`, `ACCEPTED`, `REJECTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`. |
+| `client_confirmed` | `BOOLEAN` | `DEFAULT false`, `NOT NULL` | Confirmación de finalización por parte del cliente. |
+| `worker_confirmed` | `BOOLEAN` | `DEFAULT false`, `NOT NULL` | Confirmación de finalización por parte del trabajador. |
+| `client_confirmed_by` | `UUID` | `FOREIGN KEY` (Set Null) | Usuario que confirmó en nombre del cliente. |
+| `worker_confirmed_by` | `UUID` | `FOREIGN KEY` (Set Null) | Usuario que confirmó en nombre del trabajador. |
+| `client_confirmed_at` | `TIMESTAMP` | `NULL` | Fecha de confirmación del cliente. |
+| `worker_confirmed_at` | `TIMESTAMP` | `NULL` | Fecha de confirmación del trabajador. |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Última actualización. |
 
