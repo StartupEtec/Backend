@@ -630,3 +630,11 @@ export const listUserOrdersQuerySchema = Joi.object({
     'date.iso': 'date_to debe tener formato ISO (YYYY-MM-DD)',
   }),
 });
+
+export const completeOrderSchema = Joi.object({
+  // Opcional: confirmación explícita del cliente o trabajador
+  // Si se omite, se asume que quien llama confirma
+  confirm: Joi.boolean().default(true).messages({
+    'boolean.base': 'confirm debe ser un valor booleano',
+  }),
+});

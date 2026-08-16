@@ -3661,3 +3661,102 @@ export const setupSwagger = (app) => {
  *             schema:
  *               $ref: '#/components/schemas/OrderNotFoundError'
  */
+
+/**
+ * @openapi
+ * /orders/{id}/complete:
+ *   post:
+ *     summary: Confirmar la finalización del servicio
+ *     description: |
+ *       Permite al cliente o trabajador confirmar que el servicio ha finalizado.
+ *       Se requiere confirmación dual:
+ *       - **Cliente (obligatorio)**: debe confirmar la finalización.
+ *       - **Trabajador (opcional)**: puede confirmar, pero no es obligatorio.
+ *
+ *       Cuando **ambas partes confirman**, la orden transiciona a `COMPLETED`
+ *       y se libera el escrow (fondos retenidos) al trabajador.
+ *
+ *       La orden debe estar en estado `IN_PROGRESS`.
+ *     tags: [Órdenes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID de la orden
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               confirm:
+ *                 type: boolean
+ *                 default: true
+ *                 description: |
+ *                   Si es `true` (por defecto), confirma la finalización.
+ *                   Si es `false`, revoca la confirmación previa.
+ *             example:
+ *               confirm: true
+ *     responses:
+ *       200:
+ *         description: Confirmación registrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Confirmación registrada. Se requiere la confirmación de ambas partes"
+ *                 order:
+ *                   $ref: '#/components/schemas/OrderResponse'
+ *                 bothConfirmed:
+ *                   type: boolean
+ *                   example: false
+ *                   description: Indica si ambas partes ya confirmaron
+ *                 clientConfirmed:
+ *                   type: boolean
+ *                   example: true
+ *                   description: Indica si el cliente confirmó
+ *                 workerConfirmed:
+ *                   type: boolean
+ *                   example: false
+ *                   description: Indica si el trabajador confirmó
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No autorizado (no es cliente ni trabajador de la orden)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotFoundError'
+ *       409:
+ *         description: Conflicto (orden no en IN_PROGRESS, ya confirmado, transición inválida)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/InvalidTransitionError'
+ *                 - type: object
+ *                   properties:
+ *                     error: { type: string, example: 'ALREADY_CONFIRMED' }
+ *                     message: { type: string, example: 'El cliente ya confirmó la finalización' }
+ *                     statusCode: { type: integer, example: 409 }
+ *                     timestamp: { type: string, format: 'date-time' }
+ */

@@ -318,6 +318,7 @@ Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máq
 | `GET` | `/orders/:id` | JWT | Detalles de una orden |
 | `PATCH` | `/orders/:id/status` | JWT | Actualizar estado de la orden (sigue reglas de la máquina de estados) |
 | `GET` | `/orders/:id/history` | JWT | Historial de auditoría de la orden (cambios de estado) |
+| `POST` | `/orders/:id/complete` | JWT | Confirmar finalización del servicio (doble confirmación cliente/trabajador) |
 
 **Máquina de estados de órdenes:** `PENDING → ACCEPTED | REJECTED`, `ACCEPTED → IN_PROGRESS | CANCELLED`, `IN_PROGRESS → COMPLETED | CANCELLED`.
 
@@ -328,9 +329,20 @@ Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máq
 - Cada transición exitosa inserta un registro en la tabla `order_events` y emite el evento en tiempo real `order:status_changed` a los participantes vía WebSocket.
 - Las transiciones a `COMPLETED` y `CANCELLED` disparan la lógica de escrow: `COMPLETED` libera los fondos retenidos al trabajador (`releaseFunds`), y `CANCELLED` reembolsa a la tarjeta del cliente y marca la transacción como `REFUNDED` (ver `docs/ESCROW_SYSTEM.md`).
 
+**Confirmación de finalización (doble confirmación):**
+- Endpoint `POST /orders/:id/complete` permite a cliente o trabajador confirmar/revocar la finalización del servicio.
+- **Cliente (obligatorio)**: debe confirmar para que la orden pueda completarse.
+- **Trabajador (opcional)**: puede confirmar, pero no bloquea la finalización.
+- Cuando **ambas partes confirman** y la orden está en `IN_PROGRESS`, transiciona a `COMPLETED` y libera el escrow.
+- Body opcional: `{ "confirm": true }` (default) para confirmar, `{ "confirm": false }` para revocar.
+- Emite evento WebSocket `order:completion_confirmed` con `{ order_id, client_confirmed, worker_confirmed, status }`.
+
 **Cambios de base de datos (migración `20260813122916_create_order_events.js`):**
 - Nueva tabla `order_events` (`id`, `order_id`, `user_id`, `from_state`, `to_state`, `created_at`).
 - Constraint `orders_status_check` que restringe los estados permitidos a `PENDING`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `REJECTED`, `CANCELLED`.
+
+**Cambios de base de datos (migración `20260815000001_add_confirmations_to_orders.js`):**
+- Columnas de confirmación dual en `orders`: `client_confirmed`, `worker_confirmed`, `client_confirmed_by`, `worker_confirmed_by`, `client_confirmed_at`, `worker_confirmed_at`.
 
 ### WebSocket (real-time messaging)
 
