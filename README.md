@@ -197,6 +197,54 @@ Gestión y validación de documentos oficiales presentados por los proveedores p
 |--------|------|------|-------------|
 | `GET` | `/workers/nearby` | JWT | Trabajadores disponibles en un radio (`latitude`, `longitude`, `radius_km`, `category_id?`, `limit?`, `offset?`) |
 
+### Disponibilidad del Trabajador (`/api/v1/workers/:id/availability` y `/api/v1/availability`)
+
+Configuración de la disponibilidad horaria semanal de los trabajadores (día de la semana + rangos de horas en los que pueden recibir solicitudes).
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/workers/:id/availability` | JWT | Crear un rango de disponibilidad (`day_of_week` 0-6, `start_time`, `end_time`). Máximo 2 rangos por día |
+| `GET` | `/workers/:id/availability` | JWT | Listar la disponibilidad del trabajador (solo propio). Ordenada por día y hora de inicio |
+| `PATCH` | `/availability/:id` | JWT | Actualizar el día u horario de un rango de disponibilidad |
+| `DELETE` | `/availability/:id` | JWT | Eliminar un rango de disponibilidad |
+
+**Reglas de negocio y validaciones:**
+
+- **`day_of_week`**: número entero entre `0` (Domingo) y `6` (Sábado).
+- **Horarios**: formato `HH:mm` (24 horas). `start_time` siempre debe ser anterior a `end_time`.
+- **Límite**: máximo **2 rangos por día** por trabajador (al crear o al mover un rango a otro día).
+- **Permisos**: solo el propietario del perfil de trabajador (`worker_profiles.user_id === usuario autenticado`) puede crear, listar, actualizar o eliminar sus rangos.
+- Restricciones a nivel de BD (migración `20260818020000_create_worker_availability.js`): `CHECK (day_of_week BETWEEN 0 AND 6)` y `CHECK (start_time < end_time)`, con índices en `worker_id` y `day_of_week`.
+
+**Ejemplo — crear disponibilidad:**
+
+```json
+POST /api/v1/workers/:id/availability
+Authorization: Bearer <accessToken>
+{
+  "day_of_week": 1,
+  "start_time": "09:00",
+  "end_time": "13:00"
+}
+```
+
+Respuesta `201 Created`:
+
+```json
+{
+  "message": "Disponibilidad creada correctamente",
+  "availability": {
+    "id": "a1b2c3d4-...",
+    "worker_id": "c3d4e5f6-...",
+    "day_of_week": 1,
+    "start_time": "09:00",
+    "end_time": "13:00",
+    "created_at": "2026-08-18T12:00:00.000Z",
+    "updated_at": "2026-08-18T12:00:00.000Z"
+  }
+}
+```
+
 ### Chats (`/api/v1/chats`)
 
 | Método | Ruta | Auth | Descripción |

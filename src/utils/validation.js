@@ -723,3 +723,52 @@ export const resolveDisputeSchema = Joi.object({
       'any.required': 'El ganador es requerido cuando el estado es RESOLVED',
     }),
 });
+
+const dayOfWeek = Joi.number().integer().min(0).max(6).messages({
+  'number.base': 'day_of_week debe ser un número entero',
+  'number.integer': 'day_of_week debe ser un número entero',
+  'number.min': 'day_of_week debe estar entre 0 (Domingo) y 6 (Sábado)',
+  'number.max': 'day_of_week debe estar entre 0 (Domingo) y 6 (Sábado)',
+});
+
+const startTime = Joi.string().pattern(timePattern).messages({
+  'string.pattern.base': 'start_time debe tener formato HH:mm (24 horas)',
+});
+
+const endTime = Joi.string().pattern(timePattern).messages({
+  'string.pattern.base': 'end_time debe tener formato HH:mm (24 horas)',
+});
+
+const timeRangeValidator = (value, helpers) => {
+  if (
+    value.start_time !== undefined &&
+    value.end_time !== undefined &&
+    value.start_time >= value.end_time
+  ) {
+    return helpers.message('start_time debe ser anterior a end_time');
+  }
+  return value;
+};
+
+export const createAvailabilitySchema = Joi.object({
+  day_of_week: dayOfWeek.required().messages({
+    'any.required': 'day_of_week es requerido',
+  }),
+  start_time: startTime.required().messages({
+    'any.required': 'start_time es requerido',
+  }),
+  end_time: endTime.required().messages({
+    'any.required': 'end_time es requerido',
+  }),
+}).custom(timeRangeValidator, 'validación de rango horario');
+
+export const updateAvailabilitySchema = Joi.object({
+  day_of_week: dayOfWeek.optional(),
+  start_time: startTime.optional(),
+  end_time: endTime.optional(),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  })
+  .custom(timeRangeValidator, 'validación de rango horario');
