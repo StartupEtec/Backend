@@ -638,3 +638,34 @@ export const completeOrderSchema = Joi.object({
     'boolean.base': 'confirm debe ser un valor booleano',
   }),
 });
+
+// ── Rating schemas ──────────────────────────────────────────────────────────────
+
+export const createRatingSchema = Joi.object({
+  order_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'order_id debe ser un UUID válido',
+    'any.required': 'order_id es requerido',
+  }),
+  rating_stars: Joi.number().integer().min(1).max(5).required().messages({
+    'number.base': 'rating_stars debe ser un número',
+    'number.integer': 'rating_stars debe ser un número entero',
+    'number.min': 'rating_stars debe ser al menos 1',
+    'number.max': 'rating_stars no debe exceder 5',
+    'any.required': 'rating_stars es requerido',
+  }),
+  review_text: Joi.string().trim().max(1000).allow('', null).messages({
+    'string.max': 'review_text no debe exceder los 1000 caracteres',
+  }),
+});
+
+export const listRatingsQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+});

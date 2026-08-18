@@ -1519,6 +1519,129 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
+
+        // ── Rating schemas ──────────────────────────────────────────────
+        RatingResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            order_id: { type: 'string', format: 'uuid', example: 'c3d4e5f6-...' },
+            rater_id: { type: 'string', format: 'uuid', example: '11111111-...' },
+            ratee_id: { type: 'string', format: 'uuid', example: '22222222-...' },
+            rating_stars: { type: 'integer', example: 5, minimum: 1, maximum: 5 },
+            review_text: {
+              type: 'string',
+              example: 'Excelente trabajo, muy profesional',
+              nullable: true,
+            },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateRatingRequest: {
+          type: 'object',
+          required: ['order_id', 'rating_stars'],
+          properties: {
+            order_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'c3d4e5f6-...',
+              description: 'UUID de la orden completada a calificar',
+            },
+            rating_stars: {
+              type: 'integer',
+              example: 5,
+              minimum: 1,
+              maximum: 5,
+              description: 'Calificación en estrellas (1-5)',
+            },
+            review_text: {
+              type: 'string',
+              example: 'Excelente trabajo, muy profesional',
+              maxLength: 1000,
+              nullable: true,
+              description: 'Reseña opcional (máx. 1000 caracteres)',
+            },
+          },
+        },
+        CreateRatingResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Calificación creada correctamente' },
+            rating: { $ref: '#/components/schemas/RatingResponse' },
+          },
+        },
+        RatingListItem: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            order_id: { type: 'string', format: 'uuid', example: 'c3d4e5f6-...' },
+            rater_id: { type: 'string', format: 'uuid', example: '11111111-...' },
+            ratee_id: { type: 'string', format: 'uuid', example: '22222222-...' },
+            rating_stars: { type: 'integer', example: 5, minimum: 1, maximum: 5 },
+            review_text: { type: 'string', example: 'Excelente trabajo', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+            rater: {
+              type: 'object',
+              properties: {
+                user_id: { type: 'string', format: 'uuid' },
+                full_name: { type: 'string', example: 'Juan Pérez' },
+                avatar_url: { type: 'string', nullable: true },
+              },
+            },
+          },
+        },
+        ListRatingsResponse: {
+          type: 'object',
+          properties: {
+            ratings: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/RatingListItem' },
+            },
+            count: { type: 'integer', example: 10 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+        RatingAverageResponse: {
+          type: 'object',
+          properties: {
+            average_rating: {
+              type: 'number',
+              example: 4.5,
+              nullable: true,
+              description: 'Promedio de estrellas (redondeado a 1 decimal)',
+            },
+            total_ratings: {
+              type: 'integer',
+              example: 10,
+              description: 'Total de calificaciones recibidas',
+            },
+          },
+        },
+        AlreadyRatedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'ALREADY_RATED' },
+            message: {
+              type: 'string',
+              example: 'Ya existe una calificación para esta orden por parte de este usuario',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        OrderNotCompletedError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'ORDER_NOT_COMPLETED' },
+            message: {
+              type: 'string',
+              example: 'Solo se pueden calificar órdenes en estado COMPLETED',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
   },
@@ -3759,4 +3882,147 @@ export const setupSwagger = (app) => {
  *                     message: { type: string, example: 'El cliente ya confirmó la finalización' }
  *                     statusCode: { type: integer, example: 409 }
  *                     timestamp: { type: string, format: 'date-time' }
+ */
+/**
+ * @openapi
+ * /ratings:
+ *   post:
+ *     summary: Crear una calificación para una orden completada
+ *     description: |
+ *       Permite al cliente o trabajador calificar la orden completada.
+ *       Solo participantes de la orden (cliente o trabajador) pueden calificar.
+ *       La orden debe estar en estado COMPLETED.
+ *       Máximo un rating por usuario por orden (constraint UNIQUE).
+ *       Se actualiza automáticamente el average_rating en el perfil del calificado.
+ *     tags: [Calificaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateRatingRequest'
+ *           example:
+ *             order_id: "c3d4e5f6-..."
+ *             rating_stars: 5
+ *             review_text: "Excelente trabajo, muy profesional"
+ *     responses:
+ *       201:
+ *         description: Calificación creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateRatingResponse'
+ *       400:
+ *         description: Error de validación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *       403:
+ *         description: No es cliente ni trabajador de la orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ForbiddenError'
+ *       404:
+ *         description: Orden no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderNotFoundError'
+ *       409:
+ *         description: Orden no completada o ya existe un rating del usuario para esta orden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/OrderNotCompletedError'
+ *                 - $ref: '#/components/schemas/AlreadyRatedError'
+ *
+ * /users/{id}/ratings:
+ *   get:
+ *     summary: Listar calificaciones recibidas por un usuario
+ *     description: |
+ *       Retorna las calificaciones donde el usuario es el calificado (ratee).
+ *       Incluye información del calificador (rater).
+ *       Soporta paginación con limit (default 20, max 100) y offset.
+ *     tags: [Calificaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario calificado
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         description: Número máximo de calificaciones por página
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema: { type: integer, minimum: 0, default: 0 }
+ *         description: Desplazamiento para paginación
+ *     responses:
+ *       200:
+ *         description: Lista paginada de calificaciones recibidas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ListRatingsResponse'
+ *       400:
+ *         description: Parámetros de consulta inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
+ *
+ * /users/{id}/rating-average:
+ *   get:
+ *     summary: Obtener el promedio de calificaciones de un usuario
+ *     description: |
+ *       Calcula y retorna el promedio de estrellas recibidas por el usuario
+ *       y el total de calificaciones recibidas.
+ *     tags: [Calificaciones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     responses:
+ *       200:
+ *         description: Promedio de calificaciones del usuario
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RatingAverageResponse'
+ *       401:
+ *         description: Token no proporcionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnauthorizedError'
  */
