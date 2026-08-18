@@ -13,6 +13,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import paymentProcessRoutes from './routes/paymentProcessRoutes.js';
 import certificationRoutes from './routes/certificationRoutes.js';
+import ratingRoutes from './routes/ratingRoutes.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -61,6 +62,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/payment-methods', paymentRoutes);
 app.use('/api/v1', paymentProcessRoutes);
 app.use('/api/v1', certificationRoutes);
+app.use('/api/v1', ratingRoutes);
 
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));
