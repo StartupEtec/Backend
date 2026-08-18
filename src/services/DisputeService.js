@@ -236,7 +236,10 @@ class DisputeService {
       });
     } catch (err) {
       if (err.message === 'REFUND_FAILED') {
-        return { error: 'REFUND_FAILED', message: 'No se pudo reembolsar a la tarjeta del cliente' };
+        return {
+          error: 'REFUND_FAILED',
+          message: 'No se pudo reembolsar a la tarjeta del cliente',
+        };
       }
       throw err;
     }

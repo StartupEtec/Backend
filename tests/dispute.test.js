@@ -186,7 +186,10 @@ describe('Dispute System Tests', () => {
       builders.disputes.count.mockResolvedValue([{ count: 2 }]);
       builders.disputes.offset.mockResolvedValue([CREATED_DISPUTE]);
 
-      const res = await disputeService.listDisputes(CLIENT_USER_ID, 'client', { limit: 10, offset: 0 });
+      const res = await disputeService.listDisputes(CLIENT_USER_ID, 'client', {
+        limit: 10,
+        offset: 0,
+      });
       expect(res.count).toBe(2);
       expect(res.disputes).toEqual([CREATED_DISPUTE]);
     });
@@ -210,7 +213,11 @@ describe('Dispute System Tests', () => {
       builders.disputes = makeBuilder();
       builders.disputes.first
         .mockResolvedValueOnce(CREATED_DISPUTE) // Primer llamado: buscar disputa
-        .mockResolvedValueOnce({ ...CREATED_DISPUTE, status: 'RESOLVED', resolution_notes: 'Reembolso ok' }); // Retorno final
+        .mockResolvedValueOnce({
+          ...CREATED_DISPUTE,
+          status: 'RESOLVED',
+          resolution_notes: 'Reembolso ok',
+        }); // Retorno final
       builders.orders = makeBuilder();
       builders.orders.first.mockResolvedValue(COMPLETED_ORDER);
       builders.client_profiles = makeBuilder();
@@ -226,7 +233,11 @@ describe('Dispute System Tests', () => {
         payment_method_id: 'pm-123',
       });
       builders.user_wallets = makeBuilder();
-      builders.user_wallets.first.mockResolvedValue({ id: 'w-123', user_id: CLIENT_USER_ID, escrowed_balance: 150 });
+      builders.user_wallets.first.mockResolvedValue({
+        id: 'w-123',
+        user_id: CLIENT_USER_ID,
+        escrowed_balance: 150,
+      });
       builders.transaction_logs = makeBuilder();
 
       const res = await disputeService.resolveDispute(DISPUTE_ID, ADMIN_USER_ID, {
@@ -240,9 +251,11 @@ describe('Dispute System Tests', () => {
 
     it('debería procesar reembolso debitando del trabajador si la transacción ya está COMPLETED', async () => {
       builders.disputes = makeBuilder();
-      builders.disputes.first
-        .mockResolvedValueOnce(CREATED_DISPUTE)
-        .mockResolvedValueOnce({ ...CREATED_DISPUTE, status: 'RESOLVED', resolution_notes: 'Reembolso ok' });
+      builders.disputes.first.mockResolvedValueOnce(CREATED_DISPUTE).mockResolvedValueOnce({
+        ...CREATED_DISPUTE,
+        status: 'RESOLVED',
+        resolution_notes: 'Reembolso ok',
+      });
       builders.orders = makeBuilder();
       builders.orders.first.mockResolvedValue(COMPLETED_ORDER);
       builders.client_profiles = makeBuilder();
@@ -259,7 +272,11 @@ describe('Dispute System Tests', () => {
         payment_method_id: 'pm-123',
       });
       builders.user_wallets = makeBuilder();
-      builders.user_wallets.first.mockResolvedValue({ id: 'w-123', user_id: WORKER_USER_ID, current_balance: 200 });
+      builders.user_wallets.first.mockResolvedValue({
+        id: 'w-123',
+        user_id: WORKER_USER_ID,
+        current_balance: 200,
+      });
       builders.transaction_logs = makeBuilder();
 
       const res = await disputeService.resolveDispute(DISPUTE_ID, ADMIN_USER_ID, {
