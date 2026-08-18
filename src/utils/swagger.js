@@ -1642,6 +1642,36 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
+        Dispute: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            order_id: { type: 'string', format: 'uuid', example: 'c3d4e5f6-...' },
+            opened_by_id: { type: 'string', format: 'uuid', example: 'd4e5f6a7-...' },
+            reason: {
+              type: 'string',
+              example: 'El servicio no se completó de acuerdo a lo acordado',
+            },
+            evidence_url: {
+              type: 'string',
+              format: 'uri',
+              nullable: true,
+              example: 'https://example.com/evidence.jpg',
+            },
+            status: {
+              type: 'string',
+              enum: ['OPEN', 'RESOLVED', 'CLOSED'],
+              example: 'OPEN',
+            },
+            resolution_notes: {
+              type: 'string',
+              nullable: true,
+              example: 'Reembolso aprobado a favor del cliente',
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
   },

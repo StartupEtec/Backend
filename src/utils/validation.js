@@ -711,13 +711,15 @@ export const resolveDisputeSchema = Joi.object({
     'string.max': 'Las notas de resolución no deben exceder los 2000 caracteres',
     'any.required': 'Las notas de resolución son requeridas',
   }),
-  winner: Joi.string().valid('client', 'worker').when('status', {
-    is: 'RESOLVED',
-    then: Joi.required(),
-    otherwise: Joi.optional().allow(null, ''),
-  }).messages({
-    'any.only': 'El ganador debe ser client o worker',
-    'any.required': 'El ganador es requerido cuando el estado es RESOLVED',
-  }),
+  winner: Joi.string()
+    .valid('client', 'worker')
+    .when('status', {
+      is: 'RESOLVED',
+      then: Joi.required(),
+      otherwise: Joi.optional().allow(null, ''),
+    })
+    .messages({
+      'any.only': 'El ganador debe ser client o worker',
+      'any.required': 'El ganador es requerido cuando el estado es RESOLVED',
+    }),
 });
-
