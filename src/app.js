@@ -14,6 +14,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import paymentProcessRoutes from './routes/paymentProcessRoutes.js';
 import certificationRoutes from './routes/certificationRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
+import disputeRoutes from './routes/disputeRoutes.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -63,6 +64,7 @@ app.use('/api/v1/payment-methods', paymentRoutes);
 app.use('/api/v1', paymentProcessRoutes);
 app.use('/api/v1', certificationRoutes);
 app.use('/api/v1', ratingRoutes);
+app.use('/api/v1/disputes', disputeRoutes);
 
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));

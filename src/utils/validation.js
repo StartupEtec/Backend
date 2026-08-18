@@ -669,3 +669,55 @@ export const listRatingsQuerySchema = Joi.object({
     'number.min': 'offset no puede ser negativo',
   }),
 });
+
+// ── Dispute schemas ─────────────────────────────────────────────────────────────
+
+export const createDisputeSchema = Joi.object({
+  order_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'order_id debe ser un UUID válido',
+    'any.required': 'order_id es requerido',
+  }),
+  reason: Joi.string().trim().min(10).max(2000).required().messages({
+    'string.empty': 'La razón no puede estar vacía',
+    'string.min': 'La razón debe tener al menos 10 caracteres',
+    'string.max': 'La razón no debe exceder los 2000 caracteres',
+    'any.required': 'La razón es requerida',
+  }),
+  evidence_url: Joi.string().trim().uri().allow('', null).messages({
+    'string.uri': 'La URL de evidencia debe ser un enlace válido',
+  }),
+});
+
+export const listDisputesQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+});
+
+export const resolveDisputeSchema = Joi.object({
+  status: Joi.string().valid('RESOLVED', 'CLOSED').required().messages({
+    'any.only': 'El estado debe ser RESOLVED o CLOSED',
+    'any.required': 'El estado es requerido',
+  }),
+  resolution_notes: Joi.string().trim().min(10).max(2000).required().messages({
+    'string.empty': 'Las notas de resolución no pueden estar vacías',
+    'string.min': 'Las notas de resolución deben tener al menos 10 caracteres',
+    'string.max': 'Las notas de resolución no deben exceder los 2000 caracteres',
+    'any.required': 'Las notas de resolución son requeridas',
+  }),
+  winner: Joi.string().valid('client', 'worker').when('status', {
+    is: 'RESOLVED',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(null, ''),
+  }).messages({
+    'any.only': 'El ganador debe ser client o worker',
+    'any.required': 'El ganador es requerido cuando el estado es RESOLVED',
+  }),
+});
+

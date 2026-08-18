@@ -344,6 +344,27 @@ Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máq
 **Cambios de base de datos (migración `20260815000001_add_confirmations_to_orders.js`):**
 - Columnas de confirmación dual en `orders`: `client_confirmed`, `worker_confirmed`, `client_confirmed_by`, `worker_confirmed_by`, `client_confirmed_at`, `worker_confirmed_at`.
 
+### Disputas (`/api/v1/disputes`)
+
+Gestión de disputas para resolver conflictos de calidad de servicio, cancelación o retenciones en órdenes de trabajo.
+
+| Método | Ruta | Auth | Rol Mínimo | Descripción |
+|--------|------|------|------------|-------------|
+| `POST` | `/disputes` | JWT | Cliente o Trabajador | Abre una disputa para una orden en estado `COMPLETED` o `CANCELLED` |
+| `GET` | `/disputes` | JWT | Cualquiera | Lista las disputas (usuarios ven las suyas; admins ven todas) |
+| `PATCH` | `/disputes/:id` | JWT | Admin | Resuelve o cierra una disputa (`RESOLVED` o `CLOSED`) |
+
+**Reglas de negocio y flujos:**
+- **Apertura**: Solo los participantes directos (cliente o trabajador) de una orden en estado `COMPLETED` o `CANCELLED` pueden abrir una disputa. Máximo una disputa por orden.
+- **Visualización**: Los usuarios normales están restringidos a ver únicamente las disputas donde participan activamente.
+- **Resolución a favor del Cliente**:
+  - Si los fondos están en **escrow** (`ESCROWED`): se devuelven al cliente y se cambia la transacción a `REFUNDED`.
+  - Si el pago ya fue **completado** (`COMPLETED`): se debita el dinero del saldo disponible del trabajador (`current_balance`) y se procesa el reembolso al cliente.
+- **Resolución a favor del Trabajador**:
+  - Si los fondos están en **escrow** (`ESCROWED`): se liberan inmediatamente acreditándolos a la wallet del trabajador (`current_balance`).
+  - Si el pago ya estaba **completado** (`COMPLETED`): no-op (mantiene el pago).
+- Cada cambio emite eventos WebSocket (`dispute:created` y `dispute:status_changed`) y se registra en Winston.
+
 ### WebSocket (real-time messaging)
 
 El servidor expone un WebSocket en `ws://<host>/ws`. El cliente se conecta pasando el
