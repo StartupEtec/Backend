@@ -772,3 +772,51 @@ export const updateAvailabilitySchema = Joi.object({
     'object.min': 'Debe proporcionar al menos un campo para actualizar',
   })
   .custom(timeRangeValidator, 'validación de rango horario');
+
+export const changePasswordSchema = Joi.object({
+  current_password: Joi.string().required().messages({
+    'any.required': 'La contraseña actual es requerida',
+  }),
+  new_password: Joi.string().pattern(passwordPattern).required().messages({
+    'string.pattern.base':
+      'La nueva contraseña debe tener al menos 8 caracteres, incluir una mayúscula, una minúscula, un número y un símbolo',
+    'any.required': 'La nueva contraseña es requerida',
+  }),
+});
+
+export const changeEmailSchema = Joi.object({
+  new_email: Joi.string().email().required().messages({
+    'string.email': 'El formato del nuevo correo electrónico no es válido',
+    'any.required': 'El nuevo correo electrónico es requerido',
+  }),
+});
+
+export const verifyEmailChangeSchema = Joi.object({
+  current_otp_code: Joi.string().length(6).required().messages({
+    'string.length': 'El código OTP actual debe ser de 6 dígitos',
+    'any.required': 'El código OTP actual es requerido',
+  }),
+  new_otp_code: Joi.string().length(6).required().messages({
+    'string.length': 'El nuevo código OTP debe ser de 6 dígitos',
+    'any.required': 'El nuevo código OTP es requerido',
+  }),
+});
+
+export const changePhoneSchema = Joi.object({
+  new_phone: Joi.string().min(8).max(15).required().messages({
+    'string.min': 'El nuevo teléfono debe tener al menos 8 dígitos',
+    'string.max': 'El nuevo teléfono no debe exceder los 15 dígitos',
+    'any.required': 'El nuevo teléfono es requerido',
+  }),
+});
+
+export const verifyPhoneChangeSchema = Joi.object({
+  current_otp_code: Joi.string().length(6).required().messages({
+    'string.length': 'El código OTP actual debe ser de 6 dígitos',
+    'any.required': 'El código OTP actual es requerido',
+  }),
+  new_otp_code: Joi.string().length(6).required().messages({
+    'string.length': 'El nuevo código OTP debe ser de 6 dígitos',
+    'any.required': 'El nuevo código OTP es requerido',
+  }),
+});

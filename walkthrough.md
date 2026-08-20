@@ -316,3 +316,39 @@ curl -X PATCH http://localhost:3000/api/v1/users/USER_ID \
 
 #### G. Acceder a la Documentación Swagger
 Visita http://localhost:3000/api/v1/api-docs en tu navegador para ver y probar interactivamente los endpoints mediante Swagger UI.
+
+---
+
+## Issue #28: Endpoints de Configuración de Seguridad de Usuario
+
+Se han desarrollado los endpoints específicos para la gestión segura del cambio de credenciales de usuario (contraseña, correo electrónico y teléfono). Los cambios de correo electrónico y teléfono requieren verificación en dos pasos mediante el envío e ingreso de códigos OTP tanto al canal actual como al nuevo.
+
+### Cambios Realizados
+
+#### Base de Datos
+- **Migración** [`20260820000000_create_pending_user_changes.js`](file:///home/ilan/Escritorio/Startup/Backend/src/database/migrations/20260820000000_create_pending_user_changes.js): Crea la tabla `pending_user_changes` para mantener los flujos de verificación en progreso y los códigos OTP asociados sin ensuciar la tabla `users`.
+
+#### Backend - Capa Lógica y Validación
+- **Servicio** [`SecurityConfigService.js`](file:///home/ilan/Escritorio/Startup/Backend/src/services/SecurityConfigService.js): Implementa la lógica para validar contraseñas viejas, encriptar las nuevas, generar y validar doble código OTP para email/teléfono de forma segura y realizar actualizaciones transaccionales.
+- **Controlador** [`SecurityConfigController.js`](file:///home/ilan/Escritorio/Startup/Backend/src/controllers/SecurityConfigController.js): Valida la entrada HTTP de la solicitud y maneja el control de acceso asegurándose de que `req.user.user_id === req.params.id`.
+- **Validaciones** [`validation.js`](file:///home/ilan/Escritorio/Startup/Backend/src/utils/validation.js): Agrega schemas para cambio de contraseña (con requerimientos de complejidad), inicialización de cambios de email/teléfono, y verificación final de los OTPs.
+
+#### Rutas y Documentación
+- **Rutas** [`userRoutes.js`](file:///home/ilan/Escritorio/Startup/Backend/src/routes/userRoutes.js): Agrega los 5 nuevos endpoints protegidos por JWT.
+- **Swagger** [`swagger.js`](file:///home/ilan/Escritorio/Startup/Backend/src/utils/swagger.js): Documenta completamente los endpoints bajo la sección "Seguridad de Usuario".
+- **README** [`README.md`](file:///home/ilan/Escritorio/Startup/Backend/README.md): Documenta los nuevos endpoints en la tabla resumen.
+
+### Endpoints Agregados
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/change-password` | JWT | Cambiar la contraseña validando la contraseña actual. |
+| `POST` | `/users/:id/change-email` | JWT | Iniciar cambio de correo. Envía OTP a email actual y nuevo. |
+| `POST` | `/users/:id/verify-email-change` | JWT | Verificar ambos OTPs y confirmar cambio de email. |
+| `POST` | `/users/:id/change-phone` | JWT | Iniciar cambio de teléfono. Envía OTP a teléfono actual y nuevo. |
+| `POST` | `/users/:id/verify-phone-change` | JWT | Verificar ambos OTPs y confirmar cambio de teléfono. |
+
+### Pruebas Automatizadas
+- Se creó una suite de pruebas completa en [`securityConfig.test.js`](file:///home/ilan/Escritorio/Startup/Backend/tests/securityConfig.test.js) con 21 test cases unitarios y de integración para asegurar que todos los flujos funcionen correctamente y no permitan acciones no autorizadas.
+- Ejecutar tests con: `npm test tests/securityConfig.test.js`
+

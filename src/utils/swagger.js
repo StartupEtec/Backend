@@ -4073,4 +4073,194 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/UnauthorizedError'
+ *
+ * /users/{id}/change-password:
+ *   post:
+ *     summary: Cambiar contraseña de usuario
+ *     description: Permite al usuario autenticado cambiar su contraseña validando la contraseña actual.
+ *     tags: [Seguridad de Usuario]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [current_password, new_password]
+ *             properties:
+ *               current_password:
+ *                 type: string
+ *                 example: OldPassword123!
+ *               new_password:
+ *                 type: string
+ *                 example: NewPassword123!
+ *     responses:
+ *       200:
+ *         description: Contraseña actualizada correctamente
+ *       400:
+ *         description: Contraseña actual incorrecta, nueva contraseña inválida o igual a la anterior
+ *       403:
+ *         description: No autorizado
+ *       404:
+ *         description: Usuario no encontrado
+ *
+ * /users/{id}/change-email:
+ *   post:
+ *     summary: Iniciar cambio de correo electrónico
+ *     description: Envía códigos de verificación OTP tanto al correo electrónico actual como al nuevo.
+ *     tags: [Seguridad de Usuario]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [new_email]
+ *             properties:
+ *               new_email:
+ *                 type: string
+ *                 format: email
+ *                 example: nuevo@example.com
+ *     responses:
+ *       200:
+ *         description: Flujo de cambio iniciado. OTPs enviados a ambos correos.
+ *       400:
+ *         description: Nuevo email igual al actual
+ *       403:
+ *         description: No autorizado
+ *       409:
+ *         description: El nuevo email ya está registrado
+ *
+ * /users/{id}/verify-email-change:
+ *   post:
+ *     summary: Verificar y completar cambio de correo electrónico
+ *     description: Valida los códigos OTP enviados a ambos correos electrónicos y realiza el cambio en caso de éxito.
+ *     tags: [Seguridad de Usuario]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [current_otp_code, new_otp_code]
+ *             properties:
+ *               current_otp_code:
+ *                 type: string
+ *                 example: '123456'
+ *               new_otp_code:
+ *                 type: string
+ *                 example: '654321'
+ *     responses:
+ *       200:
+ *         description: Correo electrónico cambiado correctamente
+ *       400:
+ *         description: Solicitud pendiente no encontrada, OTP expirado o incorrecto
+ *       403:
+ *         description: No autorizado
+ *       409:
+ *         description: El nuevo email ya está registrado
+ *
+ * /users/{id}/change-phone:
+ *   post:
+ *     summary: Iniciar cambio de teléfono
+ *     description: Envía códigos de verificación OTP tanto al teléfono actual como al nuevo.
+ *     tags: [Seguridad de Usuario]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [new_phone]
+ *             properties:
+ *               new_phone:
+ *                 type: string
+ *                 example: '3009876543'
+ *     responses:
+ *       200:
+ *         description: Flujo de cambio iniciado. OTPs enviados a ambos teléfonos.
+ *       400:
+ *         description: Nuevo teléfono igual al actual
+ *       403:
+ *         description: No autorizado
+ *       409:
+ *         description: El nuevo teléfono ya está registrado
+ *
+ * /users/{id}/verify-phone-change:
+ *   post:
+ *     summary: Verificar y completar cambio de teléfono
+ *     description: Valida los códigos OTP enviados a ambos teléfonos y realiza el cambio en caso de éxito.
+ *     tags: [Seguridad de Usuario]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [current_otp_code, new_otp_code]
+ *             properties:
+ *               current_otp_code:
+ *                 type: string
+ *                 example: '123456'
+ *               new_otp_code:
+ *                 type: string
+ *                 example: '654321'
+ *     responses:
+ *       200:
+ *         description: Teléfono cambiado correctamente
+ *       400:
+ *         description: Solicitud pendiente no encontrada, OTP expirado o incorrecto
+ *       403:
+ *         description: No autorizado
+ *       409:
+ *         description: El nuevo teléfono ya está registrado
  */

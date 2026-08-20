@@ -5,6 +5,7 @@ import workerProfileController from '../controllers/WorkerProfileController.js';
 import locationController from '../controllers/LocationController.js';
 import chatController from '../controllers/ChatController.js';
 import paymentController from '../controllers/PaymentController.js';
+import securityConfigController from '../controllers/SecurityConfigController.js';
 import { authenticateToken, requireRole } from '../middlewares/authMiddleware.js';
 
 const router = Router();
@@ -47,6 +48,21 @@ router.get('/:id/payment-methods', authenticateToken, paymentController.list);
 
 // Ruta de chats del usuario (debe ir ANTES de /:id genérico)
 router.get('/:id/chats', authenticateToken, chatController.list);
+
+// Rutas de configuración de seguridad de usuario (deben ir ANTES de /:id genérico)
+router.post('/:id/change-password', authenticateToken, securityConfigController.changePassword);
+router.post('/:id/change-email', authenticateToken, securityConfigController.changeEmail);
+router.post(
+  '/:id/verify-email-change',
+  authenticateToken,
+  securityConfigController.verifyEmailChange,
+);
+router.post('/:id/change-phone', authenticateToken, securityConfigController.changePhone);
+router.post(
+  '/:id/verify-phone-change',
+  authenticateToken,
+  securityConfigController.verifyPhoneChange,
+);
 
 // Rutas genéricas de usuario
 router.get('/me', authenticateToken, userController.getMyProfile);
