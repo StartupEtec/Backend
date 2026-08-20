@@ -121,6 +121,11 @@ docker-compose down -v
 | `GET` | `/users/:id` | No | Perfil público del usuario |
 | `GET` | `/users/me` | JWT | Perfil privado del usuario autenticado |
 | `PATCH` | `/users/:id` | JWT | Actualizar perfil (solo propio usuario) |
+| `POST` | `/users/:id/change-password` | JWT | Cambiar contraseña validando contraseña actual (complejidad requerida) |
+| `POST` | `/users/:id/change-email` | JWT | Iniciar cambio de correo. Envía OTP a email actual y nuevo |
+| `POST` | `/users/:id/verify-email-change` | JWT | Verificar OTPs y confirmar cambio de email |
+| `POST` | `/users/:id/change-phone` | JWT | Iniciar cambio de teléfono. Envía OTP a teléfono actual y nuevo |
+| `POST` | `/users/:id/verify-phone-change` | JWT | Verificar OTPs y confirmar cambio de teléfono |
 
 ### Perfil de Cliente (`/api/v1/users`)
 
