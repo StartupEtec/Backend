@@ -1,5 +1,5 @@
 import authService from '../services/AuthService.js';
-import logger from '../utils/logger.js';
+import logger, { asyncLocalStorage } from '../utils/logger.js';
 
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -25,6 +25,13 @@ export const authenticateToken = (req, res, next) => {
   }
 
   req.user = decoded;
+
+  // Inyectar el user_id en el almacenamiento asíncrono para Winston
+  const store = asyncLocalStorage.getStore();
+  if (store) {
+    store.userId = decoded.user_id;
+  }
+
   next();
 };
 

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Monitoreo — Digital On-Demand Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-[#e2e8f0] min-h-screen">
+  <header class="border-b border-gray-800 bg-[#0f172a] px-8 py-5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-4 w-4 rounded-full bg-emerald-500 animate-pulse" id="global-pulse"></div>
+      <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+        System Health Dashboard
+      </h1>
+    </div>
+    <div class="text-sm text-gray-400 flex items-center gap-4">
+      <span>Env: <span id="env-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">development</span></span>
+      <span>Uptime: <span id="uptime-lbl" class="font-mono text-emerald-400">0s</span></span>
+      <button onclick="fetchHealthData()" class="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-gray-800 hover:bg-gray-700 transition">
+        Refrescar ahora
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+    <!-- Componente API -->
+    <div class="bg-[#0f172a] rounded-xl border border-gray-800 p-6 flex flex-col justify-between">
+      <div>
+        <span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">API Status</span>
+        <h3 class="text-3xl font-extrabold mt-1 text-emerald-400" id="api-status">UP</h3>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-400">
+        <span>Respuesta</span>
+        <span id="api-latency" class="font-mono text-emerald-300">--ms</span>
+      </div>
+    </div>
+
+    <!-- Componente Base de Datos -->
+    <div class="bg-[#0f172a] rounded-xl border border-gray-800 p-6 flex flex-col justify-between">
+      <div>
+        <span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Database (PostgreSQL)</span>
+        <h3 class="text-3xl font-extrabold mt-1 text-emerald-400" id="db-status">UP</h3>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-400">
+        <span>Query Ping</span>
+        <span id="db-latency" class="font-mono text-emerald-300">--ms</span>
+      </div>
+    </div>
+
+    <!-- Componente Cache -->
+    <div class="bg-[#0f172a] rounded-xl border border-gray-800 p-6 flex flex-col justify-between">
+      <div>
+        <span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Cache (Redis)</span>
+        <h3 class="text-3xl font-extrabold mt-1 text-emerald-400" id="cache-status">UP</h3>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-400">
+        <span>Tipo</span>
+        <span id="cache-type" class="font-mono text-emerald-300">--</span>
+      </div>
+    </div>
+
+    <!-- Peticiones Totales -->
+    <div class="bg-[#0f172a] rounded-xl border border-gray-800 p-6 flex flex-col justify-between">
+      <div>
+        <span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Total Requests (APM)</span>
+        <h3 class="text-3xl font-extrabold mt-1 text-sky-400" id="apm-requests">0</h3>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-400">
+        <span>Latencia Promedio</span>
+        <span id="apm-avg-latency" class="font-mono text-sky-300">0ms</span>
+      </div>
+    </div>
+
+    <!-- Gráfica de Latencia y Desempeño -->
+    <div class="bg-[#0f172a] md:col-span-3 rounded-xl border border-gray-800 p-6">
+      <h3 class="text-lg font-bold mb-4 tracking-tight text-gray-200">Historial de Latencia del Servidor</h3>
+      <div class="h-64">
+        <canvas id="latencyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Desglose de Códigos de Respuesta -->
+    <div class="bg-[#0f172a] rounded-xl border border-gray-800 p-6 flex flex-col justify-between">
+      <div>
+        <h3 class="text-lg font-bold mb-4 tracking-tight text-gray-200">Códigos de Respuesta</h3>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> 2xx (Exitoso)</span>
+            <span id="code-2xx" class="font-mono font-semibold">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-blue-500"></span> 3xx (Redirección)</span>
+            <span id="code-3xx" class="font-mono font-semibold">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-500"></span> 4xx (Error Cliente)</span>
+            <span id="code-4xx" class="font-mono font-semibold">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-rose-500"></span> 5xx (Error Servidor)</span>
+            <span id="code-5xx" class="font-mono font-semibold">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="pt-4 border-t border-gray-800 mt-4 flex justify-between text-xs text-gray-500">
+        <span>Tasa de Error 5xx</span>
+        <span id="error-rate" class="font-mono text-rose-400">0%</span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Inicializar gráfica
+    const ctx = document.getElementById('latencyChart').getContext('2d');
+    const latencyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Latencia de Petición (ms)',
+          data: [],
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+          y: { grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+        }
+      }
+    });
+
+    function formatDuration(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      return `${h}h ${m}m ${s}s`;
+    }
+
+    async function fetchHealthData() {
+      try {
+        const res = await fetch('/health/detailed');
+        const data = await res.json();
+
+        // Actualizar badges
+        document.getElementById('env-badge').innerText = data.environment;
+        document.getElementById('uptime-lbl').innerText = formatDuration(data.uptime);
+
+        // Componente API
+        document.getElementById('api-latency').innerText = `${data.components.api.latency_ms.toFixed(1)} ms`;
+
+        // Componente DB
+        const dbComp = data.components.database;
+        const dbStatusEl = document.getElementById('db-status');
+        dbStatusEl.innerText = dbComp.status;
+        if (dbComp.status === 'UP') {
+          dbStatusEl.className = 'text-3xl font-extrabold mt-1 text-emerald-400';
+          document.getElementById('db-latency').innerText = `${dbComp.latency_ms.toFixed(1)} ms`;
+        } else {
+          dbStatusEl.className = 'text-3xl font-extrabold mt-1 text-rose-500';
+          document.getElementById('db-latency').innerText = 'Fallo';
+        }
+
+        // Componente Cache
+        const cacheComp = data.components.cache;
+        const cacheStatusEl = document.getElementById('cache-status');
+        cacheStatusEl.innerText = cacheComp.status;
+        if (cacheComp.status === 'UP') {
+          cacheStatusEl.className = 'text-3xl font-extrabold mt-1 text-emerald-400';
+          document.getElementById('cache-type').innerText = cacheComp.type.toUpperCase();
+        } else {
+          cacheStatusEl.className = 'text-3xl font-extrabold mt-1 text-rose-500';
+          document.getElementById('cache-type').innerText = 'Fallo';
+        }
+
+        // APM e Historial
+        document.getElementById('apm-requests').innerText = data.apm.total_requests;
+        document.getElementById('apm-avg-latency').innerText = `${data.apm.latency_stats.avg_ms} ms`;
+        document.getElementById('error-rate').innerText = `${data.apm.error_rate_5xx_percentage}%`;
+
+        // Desglose de códigos
+        document.getElementById('code-2xx').innerText = data.apm.error_rates['2xx'];
+        document.getElementById('code-3xx').innerText = data.apm.error_rates['3xx'];
+        document.getElementById('code-4xx').innerText = data.apm.error_rates['4xx'];
+        document.getElementById('code-5xx').innerText = data.apm.error_rates['5xx'];
+
+        // Actualizar gráfica con la latencia promedio del reporte
+        const timeLabel = new Date().toLocaleTimeString();
+        latencyChart.data.labels.push(timeLabel);
+        latencyChart.data.datasets[0].data.push(data.components.api.latency_ms);
+
+        if (latencyChart.data.labels.length > 15) {
+          latencyChart.data.labels.shift();
+          latencyChart.data.datasets[0].data.shift();
+        }
+        latencyChart.update();
+
+        // Estado global del pulso
+        const pulse = document.getElementById('global-pulse');
+        if (data.status === 'UP') {
+          pulse.className = 'h-4 w-4 rounded-full bg-emerald-500 animate-pulse';
+        } else {
+          pulse.className = 'h-4 w-4 rounded-full bg-rose-500 animate-pulse';
+        }
+      } catch (err) {
+        console.error('Error al consultar health endpoint:', err);
+        const pulse = document.getElementById('global-pulse');
+        pulse.className = 'h-4 w-4 rounded-full bg-rose-500 animate-pulse';
+      }
+    }
+
+    // Consultar cada 3 segundos
+    setInterval(fetchHealthData, 3000);
+    fetchHealthData();
+  </script>
+</body>
+</html>
