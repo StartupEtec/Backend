@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import authController from '../controllers/AuthController.js';
-import { authRateLimiter } from '../middlewares/rateLimiter.js';
+import { authFailRateLimiter } from '../middlewares/rateLimiter.js';
 
 const router = Router();
 
 // Apply auth rate limiting to all auth endpoints
-router.use(authRateLimiter);
+router.use(authFailRateLimiter);
 
 router.post('/register', authController.register);
 router.post('/login', authController.login);
