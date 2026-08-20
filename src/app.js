@@ -18,7 +18,10 @@ import disputeRoutes from './routes/disputeRoutes.js';
 import availabilityRoutes from './routes/availabilityRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import healthService from './services/HealthService.js';
+import helmet from 'helmet';
 import { apmMiddleware } from './middlewares/apm.js';
+import { globalRateLimiter } from './middlewares/rateLimiter.js';
+import { sanitizeMiddleware } from './middlewares/sanitize.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
@@ -27,6 +30,10 @@ const app = express();
 
 // APM Middleware registrado al inicio para medir latencias precisas
 app.use(apmMiddleware);
+
+// Encabezados de seguridad HTTP (Helmet) y Rate Limiting global para mitigar DDoS
+app.use(helmet());
+app.use(globalRateLimiter);
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
@@ -54,6 +61,9 @@ app.use(
     },
   }),
 );
+
+// Sanitización recursiva de parámetros para prevenir ataques XSS
+app.use(sanitizeMiddleware);
 
 // Configurar Swagger
 setupSwagger(app);

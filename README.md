@@ -456,6 +456,29 @@ ver `.env.example`) y se sirven desde `GET /uploads/...`.
 
 ---
 
+## 🛡️ Seguridad y Protección DDoS
+
+El backend tiene implementadas políticas y defensas estrictas a nivel de infraestructura y de código para garantizar la integridad y seguridad del servicio:
+
+### 1. Rate Limiting (Limitador de Tasa)
+- **Global**: Límite de **1000 solicitudes/minuto por IP** para mitigar ataques de denegación de servicio (DDoS) o de raspado de datos.
+- **Autenticación**: Límite específico de **5 intentos fallidos cada 15 minutos** por dirección IP. Los accesos correctos resetean este contador.
+- **Órdenes de Trabajo**: Límite estricto de **20 creaciones de órdenes por hora por usuario** (`user_id`), evitando spamming o abusos transaccionales.
+
+### 2. Sanitización contra XSS (Cross-Site Scripting)
+- Middleware global recursivo (`sanitizeMiddleware`) que limpia etiquetas HTML/scripts en todos los parámetros entrantes (`req.body`, `req.query`, `req.params`).
+
+### 3. Headers de Seguridad (Helmet.js)
+- Configuración automática de cabeceras seguras en las respuestas HTTP (`X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, etc.) para proteger contra clickjacking y ataques relacionados con el navegador.
+
+### 4. Protección contra SQL Injection
+- Todas las consultas a la base de datos se realizan a través del constructor de consultas **Knex.js**, el cual utiliza de forma nativa parámetros y sentencias preparadas (Prepared Statements).
+
+### 5. CORS Enforzado
+- Intercepción estricta en base al dominio autorizado especificado en la variable `ALLOWED_ORIGINS` del entorno.
+
+---
+
 ## 🚀 Pipeline de CI/CD (GitHub Actions)
 
 El proyecto cuenta con integración y despliegue continuo automatizados mediante GitHub Actions.

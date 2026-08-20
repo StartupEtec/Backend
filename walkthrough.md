@@ -380,4 +380,26 @@ Se ha implementado el sistema completo de diagnóstico de salud de servicios, al
 - Se creó una suite de pruebas robusta en [`healthMonitoring.test.js`](file:///home/ilan/Escritorio/Startup/Backend/tests/healthMonitoring.test.js) que asegura la correcta funcionalidad del APM, las respuestas de salud ante degradaciones del sistema y el disparo de las alertas.
 - Ejecutar tests con: `npm test tests/healthMonitoring.test.js`
 
+---
+
+## Issue #31: Rate Limiting, DDoS y Protección de Entrada contra Inyecciones
+
+Se han implementado políticas integrales de rate-limiting (tasas de acceso controladas), mitigación contra DDoS (Helmet + limitador global), y una capa robusta de sanitización de parámetros recursiva para prevenir inyecciones de código HTML/JavaScript (XSS).
+
+### Cambios Realizados
+
+#### Rate Limiting (Limitador de Frecuencia)
+- **Global**: Registrado `globalRateLimiter` en [`rateLimiter.js`](file:///home/ilan/Escritorio/Startup/Backend/src/middlewares/rateLimiter.js) configurado a **1000 solicitudes/minuto por IP**.
+- **Autenticación Inteligente**: Implementado `authFailRateLimiter` para bloquear a nivel IP solo si ocurren **5 intentos fallidos dentro de una ventana de 15 minutos**. En caso de una autenticación exitosa, el contador del cliente es limpiado para garantizar una experiencia sin bloqueos falsos positivos.
+- **Órdenes**: Límite de **20 creaciones/hora por usuario** utilizando el ID de sesión del usuario (`req.user.user_id`) como clave en lugar de la IP.
+
+#### Sanitización de Entrada e Integridad
+- **Helmet.js**: Registrado `helmet()` en [`app.js`](file:///home/ilan/Escritorio/Startup/Backend/src/app.js) para inyectar cabeceras HTTP de seguridad a todas las respuestas del servidor.
+- **Middleware XSS** [`sanitize.js`](file:///home/ilan/Escritorio/Startup/Backend/src/middlewares/sanitize.js): Middleware global recursivo encargado de limpiar cualquier string recibido en el Body, Query o Params de peticiones HTTP, eliminando etiquetas HTML.
+
+### Pruebas Automatizadas
+- Se desarrolló una suite de pruebas de seguridad dedicada en [`securityDefense.test.js`](file:///home/ilan/Escritorio/Startup/Backend/tests/securityDefense.test.js) que valida la presencia de headers HTTP de Helmet, el filtrado recursivo de scripts maliciosos y el bloqueo preciso por IP tras 5 logins fallidos.
+- Ejecutar tests con: `npm test tests/securityDefense.test.js`
+
+
 
