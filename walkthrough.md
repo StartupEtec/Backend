@@ -352,3 +352,32 @@ Se han desarrollado los endpoints específicos para la gestión segura del cambi
 - Se creó una suite de pruebas completa en [`securityConfig.test.js`](file:///home/ilan/Escritorio/Startup/Backend/tests/securityConfig.test.js) con 21 test cases unitarios y de integración para asegurar que todos los flujos funcionen correctamente y no permitan acciones no autorizadas.
 - Ejecutar tests con: `npm test tests/securityConfig.test.js`
 
+---
+
+## Issue #30: Configuración de Health Checks, Logging y Monitoreo
+
+Se ha implementado el sistema completo de diagnóstico de salud de servicios, almacenamiento y envío de logs estructurados como JSON con seguimiento automático del ID de usuario, instrumentación APM interna para medir latencias y tasas de error, alertas ante incidentes críticos (con integración a Slack) y una vista de dashboard web en tiempo real.
+
+### Cambios Realizados
+
+#### Monitoreo y Logging
+- **Logger Centralizado** [`logger.js`](file:///home/ilan/Escritorio/Startup/Backend/src/utils/logger.js): Refactorizado para utilizar un formateador JSON estructurado que inyecta automáticamente el ID del usuario del contexto asíncrono e ignora parámetros sensibles.
+- **AsyncLocalStorage**: Permite el seguimiento automático del `user_id` en todos los archivos del backend sin necesidad de pasarlo manualmente en cada llamada a `logger`.
+- **Middleware APM** [`apm.js`](file:///home/ilan/Escritorio/Startup/Backend/src/middlewares/apm.js): Middleware global de Express para registrar latencias, categorizar estados HTTP y disparar alertas en caso de respuestas con error 500 o latencias que superen el límite configurado.
+- **Servicio de Alertas** [`AlertService.js`](file:///home/ilan/Escritorio/Startup/Backend/src/services/AlertService.js): Centraliza las alertas críticas de caída de BD/Redis y picos de error, con integración directa a Slack mediante Webhooks.
+
+#### Salud y Dashboard Visual
+- **Servicio de Salud** [`HealthService.js`](file:///home/ilan/Escritorio/Startup/Backend/src/services/HealthService.js): Realiza diagnósticos rápidos y detallados calculando latencias de queries SQL a PostgreSQL y pings a Redis cache.
+- **Rutas** [`healthRoutes.js`](file:///home/ilan/Escritorio/Startup/Backend/src/routes/healthRoutes.js): Expone los endpoints de salud `/health`, `/health/detailed` y el panel visual `/health/dashboard`.
+- **Panel Visual** [`dashboard.html`](file:///home/ilan/Escritorio/Startup/Backend/src/utils/dashboard.html): Página interactiva moderna hecha con Tailwind CSS y Chart.js que consume periódicamente `/health/detailed` y renderiza el estado de los componentes, latencias y códigos de respuesta en tiempo real.
+
+### Nuevos Endpoints
+- `GET /health`: Reporte de salud rápido e inmediato del sistema.
+- `GET /health/detailed`: Diagnósticos profundos del sistema más estadísticas agregadas del APM (promedio, P95).
+- `GET /health/dashboard`: Dashboard visual interactivo.
+
+### Pruebas Automatizadas
+- Se creó una suite de pruebas robusta en [`healthMonitoring.test.js`](file:///home/ilan/Escritorio/Startup/Backend/tests/healthMonitoring.test.js) que asegura la correcta funcionalidad del APM, las respuestas de salud ante degradaciones del sistema y el disparo de las alertas.
+- Ejecutar tests con: `npm test tests/healthMonitoring.test.js`
+
+

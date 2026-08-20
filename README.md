@@ -84,8 +84,9 @@ Asegúrate de tener instalados:
    *Este comando construirá la imagen del backend e iniciará los servicios de base de datos (`db`) y de API (`api`).*
 
 3. **Verificar el estado**:
-   - La API estará accesible en: `http://localhost:3000`
-   - El endpoint de salud estará disponible en: `http://localhost:3000/api/v1/health`
+    - La API estará accesible en: `http://localhost:3000`
+    - El endpoint de salud en: `http://localhost:3000/health`
+    - El dashboard de monitoreo en: `http://localhost:3000/health/dashboard`
 
 ### Detener los servicios
 
@@ -447,9 +448,10 @@ ver `.env.example`) y se sirven desde `GET /uploads/...`.
 
 ### Salud y Documentación
 
-| Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
-| `GET` | `/api/v1/health` | No | Health check del servicio |
+| `GET` | `/health` | No | Health check básico del servicio (API, BD, Caché) |
+| `GET` | `/health/detailed` | No | Health check detallado + métricas del APM interno |
+| `GET` | `/health/dashboard` | No | Vista web del Dashboard de Monitoreo en tiempo real |
+| `GET` | `/api/v1/health` | No | Health check heredado v1 |
 | `GET` | `/api/v1/api-docs` | No | Documentación Swagger UI |
 
 ---

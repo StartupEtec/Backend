@@ -16,11 +16,17 @@ import certificationRoutes from './routes/certificationRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import availabilityRoutes from './routes/availabilityRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
+import healthService from './services/HealthService.js';
+import { apmMiddleware } from './middlewares/apm.js';
 import { setupSwagger } from './utils/swagger.js';
 
 dotenv.config();
 
 const app = express();
+
+// APM Middleware registrado al inicio para medir latencias precisas
+app.use(apmMiddleware);
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
@@ -71,13 +77,17 @@ app.use('/api/v1', availabilityRoutes);
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));
 
-// Endpoint de salud (Health Check)
-app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({
-    status: 'UP',
-    timestamp: new Date().toISOString(),
-    env: process.env.NODE_ENV || 'development',
-  });
+// Rutas de Health Check y Monitoreo (Dashboard /health)
+app.use(healthRoutes);
+
+// Endpoint heredado de salud (Health Check v1) redirigido a la lógica central
+app.get('/api/v1/health', async (req, res, next) => {
+  try {
+    const health = await healthService.getBasicHealth();
+    res.status(200).json(health);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Middleware centralizado de manejo de errores
