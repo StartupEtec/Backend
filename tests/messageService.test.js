@@ -53,6 +53,13 @@ jest.unstable_mockModule('../src/utils/websocket.js', () => ({
   default: { sendToUser: jest.fn(), sendToUsers: jest.fn() },
 }));
 
+const notificationServiceMock = {
+  send: jest.fn().mockResolvedValue({ id: 'notif-1', status: 'SENT' }),
+};
+jest.unstable_mockModule('../src/services/NotificationService.js', () => ({
+  default: notificationServiceMock,
+}));
+
 const { default: messageService } = await import('../src/services/MessageService.js');
 const imageService = (await import('../src/services/ImageService.js')).default;
 const websocketHub = (await import('../src/utils/websocket.js')).default;
@@ -83,6 +90,8 @@ describe('MessageService.createMessage', () => {
   beforeEach(() => {
     resetBuilders();
     jest.clearAllMocks();
+    // Re-apply notificationService mock after clearAllMocks
+    notificationServiceMock.send.mockResolvedValue({ id: 'notif-1', status: 'SENT' });
     mockKnex('chat_participants');
     mockKnex('messages');
     mockKnex('chats');

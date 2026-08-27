@@ -24,6 +24,8 @@ Este documento detalla el esquema de base de datos relacional implementado en Po
 - `users` (1) ── (1) `user_wallets` (saldos: disponible y retenido)
 - `orders` (1) ── (N) `ratings`
 - `orders` (1) ── (N) `disputes`
+- `users` (1) ── (N) `notifications`
+- `users` (1) ── (1) `notification_preferences`
 
 ---
 
@@ -692,3 +694,54 @@ cierra con `1008` si el token es inválido).
 | `websocketHub` | `src/utils/websocket.js` | Hub WS singleton: `Map<user_id, Set<socket>>` (multi-dispositivo), auth por token, relay de `user:typing`, `sendToUser`/`sendToUsers` |
 | `MessageController` | `src/controllers/MessageController.js` | Manejo HTTP (201/400/403/404) y delegación a `MessageService` |
 | `upload.js` | `src/middlewares/upload.js` | Multer para imagen única + `handleUploadError` (traduce errores de multer a `400 UPLOAD_ERROR`) |
+
+---
+
+## 20. `notifications` (Issue #58)
+
+Registro centralizado de todos los envíos de notificaciones multi-canal.
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY` | Identificador único autogenerado. |
+| `user_id` | `UUID` | `FK → users`, `NOT NULL` | Usuario destinatario (CASCADE en delete). |
+| `type` | `VARCHAR` | `NOT NULL` | Tipo de evento: `SERVICE_REQUEST`, `QUOTE_RECEIVED`, `QUOTE_ACCEPTED`, `SERVICE_COMPLETED`, `NEW_MESSAGE`, `ORDER_STATUS_CHANGE`. |
+| `channels` | `JSONB` | `NOT NULL` | Canales objetivo: `["push", "email", "sms"]`. |
+| `title` | `VARCHAR` | `NOT NULL` | Título de la notificación. |
+| `body` | `TEXT` | `NOT NULL` | Cuerpo del mensaje. |
+| `data` | `JSONB` | `NULLABLE` | Payload adicional: `order_id`, `chat_id`, `quote_id`, etc. |
+| `status` | `VARCHAR` | `NOT NULL`, `DEFAULT 'PENDING'` | `PENDING`, `SENT`, `FAILED`, `READ`. |
+| `read_at` | `TIMESTAMP` | `NULLABLE` | Fecha/hora en que el usuario leyó la notificación. |
+| `failed_reason` | `TEXT` | `NULLABLE` | Motivo del fallo (si aplica). |
+| `retry_count` | `INTEGER` | `DEFAULT 0` | Intentos de reenvío realizados. |
+| `max_retries` | `INTEGER` | `DEFAULT 3` | Máximo de reintentos permitidos. |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación. |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | Fecha de última modificación. |
+
+**Índices:** `user_id`, `status`, `type`, `created_at`, `(user_id, status)`.
+
+**Migración:** `20260827000000_create_notifications_tables.js`.
+
+---
+
+## 21. `notification_preferences` (Issue #58)
+
+Preferencias de notificación por usuario (una fila por usuario).
+
+| Campo | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY` | Identificador único autogenerado. |
+| `user_id` | `UUID` | `FK → users`, `UNIQUE`, `NOT NULL` | Usuario propietario (CASCADE en delete). |
+| `push_enabled` | `BOOLEAN` | `DEFAULT true` | Habilita notificaciones push. |
+| `email_enabled` | `BOOLEAN` | `DEFAULT true` | Habilita notificaciones por email. |
+| `sms_enabled` | `BOOLEAN` | `DEFAULT false` | Habilita notificaciones por SMS. |
+| `dnd_start` | `TIME` | `NULLABLE` | Inicio del horario de no molestar (HH:MM). |
+| `dnd_end` | `TIME` | `NULLABLE` | Fin del horario de no molestar (HH:MM). |
+| `dnd_enabled` | `BOOLEAN` | `DEFAULT false` | Activa el modo Do Not Disturb. |
+| `channels_config` | `JSONB` | `NULLABLE` | Configuración adicional por tipo de notificación. |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación. |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | Fecha de última modificación. |
+
+**Índices:** `user_id`.
+
+**Migración:** `20260827000000_create_notifications_tables.js`.

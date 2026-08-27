@@ -2,6 +2,7 @@ import db from '../database/db.js';
 import logger from '../utils/logger.js';
 import websocketHub from '../utils/websocket.js';
 import escrowService from './EscrowService.js';
+import notificationService from './NotificationService.js';
 
 // Error de escrow lanzado dentro de una transacción para abortar la operación.
 class EscrowOperationError extends Error {
@@ -408,6 +409,21 @@ class OrderService {
       status: nextStatus,
     });
 
+    // Notificaciones push/email/SMS
+    for (const uid of participantUserIds) {
+      notificationService
+        .send(uid, 'ORDER_STATUS_CHANGE', {
+          order_id: orderId,
+          old_status: order.status,
+          new_status: nextStatus,
+        })
+        .catch((err) =>
+          logger.error('[NOTIFICATION] Error enviando notificación de orden', {
+            error: err.message,
+          }),
+        );
+    }
+
     return { order: this.formatOrder(updatedOrder) };
   }
 
@@ -560,6 +576,20 @@ class OrderService {
         worker_confirmed: finalOrder.worker_confirmed,
         status: finalOrder.status,
       });
+
+      // Notificación push/email/SMS de servicio completado
+      for (const uid of userIds) {
+        notificationService
+          .send(uid, 'SERVICE_COMPLETED', {
+            order_id: orderId,
+            status: finalOrder.status,
+          })
+          .catch((err) =>
+            logger.error('[NOTIFICATION] Error enviando notificación de completado', {
+              error: err.message,
+            }),
+          );
+      }
     }
 
     return {

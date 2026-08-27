@@ -1,6 +1,7 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
 import escrowService from './EscrowService.js';
+import notificationService from './NotificationService.js';
 
 // Estados de la máquina de estados de cotizaciones.
 const QUOTE_STATUS = {
@@ -130,6 +131,22 @@ class QuoteService {
       worker_user_id: userId,
       timestamp: new Date().toISOString(),
     });
+
+    // Notificar al cliente que recibió una cotización
+    const clientProfile = await db('client_profiles').where({ id: order.client_id }).first();
+    if (clientProfile?.user_id) {
+      notificationService
+        .send(clientProfile.user_id, 'QUOTE_RECEIVED', {
+          order_id: orderId,
+          quote_id: row.id,
+          price: data.proposed_price,
+        })
+        .catch((err) =>
+          logger.error('[NOTIFICATION] Error enviando notificación de cotización', {
+            error: err.message,
+          }),
+        );
+    }
 
     return this.formatQuote(row);
   }
@@ -306,6 +323,21 @@ class QuoteService {
       amount: quote.proposed_price,
       timestamp: new Date().toISOString(),
     });
+
+    // Notificar al trabajador que su cotización fue aceptada
+    if (workerProfile?.user_id) {
+      notificationService
+        .send(workerProfile.user_id, 'QUOTE_ACCEPTED', {
+          order_id: quote.order_id,
+          quote_id: quote.id,
+          price: quote.proposed_price,
+        })
+        .catch((err) =>
+          logger.error('[NOTIFICATION] Error enviando notificación de aceptación', {
+            error: err.message,
+          }),
+        );
+    }
 
     const updated = await db('quotes').where({ id: quote.id }).first();
     return this.formatQuote(updated);

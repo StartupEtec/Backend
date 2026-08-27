@@ -65,6 +65,13 @@ jest.unstable_mockModule('../src/services/EscrowService.js', () => ({
   default: escrowServiceMock,
 }));
 
+const notificationServiceMock = {
+  send: jest.fn().mockResolvedValue({ id: 'notif-1', status: 'SENT' }),
+};
+jest.unstable_mockModule('../src/services/NotificationService.js', () => ({
+  default: notificationServiceMock,
+}));
+
 const { default: orderService } = await import('../src/services/OrderService.js');
 const { default: orderController } = await import('../src/controllers/OrderController.js');
 const { ORDER_STATUS } = await import('../src/services/OrderService.js');
@@ -95,6 +102,8 @@ const resetBuilders = () => {
   Object.keys(builders).forEach((key) => delete builders[key]);
   escrowServiceMock.releaseFunds.mockReset();
   escrowServiceMock.refund.mockReset();
+  // Re-apply notificationService mock
+  notificationServiceMock.send.mockResolvedValue({ id: 'notif-1', status: 'SENT' });
   setupMockKnex();
 };
 

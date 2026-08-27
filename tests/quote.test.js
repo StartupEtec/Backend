@@ -56,6 +56,13 @@ jest.unstable_mockModule('../src/services/EscrowService.js', () => ({
   default: escrowServiceMock,
 }));
 
+const notificationServiceMock = {
+  send: jest.fn().mockResolvedValue({ id: 'notif-1', status: 'SENT' }),
+};
+jest.unstable_mockModule('../src/services/NotificationService.js', () => ({
+  default: notificationServiceMock,
+}));
+
 const { default: quoteService } = await import('../src/services/QuoteService.js');
 const { default: quoteController } = await import('../src/controllers/QuoteController.js');
 const { createQuoteSchema, updateQuoteStatusSchema } = await import('../src/utils/validation.js');
@@ -81,7 +88,7 @@ const QUOTE_ROW = {
   id: QUOTE_ID,
   order_id: ORDER_ID,
   proposed_price: '35000.00',
-  proposed_date: new Date(2026, 7, 20),
+  proposed_date: new Date(2099, 5, 15),
   proposed_time: '14:30:00',
   status: 'PENDING',
   rejection_reason: null,
@@ -99,6 +106,8 @@ const QUOTE_ROW_WITH_ORDER = {
 const resetBuilders = () => {
   Object.keys(builders).forEach((key) => delete builders[key]);
   escrowServiceMock.startEscrow.mockReset();
+  // Re-apply notificationService mock
+  notificationServiceMock.send.mockResolvedValue({ id: 'notif-1', status: 'SENT' });
   setupMockKnex();
 };
 
@@ -109,7 +118,7 @@ describe('QuoteService', () => {
     it('should return ORDER_NOT_FOUND when the order does not exist', async () => {
       const result = await quoteService.createQuote(WORKER_USER_ID, ORDER_ID, {
         proposed_price: 35000,
-        proposed_date: new Date('2026-08-20T00:00:00.000Z'),
+        proposed_date: new Date('2099-06-15T00:00:00.000Z'),
         proposed_time: '14:30',
       });
 
@@ -127,7 +136,7 @@ describe('QuoteService', () => {
 
       const result = await quoteService.createQuote(WORKER_USER_ID, ORDER_ID, {
         proposed_price: 35000,
-        proposed_date: new Date('2026-08-20T00:00:00.000Z'),
+        proposed_date: new Date('2099-06-15T00:00:00.000Z'),
         proposed_time: '14:30',
       });
 
@@ -140,7 +149,7 @@ describe('QuoteService', () => {
 
       const result = await quoteService.createQuote(WORKER_USER_ID, ORDER_ID, {
         proposed_price: 35000,
-        proposed_date: new Date('2026-08-20T00:00:00.000Z'),
+        proposed_date: new Date('2099-06-15T00:00:00.000Z'),
         proposed_time: '14:30',
       });
 
@@ -155,7 +164,7 @@ describe('QuoteService', () => {
 
       const result = await quoteService.createQuote(WORKER_USER_ID, ORDER_ID, {
         proposed_price: 35000,
-        proposed_date: new Date('2026-08-20T00:00:00.000Z'),
+        proposed_date: new Date('2099-06-15T00:00:00.000Z'),
         proposed_time: '14:30',
       });
 
@@ -172,7 +181,7 @@ describe('QuoteService', () => {
 
       const result = await quoteService.createQuote(WORKER_USER_ID, ORDER_ID, {
         proposed_price: 35000,
-        proposed_date: new Date('2026-08-20T00:00:00.000Z'),
+        proposed_date: new Date('2099-06-15T00:00:00.000Z'),
         proposed_time: '14:30',
       });
 
@@ -180,7 +189,7 @@ describe('QuoteService', () => {
         id: QUOTE_ID,
         order_id: ORDER_ID,
         proposed_price: 35000,
-        proposed_date: '2026-08-20',
+        proposed_date: '2099-06-15',
         proposed_time: '14:30:00',
         status: 'PENDING',
         rejection_reason: null,
@@ -190,7 +199,7 @@ describe('QuoteService', () => {
       expect(builders.quotes.insert).toHaveBeenCalledWith({
         order_id: ORDER_ID,
         proposed_price: 35000,
-        proposed_date: '2026-08-20',
+        proposed_date: '2099-06-15',
         proposed_time: '14:30',
         status: 'PENDING',
       });
@@ -562,7 +571,7 @@ describe('QuoteController', () => {
         { order_id: ORDER_ID },
         {
           proposed_price: 35000,
-          proposed_date: '2026-08-20',
+          proposed_date: '2099-06-15',
           proposed_time: '14:30',
         },
         { user_id: WORKER_USER_ID },

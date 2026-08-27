@@ -16,6 +16,7 @@ import certificationRoutes from './routes/certificationRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import availabilityRoutes from './routes/availabilityRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import healthService from './services/HealthService.js';
 import helmet from 'helmet';
@@ -83,6 +84,7 @@ app.use('/api/v1', certificationRoutes);
 app.use('/api/v1', ratingRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1', availabilityRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Archivos adjuntos (imágenes de mensajes comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));
