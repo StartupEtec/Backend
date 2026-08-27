@@ -2,6 +2,7 @@ import db from '../database/db.js';
 import logger from '../utils/logger.js';
 import imageService from './ImageService.js';
 import websocketHub from '../utils/websocket.js';
+import notificationService from './NotificationService.js';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -90,6 +91,24 @@ class MessageService {
 
     const otherIds = (await this.getChatParticipantIds(chatId)).filter((id) => id !== userId);
     websocketHub.sendToUsers(otherIds, 'message:new', { chat_id: chatId, message });
+
+    // Notificar push/email/SMS a los demás participantes
+    const senderProfile = await db('client_profiles').where({ user_id: userId }).first();
+    const senderName = senderProfile?.full_name || 'Alguien';
+    for (const recipientId of otherIds) {
+      notificationService
+        .send(recipientId, 'NEW_MESSAGE', {
+          chat_id: chatId,
+          sender_id: userId,
+          sender_name: senderName,
+          preview: data.content?.slice(0, 50) || 'Imagen',
+        })
+        .catch((err) =>
+          logger.error('[NOTIFICATION] Error enviando notificación de mensaje', {
+            error: err.message,
+          }),
+        );
+    }
 
     logger.info('[AUDITORIA] Mensaje enviado', {
       chat_id: chatId,

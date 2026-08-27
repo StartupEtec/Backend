@@ -820,3 +820,84 @@ export const verifyPhoneChangeSchema = Joi.object({
     'any.required': 'El nuevo código OTP es requerido',
   }),
 });
+
+// ─── Notificaciones ────────────────────────────────────────────────
+
+const NOTIFICATION_CHANNELS = ['push', 'email', 'sms'];
+const NOTIFICATION_TYPES = [
+  'SERVICE_REQUEST',
+  'QUOTE_RECEIVED',
+  'QUOTE_ACCEPTED',
+  'SERVICE_COMPLETED',
+  'NEW_MESSAGE',
+  'ORDER_STATUS_CHANGE',
+];
+const NOTIFICATION_STATUSES = ['PENDING', 'SENT', 'FAILED', 'READ'];
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const updateNotificationPreferencesSchema = Joi.object({
+  push_enabled: Joi.boolean().optional().messages({
+    'boolean.base': 'push_enabled debe ser un valor booleano',
+  }),
+  email_enabled: Joi.boolean().optional().messages({
+    'boolean.base': 'email_enabled debe ser un valor booleano',
+  }),
+  sms_enabled: Joi.boolean().optional().messages({
+    'boolean.base': 'sms_enabled debe ser un valor booleano',
+  }),
+  dnd_enabled: Joi.boolean().optional().messages({
+    'boolean.base': 'dnd_enabled debe ser un valor booleano',
+  }),
+  dnd_start: Joi.string().pattern(TIME_PATTERN).optional().allow(null, '').messages({
+    'string.pattern.base': 'dnd_start debe tener el formato HH:MM (ej: 22:00)',
+  }),
+  dnd_end: Joi.string().pattern(TIME_PATTERN).optional().allow(null, '').messages({
+    'string.pattern.base': 'dnd_end debe tener el formato HH:MM (ej: 08:00)',
+  }),
+  channels_config: Joi.object().pattern(Joi.string(), Joi.any()).optional().allow(null).messages({
+    'object.base': 'channels_config debe ser un objeto',
+  }),
+}).messages({
+  'object.unknown': 'Campo no permitido en preferencias de notificación',
+});
+
+export const listNotificationsSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(50).optional().default(20).messages({
+    'number.base': 'limit debe ser un número',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 50',
+  }),
+  offset: Joi.number().integer().min(0).optional().default(0).messages({
+    'number.base': 'offset debe ser un número',
+    'number.min': 'offset no puede ser negativo',
+  }),
+  status: Joi.string()
+    .valid(...NOTIFICATION_STATUSES)
+    .optional()
+    .messages({
+      'any.only': `status debe ser uno de: ${NOTIFICATION_STATUSES.join(', ')}`,
+    }),
+  type: Joi.string()
+    .valid(...NOTIFICATION_TYPES)
+    .optional()
+    .messages({
+      'any.only': `type debe ser uno de: ${NOTIFICATION_TYPES.join(', ')}`,
+    }),
+});
+
+export const sendTestNotificationSchema = Joi.object({
+  type: Joi.string()
+    .valid(...NOTIFICATION_TYPES)
+    .optional()
+    .default('ORDER_STATUS_CHANGE')
+    .messages({
+      'any.only': `type debe ser uno de: ${NOTIFICATION_TYPES.join(', ')}`,
+    }),
+  channels: Joi.array()
+    .items(Joi.string().valid(...NOTIFICATION_CHANNELS))
+    .optional()
+    .messages({
+      'array.base': 'channels debe ser un array',
+      'any.only': `cada canal debe ser uno de: ${NOTIFICATION_CHANNELS.join(', ')}`,
+    }),
+});
