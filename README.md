@@ -37,7 +37,24 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
 - `npm start`: Inicia el servidor en producción utilizando Node.js nativo sobre `src/server.js`.
 - `npm run format`: Formatea el código de manera automática utilizando `Prettier`.
 - `npm run format:check`: Verifica si hay desviaciones en las reglas del formateador de código.
-- `npm test`: Ejecuta la suite de pruebas unitarias usando `Jest`.
+- `npm test`: Ejecuta la suite de pruebas unitarias con `Jest` y genera el reporte de cobertura en `coverage/`.
+
+## 🧪 Testing y Cobertura
+
+- **Stack**: Jest 29 + `supertest` con **Babel** (`@babel/preset-env`, targets `node: current`, `modules: false` para conservar ESM nativo — ver `babel.config.json` y `transform` en `jest.config.js`).
+- La suite cubre **servicios críticos** (auth, pagos, órdenes, chat, escrow), máquina de estados de órdenes, validaciones de entrada (Joi), utilidades (cifrado, caché) y casos de error/edge.
+- `npm test` ejecuta `--coverage` y **falla si no se alcanza el umbral mínimo** definido en `jest.config.js`:
+
+| Métrica | Mínimo |
+|---|---|
+| Statements / Lines (capa crítica) | 70% |
+| Branches (capa crítica) | 55% |
+| Functions (capa crítica) | 60% |
+
+- Archivos críticos con umbral propio del 70% (statements, functions, lines): `AuthService`, `PaymentService`, `OrderService`, `ChatService`, `EscrowService` y `src/utils/validation.js`.
+- **Alcance del reporte**: `src/services/*.js` y `src/utils/**/*.js`. Los adaptadores de proveedores externos (`src/services/providers/**`), los controllers/routes (vía HTTP) y la plomería de middleware quedan fuera del reporte por considerarse lógica de baja criticidad / dependencias de terceros.
+- El reporte HTML se genera en `coverage/lcov-report/index.html` (el directorio `coverage/` está en `.gitignore`).
+- El CI ejecuta `format:check` + `npm test` en cada Pull Request, por lo que la cobertura mínima se valida automáticamente.
 
 ## 📂 Estructura del Directorio
 

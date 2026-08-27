@@ -6,5 +6,33 @@ export default {
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
-  transform: {}
+  transform: {
+    '^.+\\.[tj]sx?$': 'babel-jest',
+  },
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/**/*.js',
+    '!src/server.js',
+    '!src/database/**/*.js',
+    '!src/routes/**/*.js',
+    '!src/controllers/**/*.js',
+    '!src/middlewares/**/*.js',
+    '!src/services/providers/**/*.js',
+    '!src/utils/dashboard.html',
+  ],
+  coverageDirectory: 'coverage',
+  coverageThreshold: {
+    global: {
+      statements: 70,
+      lines: 70,
+      branches: 55,
+      functions: 60,
+    },
+    'src/services/AuthService.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+    'src/services/PaymentService.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+    'src/services/OrderService.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+    'src/services/ChatService.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+    'src/services/EscrowService.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+    'src/utils/validation.js': { statements: 70, lines: 70, functions: 70, branches: 55 },
+  },
 };
