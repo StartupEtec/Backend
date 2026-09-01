@@ -38,6 +38,128 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
 - `npm run format`: Formatea el código de manera automática utilizando `Prettier`.
 - `npm run format:check`: Verifica si hay desviaciones en las reglas del formateador de código.
 - `npm test`: Ejecuta la suite de pruebas unitarias con `Jest` y genera el reporte de cobertura en `coverage/`.
+- `npm run seed` / `npm run seed:dev`: Puebla la base de datos con datos iniciales (32 categorías, 10 usuarios de test, ubicaciones, órdenes en varios estados, cotizaciones, escrow y ratings).
+- `npm run seed:clear`: Limpia de forma atómica y ordenada todas las tablas de prueba de la base de datos.
+
+## 🌱 Población de Datos Iniciales (Seeds)
+
+El proyecto incluye un set completo de seeds modulares con Knex.js y scripts de limpieza atómica para facilitar el desarrollo local, pruebas manuales, testing automatizado e integración con el Frontend.
+
+### 🚀 Comandos Rápidos
+
+| Comando | Descripción |
+|---|---|
+| `npm run seed` | Limpia la BD y siembra el dataset completo de desarrollo |
+| `npm run seed:dev` | Alias equivalente a `npm run seed` |
+| `npm run seed:clear` | Ejecuta `clear.js` para limpiar y vaciar atómicamente todas las tablas |
+
+```bash
+# Poblar la base de datos
+npm run seed
+
+# Limpiar toda la base de datos (Reset)
+npm run seed:clear
+```
+
+---
+
+### 👥 Usuarios de Prueba Sembrados
+
+> **Contraseña universal para todas las cuentas de prueba:** `test123!`  
+> Todos los usuarios cuentan con email y teléfono verificados (`is_verified: true`, `active: true`).
+
+#### 1. Clientes de Test
+| Email | Contraseña | Nombre Completo | Teléfono | Ubicación (CABA) | Tarjeta Guardada |
+|---|---|---|---|---|---|
+| `cliente1@test.com` | `test123!` | Juan Carlos Pérez | `+5491144441111` | Av. Santa Fe 3200, Palermo | Visa `**** 4242` |
+| `cliente2@test.com` | `test123!` | María Eugenia González | `+5491144442222` | Av. Cabildo 2100, Belgrano | Mastercard `**** 5555` |
+| `cliente3@test.com` | `test123!` | Lucas Rodríguez | `+5491144443333` | Av. Rivadavia 5400, Caballito | Visa `**** 1234` |
+| `cliente4@test.com` | `test123!` | Sofía Martínez | `+5491144444444` | Av. Callao 1400, Recoleta | Visa `**** 8888` |
+| `cliente5@test.com` | `test123!` | Carlos Alberto Gómez | `+5491144445555` | Av. Triunvirato 4500, Villa Urquiza | Mastercard `**** 7777` |
+
+#### 2. Trabajadores de Test (Rol Dual)
+| Email | Contraseña | Nombre Completo | Especialidad / Categoría | Tarifa/Hora | Certificaciones | Ubicación (CABA) |
+|---|---|---|---|---|---|---|
+| `worker1@test.com` | `test123!` | Roberto Fernández | Plomería | $8.500 | Matrícula + DNI (Aprobados) | Villa Crespo |
+| `worker2@test.com` | `test123!` | Diego Álvarez | Electricidad | $9.500 | Matrícula COPIME + DNI (Aprobados) | Belgrano |
+| `worker3@test.com` | `test123!` | Laura Benítez | Limpieza | $6.500 | Antecedentes + DNI (Aprobados) | Recoleta |
+| `worker4@test.com` | `test123!` | Martín Díaz | Pintura | $7.500 | Antecedentes + DNI (Aprobados) | Villa del Parque |
+| `worker5@test.com` | `test123!` | Esteban Rossi | Climatización | $11.000 | Matrícula Climatización + DNI (Aprobados) | Coghlan |
+
+---
+
+### 📦 Órdenes de Ejemplo en Diferentes Estados
+
+| ID Orden | Estado | Cliente | Trabajador | Categoría | Cotización | Escrow / Pago |
+|---|---|---|---|---|---|---|
+| `c1111111-...` | `PENDING` | Juan Carlos Pérez | Roberto Fernández | Plomería | $15.000 (Pendiente) | Sin transacción |
+| `c2222222-...` | `ACCEPTED` | María E. González | Diego Álvarez | Electricidad | $25.000 (Aceptada) | `ESCROWED` ($25.000 retenidos) |
+| `c3333333-...` | `IN_PROGRESS` | Lucas Rodríguez | Laura Benítez | Limpieza | $32.000 (Aceptada) | `ESCROWED` ($32.000 retenidos) |
+| `c4444444-...` | `COMPLETED` | Sofía Martínez | Martín Díaz | Pintura | $65.000 (Aceptada) | `COMPLETED` (Fondos liberados al trabajador) |
+| `c5555555-...` | `COMPLETED` | Carlos A. Gómez | Esteban Rossi | Climatización | $85.000 (Aceptada) | `COMPLETED` (Fondos liberados al trabajador) |
+| `c6666666-...` | `CANCELLED` | Juan Carlos Pérez | Diego Álvarez | Electricidad | $18.000 (Cancelada) | Cancelada |
+| `c7777777-...` | `REJECTED` | María E. González | Martín Díaz | Pintura | $220.000 (Rechazada) | Rechazada por cliente |
+
+---
+
+### 🗂️ Categorías de Servicios Sembradas (32 en total)
+
+1. Limpieza
+2. Plomería
+3. Electricidad
+4. Jardinería y Paisajismo
+5. Pintura
+6. Carpintería
+7. Climatización y Refrigeración
+8. Cuidado de Mascotas
+9. Soporte Técnico e Informática
+10. Cerrajería
+11. Gasista Matriculado
+12. Mudanzas y Fletes
+13. Albañilería y Construcción
+14. Herrería y Soldadura
+15. Techista y Reparación de Techos
+16. Fumigación y Control de Plagas
+17. Seguridad y Cámaras (CCTV)
+18. Reparación de Electrodomésticos
+19. Durlock y Yesería
+20. Tapicería y Restauración
+21. Pulido y Plastificado de Pisos
+22. Impermeabilización
+23. Cuidado de Adultos Mayores
+24. Cuidado Infantil y Niñera
+25. Clases Particulares
+26. Diseño y Decoración de Interiores
+27. Organización de Espacios
+28. Peluquería y Barbería a Domicilio
+29. Masajes y Estética
+30. Catering y Chef a Domicilio
+31. Mantenimiento de Piletas / Piscinas
+32. Vidriería y Cerramientos
+
+---
+
+### 💡 Ejemplo de Uso con cURL
+
+```bash
+# Iniciar sesión con un cliente sembrado
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "cliente1@test.com",
+    "password": "test123!"
+  }'
+
+# Iniciar sesión con un trabajador sembrado
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "worker1@test.com",
+    "password": "test123!"
+  }'
+```
+
+
 
 ## 🧪 Testing y Cobertura
 

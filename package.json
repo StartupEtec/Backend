@@ -13,7 +13,10 @@
     "migrate:latest": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
-    "seed:run": "knex seed:run"
+    "seed": "knex seed:run",
+    "seed:dev": "knex seed:run",
+    "seed:run": "knex seed:run",
+    "seed:clear": "node src/database/seeds/clear.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
