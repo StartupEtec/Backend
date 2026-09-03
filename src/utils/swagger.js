@@ -3900,11 +3900,15 @@ export { swaggerSpec };
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotFoundError'
+ *
+ * @openapi
+ * /orders/users/{id}/orders:
  *   get:
- *     summary: Listar órdenes del usuario autenticado
+ *     summary: Listar órdenes del usuario
  *     description: |
- *       Retorna las órdenes donde el usuario participa como cliente o trabajador,
- *       ordenadas por `created_at` descendente. Soporta paginación
+ *       Retorna las órdenes donde el usuario (identificado por su UUID) participa como
+ *       cliente o trabajador, ordenadas por `created_at` descendente. El `id` debe
+ *       coincidir con el del usuario autenticado. Soporta paginación
  *       (`limit` default 20, máx 100; `offset` default 0) y filtros:
  *       - `status`: filtra por estado de la orden.
  *       - `role`: `MINE_AS_CLIENT` o `MINE_AS_WORKER` para acotar por rol del usuario.
@@ -3914,6 +3918,13 @@ export { swaggerSpec };
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: UUID del usuario
  *       - in: query
  *         name: limit
  *         required: false
