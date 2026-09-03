@@ -73,6 +73,8 @@ const router = Router();
  *         description: Perfil de trabajador no encontrado o no autorizado
  *       409:
  *         description: Se alcanzó el máximo de 2 rangos para el día
+ *       500:
+ *         description: Error interno del servidor
  *
  *   get:
  *     summary: Listar disponibilidad de un trabajador
@@ -106,6 +108,8 @@ const router = Router();
  *         description: No autenticado
  *       404:
  *         description: Perfil de trabajador no encontrado o no autorizado
+ *       500:
+ *         description: Error interno del servidor
  */
 
 /**
@@ -168,6 +172,8 @@ const router = Router();
  *         description: Disponibilidad no encontrada o no autorizado
  *       409:
  *         description: Se alcanzó el máximo de 2 rangos para el nuevo día
+ *       500:
+ *         description: Error interno del servidor
  *
  *   delete:
  *     summary: Eliminar un rango de disponibilidad
@@ -190,6 +196,8 @@ const router = Router();
  *         description: No autenticado
  *       404:
  *         description: Disponibilidad no encontrada o no autorizado
+ *       500:
+ *         description: Error interno del servidor
  */
 
 // Crear disponibilidad (POST /api/v1/workers/:id/availability)

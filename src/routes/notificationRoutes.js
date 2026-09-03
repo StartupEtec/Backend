@@ -9,7 +9,7 @@ router.use(authenticateToken);
 
 /**
  * @openapi
- * /api/v1/notifications:
+ * /notifications:
  *   get:
  *     tags: [Notifications]
  *     summary: Listar notificaciones del usuario
@@ -49,12 +49,14 @@ router.use(authenticateToken);
  *         description: Lista de notificaciones.
  *       401:
  *         description: Token de autenticación faltante o inválido.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.get('/', (req, res, next) => notificationController.listNotifications(req, res, next));
 
 /**
  * @openapi
- * /api/v1/notifications/unread-count:
+ * /notifications/unread-count:
  *   get:
  *     tags: [Notifications]
  *     summary: Obtener conteo de notificaciones no leídas
@@ -71,6 +73,8 @@ router.get('/', (req, res, next) => notificationController.listNotifications(req
  *               properties:
  *                 unread_count:
  *                   type: integer
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.get('/unread-count', (req, res, next) =>
   notificationController.getUnreadCount(req, res, next),
@@ -78,7 +82,7 @@ router.get('/unread-count', (req, res, next) =>
 
 /**
  * @openapi
- * /api/v1/notifications/{id}/read:
+ * /notifications/{id}/read:
  *   patch:
  *     tags: [Notifications]
  *     summary: Marcar notificación como leída
@@ -98,12 +102,14 @@ router.get('/unread-count', (req, res, next) =>
  *         description: Notificación marcada como leída.
  *       404:
  *         description: Notificación no encontrada.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.patch('/:id/read', (req, res, next) => notificationController.markAsRead(req, res, next));
 
 /**
  * @openapi
- * /api/v1/notifications/read-all:
+ * /notifications/read-all:
  *   patch:
  *     tags: [Notifications]
  *     summary: Marcar todas las notificaciones como leídas
@@ -113,12 +119,14 @@ router.patch('/:id/read', (req, res, next) => notificationController.markAsRead(
  *     responses:
  *       200:
  *         description: Cantidad de notificaciones marcadas.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.patch('/read-all', (req, res, next) => notificationController.markAllAsRead(req, res, next));
 
 /**
  * @openapi
- * /api/v1/notifications/preferences:
+ * /notifications/preferences:
  *   get:
  *     tags: [Notifications]
  *     summary: Obtener preferencias de notificación
@@ -128,6 +136,8 @@ router.patch('/read-all', (req, res, next) => notificationController.markAllAsRe
  *     responses:
  *       200:
  *         description: Preferencias de notificación.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.get('/preferences', (req, res, next) =>
   notificationController.getPreferences(req, res, next),
@@ -135,7 +145,7 @@ router.get('/preferences', (req, res, next) =>
 
 /**
  * @openapi
- * /api/v1/notifications/preferences:
+ * /notifications/preferences:
  *   patch:
  *     tags: [Notifications]
  *     summary: Actualizar preferencias de notificación
@@ -170,6 +180,8 @@ router.get('/preferences', (req, res, next) =>
  *         description: Preferencias actualizadas.
  *       400:
  *         description: Error de validación.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.patch('/preferences', (req, res, next) =>
   notificationController.updatePreferences(req, res, next),
@@ -177,7 +189,7 @@ router.patch('/preferences', (req, res, next) =>
 
 /**
  * @openapi
- * /api/v1/notifications/test:
+ * /notifications/test:
  *   post:
  *     tags: [Notifications]
  *     summary: Enviar notificación de prueba
@@ -205,6 +217,8 @@ router.patch('/preferences', (req, res, next) =>
  *         description: Notificación de prueba enviada.
  *       403:
  *         description: No disponible en producción.
+ *       500:
+ *         description: Error interno del servidor.
  */
 router.post('/test', (req, res, next) =>
   notificationController.sendTestNotification(req, res, next),
