@@ -16,7 +16,8 @@
     "seed": "knex seed:run",
     "seed:dev": "knex seed:run",
     "seed:run": "knex seed:run",
-    "seed:clear": "node src/database/seeds/clear.js"
+    "seed:clear": "node src/database/seeds/clear.js",
+    "swagger:export": "node scripts/export-openapi.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -44,6 +45,7 @@
     "@babel/preset-env": "^7.29.7",
     "babel-jest": "^29.7.0",
     "jest": "^29.7.0",
+    "js-yaml": "^5.4.1",
     "nodemon": "^3.1.4",
     "prettier": "^3.3.2",
     "supertest": "^7.2.2"

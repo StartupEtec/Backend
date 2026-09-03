@@ -40,6 +40,7 @@ Servicio Backend RESTful construido en Node.js, Express y TypeScript.
 - `npm test`: Ejecuta la suite de pruebas unitarias con `Jest` y genera el reporte de cobertura en `coverage/`.
 - `npm run seed` / `npm run seed:dev`: Puebla la base de datos con datos iniciales (32 categorías, 10 usuarios de test, ubicaciones, órdenes en varios estados, cotizaciones, escrow y ratings).
 - `npm run seed:clear`: Limpia de forma atómica y ordenada todas las tablas de prueba de la base de datos.
+- `npm run swagger:export`: Genera el archivo `docs/openapi.yaml` con la especificación OpenAPI 3.0 del API a partir de los comentarios JSDoc de las rutas.
 
 ## 🌱 Población de Datos Iniciales (Seeds)
 
@@ -59,6 +60,9 @@ npm run seed
 
 # Limpiar toda la base de datos (Reset)
 npm run seed:clear
+
+# Regenerar la especificación OpenAPI (docs/openapi.yaml)
+npm run swagger:export
 ```
 
 ---
@@ -592,6 +596,73 @@ ver `.env.example`) y se sirven desde `GET /uploads/...`.
 | `GET` | `/health/dashboard` | No | Vista web del Dashboard de Monitoreo en tiempo real |
 | `GET` | `/api/v1/health` | No | Health check heredado v1 |
 | `GET` | `/api/v1/api-docs` | No | Documentación Swagger UI |
+| `GET` | `/api/docs` | No | Documentación Swagger UI (endpoint alternativo) |
+
+---
+
+## 📖 Documentación Interactiva de la API (Swagger / OpenAPI 3.0)
+
+El proyecto incluye documentación **interactiva y navegable** de toda la API, generada automáticamente a partir de los comentarios JSDoc de las rutas con `swagger-jsdoc` y servida con `swagger-ui-express`.
+
+### 🔗 Endpoints de la UI
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/v1/api-docs` | Swagger UI principal |
+| `GET /api/docs` | Endpoint alternativo (mismo Swagger UI) |
+
+### 🗂️ Archivo de especificación estática
+
+La especificación también está disponible como archivo **OpenAPI 3.0** en:
+
+- **`docs/openapi.yaml`** — Especificación completa exportada (56 paths, todos los schemas, parámetros, respuestas y códigos de error).
+
+> Este archivo se puede importar en herramientas como **Postman**, **Insomnia**, **Swagger Editor** o **Stoplight** para pruebas y generación de clientes.
+
+### ♻️ Regeneración automática (mantenimiento)
+
+La documentación se mantiene de forma **semicontinua**: cada vez que se agrega o modifica un endpoint en `src/routes/*.js`, se actualizan los comentarios JSDoc con la anotación `@openapi` y se regenera el YAML ejecutando:
+
+```bash
+npm run swagger:export
+```
+
+Esto vuelca el spec generado (`swaggerSpec`) a `docs/openapi.yaml` de forma manual. La UI en `/api/v1/api-docs` y `/api/docs` se actualiza automáticamente al reiniciar el servidor, ya que lee el spec desde `swagger-jsdoc` en tiempo de ejecución.
+
+### 🔐 Autenticación (Bearer Token)
+
+Toda la documentación define un esquema de autorización `bearerAuth` de tipo JWT. Los endpoints protegidos muestran un candado 🔒 en la UI; para probarlos:
+
+1. Llamá a `POST /auth/login` y luego `POST /auth/verify-otp` para obtener el `accessToken`.
+2. En Swagger UI hacé clic en **Authorize** y pegá el token.
+
+### ⚠️ Códigos de error documentados
+
+Cada endpoint documenta los códigos de error específicos de negocio y HTTP que puede devolver. Algunos ejemplos:
+
+| Código | Significado |
+|--------|-------------|
+| `400 VALIDATION_ERROR` | Validación de entrada fallida (usando Joi) |
+| `401 UNAUTHORIZED` / `AUTH_FAILED` | Token faltante o credenciales incorrectas |
+| `403 FORBIDDEN` | Rol no permitido o sin permisos |
+| `404 *_NOT_FOUND` | Recurso inexistente (p.ej. `ORDER_NOT_FOUND`) |
+| `409 *_CONFLICT` | Conflicto de negocio (p.ej. `INVALID_TRANSITION`, `ALREADY_RATED`, `PAYMENT_ALREADY_STARTED`) |
+| `429 TOO_MANY_REQUESTS` | Rate limit excedido |
+| `500 INTERNAL_SERVER_ERROR` | Error interno (sin detalles sensibles expuestos) |
+
+Todas las respuestas de error usan la estructura estandarizada:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Email inválido",
+  "statusCode": 400,
+  "timestamp": "2026-06-30T12:00:00.000Z"
+}
+```
+
+### 🧩 Schemas disponibles
+
+La especificación incluye schemas de modelos de datos reutilizables, entre otros: `UserProfile`, `ClientProfile`, `WorkerProfile`, `Location`, `Chat`, `Message`, `Quote`, `Order`, `Rating`, `Dispute`, `WorkerAvailability`, `PaymentMethod`, `Notification` y todas las entidades de error.
 
 ---
 

@@ -98,6 +98,8 @@ const router = Router();
  *         description: No autenticado
  *       403:
  *         description: No autorizado
+ *       500:
+ *         description: Error interno del servidor
  *
  *   get:
  *     summary: Listar los métodos de pago de un usuario
@@ -140,6 +142,8 @@ const router = Router();
  *         description: No autenticado
  *       403:
  *         description: No autorizado
+ *       500:
+ *         description: Error interno del servidor
  */
 
 /**
@@ -191,6 +195,8 @@ const router = Router();
  *         description: No autorizado
  *       404:
  *         description: Método de pago no encontrado
+ *       500:
+ *         description: Error interno del servidor
  *
  *   delete:
  *     summary: Eliminar un método de pago
@@ -217,6 +223,8 @@ const router = Router();
  *         description: Método de pago no encontrado
  *       409:
  *         description: Conflicto - Transacciones pendientes asociadas al método de pago
+ *       500:
+ *         description: Error interno del servidor
  */
 router.patch('/:id', authenticateToken, paymentController.update);
 router.delete('/:id', authenticateToken, paymentController.delete);

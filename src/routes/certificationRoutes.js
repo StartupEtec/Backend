@@ -56,6 +56,8 @@ const router = Router();
  *         description: No autorizado
  *       404:
  *         description: Perfil de trabajador no encontrado
+ *       500:
+ *         description: Error interno del servidor
  *
  *   get:
  *     summary: Listar las certificaciones de un proveedor
@@ -80,6 +82,8 @@ const router = Router();
  *         description: No autorizado
  *       404:
  *         description: Perfil de trabajador no encontrado
+ *       500:
+ *         description: Error interno del servidor
  */
 router.post(
   '/workers/:id/certifications',
@@ -117,6 +121,8 @@ router.get('/workers/:id/certifications', authenticateToken, certificationContro
  *         description: No autorizado
  *       404:
  *         description: Certificación no encontrada
+ *       500:
+ *         description: Error interno del servidor
  *
  *   patch:
  *     summary: Reenviar un documento de certificación rechazado
@@ -155,6 +161,8 @@ router.get('/workers/:id/certifications', authenticateToken, certificationContro
  *         description: No autorizado
  *       404:
  *         description: Certificación no encontrada
+ *       500:
+ *         description: Error interno del servidor
  */
 router.get('/certifications/:id', authenticateToken, certificationController.getById);
 
@@ -211,6 +219,8 @@ router.patch(
  *         description: No autorizado
  *       404:
  *         description: Certificación no encontrada
+ *       500:
+ *         description: Error interno del servidor
  */
 router.patch('/certifications/:id/status', authenticateToken, certificationController.updateStatus);
 

@@ -67,6 +67,8 @@ const router = Router();
  *         description: Orden no encontrada
  *       409:
  *         description: La orden no está en COMPLETED/CANCELLED o ya existe una disputa
+ *       500:
+ *         description: Error interno del servidor
  *
  *   get:
  *     summary: Listar disputas
@@ -112,6 +114,8 @@ const router = Router();
  *         description: Parámetros de consulta inválidos
  *       401:
  *         description: No autenticado
+ *       500:
+ *         description: Error interno del servidor
  */
 
 /**
@@ -178,6 +182,8 @@ const router = Router();
  *         description: La disputa no está en estado OPEN
  *       502:
  *         description: No se pudo reembolsar a la tarjeta del cliente
+ *       500:
+ *         description: Error interno del servidor
  */
 
 // Abrir disputa (POST /api/v1/disputes)

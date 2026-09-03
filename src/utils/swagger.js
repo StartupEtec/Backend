@@ -1690,6 +1690,256 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             updated_at: { type: 'string', format: 'date-time' },
           },
         },
+
+        // ── Internal Server Error schema ────────────────────────────────
+        InternalServerError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'INTERNAL_SERVER_ERROR' },
+            message: { type: 'string', example: 'Ocurrió un error interno en el servidor' },
+            statusCode: { type: 'integer', example: 500 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        // ── Payment Method schemas ──────────────────────────────────────
+        PaymentMethodResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'b2c3d4e5-...' },
+            card_number_masked: {
+              type: 'string',
+              example: '**** **** **** 9010',
+              description: 'Número de tarjeta enmascarado (solo últimos 4 dígitos)',
+            },
+            card_brand: { type: 'string', example: 'Visa' },
+            exp_month: { type: 'integer', example: 12 },
+            exp_year: { type: 'integer', example: 2030 },
+            cardholder_name: { type: 'string', example: 'Juan Pérez' },
+            is_primary: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreatePaymentMethodRequest: {
+          type: 'object',
+          required: ['card_number', 'cvv', 'exp_month', 'exp_year', 'cardholder_name'],
+          properties: {
+            card_number: {
+              type: 'string',
+              pattern: '^\\d{13,19}$',
+              example: '4000123456789010',
+              description: 'Número de la tarjeta (13-19 dígitos)',
+            },
+            cvv: {
+              type: 'string',
+              pattern: '^\\d{3,4}$',
+              example: '123',
+              description: 'Código de seguridad (3-4 dígitos). No se almacena.',
+            },
+            exp_month: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 12,
+              example: 12,
+              description: 'Mes de expiración (1-12)',
+            },
+            exp_year: {
+              type: 'integer',
+              example: 2030,
+              description: 'Año de expiración (cuatro dígitos)',
+            },
+            cardholder_name: {
+              type: 'string',
+              example: 'Juan Pérez',
+              description: 'Nombre del titular de la tarjeta',
+            },
+            is_primary: {
+              type: 'boolean',
+              default: false,
+              description: 'Define si es el método de pago por defecto',
+            },
+          },
+        },
+        CreatePaymentMethodResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Método de pago agregado correctamente' },
+            payment_method: { $ref: '#/components/schemas/PaymentMethodResponse' },
+          },
+        },
+        ListPaymentMethodsResponse: {
+          type: 'object',
+          properties: {
+            payment_methods: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/PaymentMethodResponse' },
+            },
+          },
+        },
+        UpdatePaymentMethodRequest: {
+          type: 'object',
+          properties: {
+            exp_month: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 12,
+              example: 12,
+              description: 'Nuevo mes de expiración',
+            },
+            exp_year: {
+              type: 'integer',
+              example: 2031,
+              description: 'Nuevo año de expiración',
+            },
+            cardholder_name: {
+              type: 'string',
+              example: 'Juan Pérez Modificado',
+              description: 'Nuevo nombre del titular',
+            },
+            is_primary: {
+              type: 'boolean',
+              example: true,
+              description: 'Marcar como método de pago por defecto',
+            },
+          },
+          description: 'Todos los campos son opcionales en PATCH',
+        },
+        UpdatePaymentMethodResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Método de pago actualizado correctamente' },
+            payment_method: { $ref: '#/components/schemas/PaymentMethodResponse' },
+          },
+        },
+        DeletePaymentMethodResponse: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'Método de pago eliminado correctamente' },
+          },
+        },
+        PaymentMethodNotFoundError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'PAYMENT_METHOD_NOT_FOUND' },
+            message: { type: 'string', example: 'Método de pago no encontrado' },
+            statusCode: { type: 'integer', example: 404 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        PaymentMethodLimitError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'PAYMENT_METHOD_LIMIT_REACHED' },
+            message: { type: 'string', example: 'Máximo de 10 métodos de pago alcanzado' },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        PaymentMethodHasTransactionsError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'PAYMENT_METHOD_HAS_TRANSACTIONS' },
+            message: {
+              type: 'string',
+              example: 'No se puede eliminar: existen transacciones pendientes asociadas',
+            },
+            statusCode: { type: 'integer', example: 409 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        // ── Notification schemas ────────────────────────────────────────
+        NotificationResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            user_id: { type: 'string', format: 'uuid', example: 'b2c3d4e5-...' },
+            type: {
+              type: 'string',
+              example: 'ORDER_STATUS_CHANGE',
+              enum: [
+                'SERVICE_REQUEST',
+                'QUOTE_RECEIVED',
+                'QUOTE_ACCEPTED',
+                'SERVICE_COMPLETED',
+                'NEW_MESSAGE',
+                'ORDER_STATUS_CHANGE',
+              ],
+            },
+            title: { type: 'string', example: 'Estado de orden actualizado' },
+            body: { type: 'string', example: 'Tu orden ha sido aceptada por el trabajador' },
+            status: {
+              type: 'string',
+              example: 'SENT',
+              enum: ['PENDING', 'SENT', 'FAILED', 'READ'],
+            },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        ListNotificationsResponse: {
+          type: 'object',
+          properties: {
+            notifications: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/NotificationResponse' },
+            },
+            count: { type: 'integer', example: 25 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+        UnreadCountResponse: {
+          type: 'object',
+          properties: {
+            unread_count: { type: 'integer', example: 5 },
+          },
+        },
+        NotificationPreferencesResponse: {
+          type: 'object',
+          properties: {
+            push_enabled: { type: 'boolean', example: true },
+            email_enabled: { type: 'boolean', example: true },
+            sms_enabled: { type: 'boolean', example: false },
+            dnd_enabled: { type: 'boolean', example: false },
+            dnd_start: { type: 'string', example: '22:00', nullable: true },
+            dnd_end: { type: 'string', example: '08:00', nullable: true },
+          },
+        },
+        UpdateNotificationPreferencesRequest: {
+          type: 'object',
+          properties: {
+            push_enabled: { type: 'boolean' },
+            email_enabled: { type: 'boolean' },
+            sms_enabled: { type: 'boolean' },
+            dnd_enabled: { type: 'boolean' },
+            dnd_start: { type: 'string', pattern: '^[0-2][0-9]:[0-5][0-9]$', example: '22:00' },
+            dnd_end: { type: 'string', pattern: '^[0-2][0-9]:[0-5][0-9]$', example: '08:00' },
+          },
+          description: 'Todos los campos son opcionales',
+        },
+        SendTestNotificationRequest: {
+          type: 'object',
+          properties: {
+            type: {
+              type: 'string',
+              enum: [
+                'SERVICE_REQUEST',
+                'QUOTE_RECEIVED',
+                'QUOTE_ACCEPTED',
+                'SERVICE_COMPLETED',
+                'NEW_MESSAGE',
+                'ORDER_STATUS_CHANGE',
+              ],
+              default: 'ORDER_STATUS_CHANGE',
+            },
+            channels: {
+              type: 'array',
+              items: { type: 'string', enum: ['push', 'email', 'sms'] },
+            },
+          },
+        },
       },
     },
   },
@@ -1700,7 +1950,10 @@ const swaggerSpec = swaggerJSDoc(options);
 
 export const setupSwagger = (app) => {
   app.use('/api/v1/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 };
+
+export { swaggerSpec };
 
 /**
  * @openapi
@@ -1747,6 +2000,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/login:
  *   post:
@@ -1798,6 +2057,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/verify-otp:
  *   post:
@@ -1875,6 +2140,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/forgot-password:
  *   post:
@@ -1919,6 +2190,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/verify-reset-code:
  *   post:
@@ -1952,6 +2229,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/reset-password:
  *   post:
@@ -1990,6 +2273,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /users/{id}:
  *   get:
@@ -2019,6 +2308,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotFoundError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *   patch:
  *     summary: Actualizar perfil de usuario
  *     description: |
@@ -2077,6 +2372,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotFoundError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /users/me:
  *   get:
@@ -2113,6 +2414,12 @@ export const setupSwagger = (app) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotFoundError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /users/{id}/client-profile:
  *   get:
