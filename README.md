@@ -250,9 +250,10 @@ docker-compose down -v
 
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
-| `POST` | `/auth/register` | No | Registrar nuevo usuario |
+| `POST` | `/auth/register` | No | Registrar nuevo usuario. Responde `is_verified: false` |
 | `POST` | `/auth/login` | No | Iniciar sesión |
 | `POST` | `/auth/verify-otp` | No | Verificar código OTP (2FA) |
+| `POST` | `/auth/resend-otp` | No | Regenerar código OTP (ej. expirado o agotado) |
 | `POST` | `/auth/refresh-token` | No | Renovar access token |
 | `POST` | `/auth/forgot-password` | No | Solicitar recuperación de contraseña |
 | `POST` | `/auth/verify-reset-code` | No | Verificar código de recuperación |
@@ -672,8 +673,24 @@ El backend tiene implementadas políticas y defensas estrictas a nivel de infrae
 
 ### 1. Rate Limiting (Limitador de Tasa)
 - **Global**: Límite de **1000 solicitudes/minuto por IP** para mitigar ataques de denegación de servicio (DDoS) o de raspado de datos.
-- **Autenticación**: Límite específico de **5 intentos fallidos cada 15 minutos** por dirección IP. Los accesos correctos resetean este contador.
+- **Autenticación**: Límite específico de **5 intentos fallidos cada 15 minutos** por dirección IP. Solo cuentan los **fallos reales de autenticación** (`AUTH_FAILED`, `INVALID_OTP`, `EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, códigos de reset), nunca errores de validación del payload (`VALIDATION_ERROR`). Los accesos correctos resetean este contador.
 - **Órdenes de Trabajo**: Límite estricto de **20 creaciones de órdenes por hora por usuario** (`user_id`), evitando spamming o abusos transaccionales.
+- **OTP por código/usuario**: máximo **5 intentos fallidos** por código en el servidor (columna persistente `otp_failed_attempts`). Al superarlos el OTP se invalida y debe solicitarse uno nuevo con `POST /auth/resend-otp`. Límite configurable con `OTP_MAX_ATTEMPTS`.
+
+### Contrato de errores OTP (`POST /auth/verify-otp`)
+
+| Código error | HTTP status | Significado |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Payload inválido |
+| `INVALID_OTP` | 400 | Código incorrecto o usuario no encontrado |
+| `EXPIRED_OTP` | 410 | Código vencido (10 min) |
+| `OTP_ATTEMPTS_EXCEEDED` | 429 | 5 intentos fallidos: código invalidado |
+
+### Canonicalización de teléfonos (E.164)
+
+Todos los endpoints que reciben `phone` (`register`, `login`, `forgot-password`, `verify-otp`, `verify-reset-code`, `resend-otp`, `change-phone`) canonicalizan la entrada a **E.164** (`+57…`) en el servidor antes de validar o buscar en BD. El código de país por defecto se configura con `DEFAULT_PHONE_COUNTRY_CODE` (`.env`). Esto hace el lookup insensible a variaciones de formato (guiones, espacios, `+`, `00`, cero nacional).
+
+> ⚠️ **Migración requerida**: `20260912000001_add_otp_attempts_and_canonical_phone.js` agrega `users.otp_failed_attempts` y reescribe los teléfonos existentes a formato E.164 (`npm run migrate:latest`).
 
 ### 2. Sanitización contra XSS (Cross-Site Scripting)
 - Middleware global recursivo (`sanitizeMiddleware`) que limpia etiquetas HTML/scripts en todos los parámetros entrantes (`req.body`, `req.query`, `req.params`).

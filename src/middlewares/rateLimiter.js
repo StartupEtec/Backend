@@ -32,12 +32,37 @@ export const orderRateLimiter = rateLimit({
 });
 
 // 3. Limitador de intentos fallidos de autenticación: 5 intentos fallidos / 15 minutos
+// Solo cuentan los fallos reales de autenticación (credenciales u OTP). Los errores
+// de validación del payload (VALIDATION_ERROR) NO queman la IP: no están relacionados
+// con un intento de login/OTP real y permitirían un DoS trivial con cuerpos inválidos.
+const AUTH_FAILURE_CODES = new Set([
+  'AUTH_FAILED',
+  'INVALID_OTP',
+  'EXPIRED_OTP',
+  'OTP_ATTEMPTS_EXCEEDED',
+  'INVALID_RESET_CODE',
+  'EXPIRED_RESET_CODE',
+  'INVALID_REFRESH_TOKEN',
+  'INVALID_TOKEN',
+]);
 const failedAttempts = new Map();
+const MAX_FAILED_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
 
 export const authFailRateLimiter = (req, res, next) => {
   if (process.env.NODE_ENV === 'test' && !req.testRateLimit) {
     return next();
   }
+
+  // Capturar el body de la respuesta (vía closure) para decidir, en 'finish', si
+  // fue un fallo de autenticación real. No dependemos de res.locals para que el
+  // middleware siga siendo testeable con objetos res mínimos.
+  let responseBody = {};
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    responseBody = body;
+    return originalJson(body);
+  };
 
   const ip = req.ip;
   const record = failedAttempts.get(ip);
@@ -46,7 +71,7 @@ export const authFailRateLimiter = (req, res, next) => {
   if (record) {
     if (now > record.resetTime) {
       failedAttempts.delete(ip);
-    } else if (record.count >= 5) {
+    } else if (record.count >= MAX_FAILED_ATTEMPTS) {
       return res.status(429).json({
         error: 'TOO_MANY_REQUESTS',
         message:
@@ -58,14 +83,17 @@ export const authFailRateLimiter = (req, res, next) => {
   }
 
   res.on('finish', () => {
-    // Si la respuesta es un error de cliente (credenciales inválidas, otp incorrecto, etc.)
+    // Solo incrementar ante fallos reales de autenticación, no ante cualquier 4xx.
     if (res.statusCode >= 400 && res.statusCode < 500) {
+      const body = responseBody || {};
+      if (!AUTH_FAILURE_CODES.has(body.error)) {
+        return;
+      }
       const current = failedAttempts.get(ip);
-      const timestamp = Date.now();
       if (!current) {
         failedAttempts.set(ip, {
           count: 1,
-          resetTime: timestamp + 15 * 60 * 1000,
+          resetTime: Date.now() + WINDOW_MS,
         });
       } else {
         current.count++;

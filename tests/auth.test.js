@@ -110,65 +110,120 @@ describe('Auth Services & Middlewares Tests', () => {
         expect.objectContaining({
           otp_code: otp,
           otp_expires_at: expect.any(Date),
+          otp_failed_attempts: 0,
         }),
       );
     });
 
-    it('should verify a valid OTP and clear it from the record', async () => {
+    it('should verify a valid OTP, clear it and mark the user as verified', async () => {
       const mockUser = {
         id: 'user-uuid',
         email: 'test@example.com',
         phone: '12345678',
         otp_code: '999999',
         otp_expires_at: new Date(Date.now() + 50000),
+        otp_failed_attempts: 1,
       };
       mockQueryBuilder.first.mockResolvedValue(mockUser);
 
-      const verifiedUser = await otpService.verifyOtp('test@example.com', '999999');
-      expect(verifiedUser).toBeDefined();
-      expect(verifiedUser.id).toBe('user-uuid');
-      // OTP should be cleared and user marked as verified
+      const result = await otpService.verifyOtp('test@example.com', '999999');
+      expect(result.valid).toBe(true);
+      expect(result.reason).toBeNull();
+      expect(result.user.id).toBe('user-uuid');
+      // OTP should be cleared, user marked as verified and attempts reset
       expect(mockQueryBuilder.update).toHaveBeenCalledWith(
         expect.objectContaining({
           otp_code: null,
           otp_expires_at: null,
           is_verified: true,
+          otp_failed_attempts: 0,
         }),
       );
     });
 
-    it('should return null if OTP is expired', async () => {
+    it('should report EXPIRED when the OTP is expired', async () => {
       const mockUser = {
         id: 'user-uuid',
         email: 'test@example.com',
         phone: '12345678',
         otp_code: '999999',
         otp_expires_at: new Date(Date.now() - 50000), // in the past
+        otp_failed_attempts: 0,
       };
       mockQueryBuilder.first.mockResolvedValue(mockUser);
 
-      const verifiedUser = await otpService.verifyOtp('test@example.com', '999999');
-      expect(verifiedUser).toBeNull();
+      const result = await otpService.verifyOtp('test@example.com', '999999');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('EXPIRED');
+      expect(mockQueryBuilder.update).not.toHaveBeenCalled();
     });
 
-    it('should return null if OTP code does not match', async () => {
+    it('should report INVALID and count the attempt when the code does not match', async () => {
       const mockUser = {
         id: 'user-uuid',
         email: 'test@example.com',
         phone: '12345678',
         otp_code: '111111',
         otp_expires_at: new Date(Date.now() + 50000),
+        otp_failed_attempts: 0,
       };
       mockQueryBuilder.first.mockResolvedValue(mockUser);
 
-      const verifiedUser = await otpService.verifyOtp('test@example.com', '999999');
-      expect(verifiedUser).toBeNull();
+      const result = await otpService.verifyOtp('test@example.com', '999999');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('INVALID');
+      expect(mockQueryBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ otp_failed_attempts: 1 }),
+      );
     });
 
-    it('should return null if user is not found', async () => {
+    it('should report NOT_FOUND when no user matches', async () => {
       mockQueryBuilder.first.mockResolvedValue(null);
-      const verifiedUser = await otpService.verifyOtp('notfound@example.com', '123456');
-      expect(verifiedUser).toBeNull();
+      const result = await otpService.verifyOtp('notfound@example.com', '123456');
+      expect(result.valid).toBe(false);
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('NOT_FOUND');
+    });
+
+    it('should invalidate the OTP after reaching the max attempts', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        email: 'test@example.com',
+        phone: '12345678',
+        otp_code: '111111',
+        otp_expires_at: new Date(Date.now() + 50000),
+        otp_failed_attempts: 4, // 5th attempt is the last one
+      };
+      mockQueryBuilder.first.mockResolvedValue(mockUser);
+
+      const result = await otpService.verifyOtp('test@example.com', '999999');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('ATTEMPTS_EXCEEDED');
+      expect(mockQueryBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          otp_code: null,
+          otp_expires_at: null,
+          otp_failed_attempts: 5,
+        }),
+      );
+    });
+
+    it('should keep reporting ATTEMPTS_EXCEEDED once the code is invalidated', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        email: 'test@example.com',
+        phone: '12345678',
+        otp_code: null,
+        otp_expires_at: null,
+        otp_failed_attempts: 5,
+      };
+      mockQueryBuilder.first.mockResolvedValue(mockUser);
+
+      const result = await otpService.verifyOtp('test@example.com', '999999');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('ATTEMPTS_EXCEEDED');
+      expect(mockQueryBuilder.where).toHaveBeenCalledTimes(1);
+      expect(mockQueryBuilder.update).not.toHaveBeenCalled();
     });
   });
 

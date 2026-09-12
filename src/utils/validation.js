@@ -1,16 +1,35 @@
 import Joi from 'joi';
+import { canonicalPhone } from './phone.js';
 
 const passwordPattern =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+
+/**
+ * Campo de teléfono reutilizable: canonicaliza la entrada a E.164 durante la
+ * validación (ver src/utils/phone.js) para que el valor resultante se almacene
+ * y se consulte siempre en el mismo formato canónico.
+ */
+const phoneField = Joi.string()
+  .trim()
+  .custom((value, helpers) => {
+    const canonical = canonicalPhone(value);
+    return canonical || helpers.error('phone.invalid');
+  }, 'Canonicalización de teléfono a E.164')
+  .min(8)
+  .max(16)
+  .messages({
+    'phone.invalid': 'El formato del teléfono no es válido',
+    'string.min': 'El teléfono debe tener al menos 8 dígitos',
+    'string.max': 'El teléfono no debe exceder los 15 dígitos',
+    'any.required': 'El teléfono es requerido',
+  });
 
 export const registerSchema = Joi.object({
   email: Joi.string().email().required().messages({
     'string.email': 'El formato del correo electrónico no es válido',
     'any.required': 'El correo electrónico es requerido',
   }),
-  phone: Joi.string().min(8).max(15).required().messages({
-    'string.min': 'El teléfono debe tener al menos 8 dígitos',
-    'string.max': 'El teléfono no debe exceder los 15 dígitos',
+  phone: phoneField.required().messages({
     'any.required': 'El teléfono es requerido',
   }),
   password: Joi.string().pattern(passwordPattern).required().messages({
@@ -22,7 +41,7 @@ export const registerSchema = Joi.object({
 
 export const loginSchema = Joi.object({
   email: Joi.string().email().optional(),
-  phone: Joi.string().min(8).max(15).optional(),
+  phone: phoneField.optional(),
   password: Joi.string().required().messages({
     'any.required': 'La contraseña es requerida',
   }),
@@ -34,7 +53,7 @@ export const loginSchema = Joi.object({
 
 export const verifyOtpSchema = Joi.object({
   email: Joi.string().email().optional(),
-  phone: Joi.string().min(8).max(15).optional(),
+  phone: phoneField.optional(),
   otp_code: Joi.string().length(6).required().messages({
     'string.length': 'El código OTP debe ser de 6 dígitos',
     'any.required': 'El código OTP es requerido',
@@ -45,6 +64,15 @@ export const verifyOtpSchema = Joi.object({
     'object.missing': 'Debe proporcionar el correo electrónico o el teléfono asociado al OTP',
   });
 
+export const resendOtpSchema = Joi.object({
+  email: Joi.string().email().optional(),
+  phone: phoneField.optional(),
+})
+  .or('email', 'phone')
+  .messages({
+    'object.missing': 'Debe proporcionar el correo electrónico o el teléfono',
+  });
+
 export const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().required().messages({
     'any.required': 'El token de refresco es requerido',
@@ -53,7 +81,7 @@ export const refreshTokenSchema = Joi.object({
 
 export const forgotPasswordSchema = Joi.object({
   email: Joi.string().email().optional(),
-  phone: Joi.string().min(8).max(15).optional(),
+  phone: phoneField.optional(),
 })
   .or('email', 'phone')
   .messages({
@@ -62,7 +90,7 @@ export const forgotPasswordSchema = Joi.object({
 
 export const verifyResetCodeSchema = Joi.object({
   email: Joi.string().email().optional(),
-  phone: Joi.string().min(8).max(15).optional(),
+  phone: phoneField.optional(),
   reset_code: Joi.string().length(6).required().messages({
     'string.length': 'El código de recuperación debe ser de 6 dígitos',
     'any.required': 'El código de recuperación es requerido',
@@ -803,9 +831,7 @@ export const verifyEmailChangeSchema = Joi.object({
 });
 
 export const changePhoneSchema = Joi.object({
-  new_phone: Joi.string().min(8).max(15).required().messages({
-    'string.min': 'El nuevo teléfono debe tener al menos 8 dígitos',
-    'string.max': 'El nuevo teléfono no debe exceder los 15 dígitos',
+  new_phone: phoneField.required().messages({
     'any.required': 'El nuevo teléfono es requerido',
   }),
 });

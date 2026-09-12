@@ -76,6 +76,41 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       );
       expectValid(validation.resetPasswordSchema, { token: 't', password: 'NuevaPass1!' });
     });
+
+    it('canonicaliza teléfonos a E.164 en todos los flujos', () => {
+      const res = expectValid(validation.registerSchema, {
+        email: 'user@example.com',
+        phone: '300 123-45-67',
+        password: 'Strong1!',
+      });
+      expect(res.phone).toBe('+573001234567');
+
+      const login = expectValid(validation.loginSchema, {
+        phone: '+57 300 123 45 67',
+        password: 'Strong1!',
+      });
+      expect(login.phone).toBe('+573001234567');
+
+      const otp = expectValid(validation.verifyOtpSchema, {
+        phone: '03001234567',
+        otp_code: '123456',
+      });
+      expect(otp.phone).toBe('+573001234567');
+
+      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '3001234567' });
+      expect(forgot.phone).toBe('+573001234567');
+    });
+
+    it('rechaza teléfonos inválidos', () => {
+      expectInvalid(validation.registerSchema, { phone: 'abc' }, 'formato del teléfono');
+      expectInvalid(validation.registerSchema, { phone: '123' }, '8 dígitos');
+    });
+
+    it('resendOtpSchema: requiere email o teléfono y canonicaliza', () => {
+      expectInvalid(validation.resendOtpSchema, {}, 'correo electrónico');
+      const res = expectValid(validation.resendOtpSchema, { phone: '3001234567' });
+      expect(res.phone).toBe('+573001234567');
+    });
   });
 
   describe('Perfiles', () => {

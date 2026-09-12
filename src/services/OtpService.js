@@ -45,8 +45,13 @@ class NotificationProvider {
 const notificationProvider = new NotificationProvider();
 
 class OtpService {
+  constructor() {
+    this.MAX_OTP_ATTEMPTS = Number.parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10);
+  }
+
   /**
    * Generates a 6-digit numeric OTP and saves it to the user record with 10-minute expiration.
+   * Any OTP request that regenerates the code resets the failed-attempt counter.
    * @param {string} userId - UUID of the user.
    * @returns {Promise<string>} The generated OTP code.
    */
@@ -57,6 +62,7 @@ class OtpService {
     await db('users').where({ id: userId }).update({
       otp_code: otpCode,
       otp_expires_at: expiresAt,
+      otp_failed_attempts: 0,
     });
 
     return otpCode;
@@ -73,10 +79,19 @@ class OtpService {
   }
 
   /**
-   * Validates OTP for a user. On success, clears OTP fields and marks user as verified.
-   * @param {string} emailOrPhone - User's email or phone number.
+   * Validates an OTP for a user. Always returns a structured result so the caller
+   * can discriminate the failure reason (explicit error contract):
+   *   - { valid: true,  user, reason: null }            → success, OTP cleared + user verified
+   *   - { valid: false, user, reason: 'NOT_FOUND' }     → no user matches email/phone
+   *   - { valid: false, user, reason: 'EXPIRED' }       → code already expired
+   *   - { valid: false, user, reason: 'INVALID' }       → code is wrong (attempt counted)
+   *   - { valid: false, user, reason: 'ATTEMPTS_EXCEEDED' } → code invalidated after max attempts
+   *
+   * After OTP_MAX_ATTEMPTS (default 5) wrong attempts the OTP is invalidated, so a
+   * new code must be requested via POST /auth/resend-otp.
+   * @param {string} emailOrPhone - User's email or phone number (canonicalised E.164).
    * @param {string} otpCode - The code to verify.
-   * @returns {Promise<object|null>} The user object if valid, null otherwise.
+   * @returns {Promise<object>}
    */
   async verifyOtp(emailOrPhone, otpCode) {
     const user = await db('users')
@@ -86,28 +101,50 @@ class OtpService {
 
     if (!user) {
       logger.warn(`Intento de verificación de OTP para usuario inexistente: ${emailOrPhone}`);
-      return null;
-    }
-
-    if (!user.otp_code || user.otp_code !== otpCode) {
-      logger.warn(`Código OTP incorrecto para el usuario: ${emailOrPhone}`);
-      return null;
+      return { valid: false, user: null, reason: 'NOT_FOUND' };
     }
 
     const now = new Date();
-    if (new Date(user.otp_expires_at) < now) {
-      logger.warn(`Código OTP expirado para el usuario: ${emailOrPhone}`);
-      return null;
+
+    // El código ya fue invalidado por exceso de intentos posteriores.
+    if (!user.otp_code && Number(user.otp_failed_attempts || 0) >= this.MAX_OTP_ATTEMPTS) {
+      return { valid: false, user, reason: 'ATTEMPTS_EXCEEDED' };
     }
 
-    // Clear OTP fields after successful verification and mark user as verified
-    await db('users').where({ id: user.id }).update({
-      otp_code: null,
-      otp_expires_at: null,
-      is_verified: true,
-    });
+    // Comprobamos la expiración antes que la igualdad para no filtrar si el código fue correcto.
+    if (user.otp_code && new Date(user.otp_expires_at) < now) {
+      logger.warn(`Código OTP expirado para el usuario: ${emailOrPhone}`);
+      return { valid: false, user, reason: 'EXPIRED' };
+    }
 
-    return user;
+    if (user.otp_code && user.otp_code === otpCode) {
+      // Clear OTP fields after successful verification and mark user as verified
+      await db('users').where({ id: user.id }).update({
+        otp_code: null,
+        otp_expires_at: null,
+        is_verified: true,
+        otp_failed_attempts: 0,
+      });
+
+      return { valid: true, user, reason: null };
+    }
+
+    const nextAttempts = Number(user.otp_failed_attempts || 0) + 1;
+    if (nextAttempts >= this.MAX_OTP_ATTEMPTS) {
+      logger.warn(`Código OTP invalidado por exceso de intentos para el usuario: ${emailOrPhone}`);
+      await db('users').where({ id: user.id }).update({
+        otp_code: null,
+        otp_expires_at: null,
+        otp_failed_attempts: nextAttempts,
+      });
+      return { valid: false, user, reason: 'ATTEMPTS_EXCEEDED' };
+    }
+
+    logger.warn(`Código OTP incorrecto para el usuario: ${emailOrPhone}`);
+    await db('users').where({ id: user.id }).update({
+      otp_failed_attempts: nextAttempts,
+    });
+    return { valid: false, user, reason: 'INVALID' };
   }
 }
 
