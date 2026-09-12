@@ -58,21 +58,66 @@ describe('Security and Defense Middleware Tests', () => {
       expect(next).toHaveBeenCalled();
     });
 
-    it('should block requests after 5 consecutive failures', () => {
-      // Simulate 5 failed requests
+    it('should block requests after 5 real auth failures', () => {
+      // Simulate 5 failed authentication requests (AUTH_FAILED). El middleware
+      // parchea res.json para capturar el body y solo cuenta fallos reales.
       for (let i = 0; i < 5; i++) {
+        const finishCallbacks = [];
         const localRes = {
           statusCode: 401,
           status: jest.fn().mockReturnThis(),
           json: jest.fn().mockReturnThis(),
           on: jest.fn().mockImplementation((event, cb) => {
-            if (event === 'finish') cb();
+            if (event === 'finish') finishCallbacks.push(cb);
           }),
         };
         authFailRateLimiter(req, localRes, next);
+        localRes.json({ error: 'AUTH_FAILED' }); // cuerpo real de un login fallido
+        finishCallbacks.splice(0).forEach((cb) => cb());
       }
 
-      // 6th request should fail with 429
+      // 6th request should fail with 429. El middleware reemplaza res.json con un
+      // wrapper, así que guardamos referencias a los mocks originales para asertar.
+      const statusMock = jest.fn().mockReturnThis();
+      const jsonMock = jest.fn().mockReturnThis();
+      const blockedRes = {
+        statusCode: 200,
+        status: statusMock,
+        json: jsonMock,
+        on: jest.fn(),
+      };
+      const blockedNext = jest.fn();
+
+      authFailRateLimiter(req, blockedRes, blockedNext);
+
+      expect(statusMock).toHaveBeenCalledWith(429);
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'TOO_MANY_REQUESTS',
+        }),
+      );
+      expect(blockedNext).not.toHaveBeenCalled();
+    });
+
+    it('should NOT count payload validation errors toward the IP limit', () => {
+      // Los errores VALIDATION_ERROR no están relacionados con un intento de
+      // autenticación; no deben quemar la IP (desacoplados del límite).
+      const validationReq = { ip: '192.168.1.2', testRateLimit: true };
+      for (let i = 0; i < 10; i++) {
+        const finishCallbacks = [];
+        const localRes = {
+          statusCode: 400,
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn().mockReturnThis(),
+          on: jest.fn().mockImplementation((event, cb) => {
+            if (event === 'finish') finishCallbacks.push(cb);
+          }),
+        };
+        authFailRateLimiter(validationReq, localRes, next);
+        localRes.json({ error: 'VALIDATION_ERROR' });
+        finishCallbacks.splice(0).forEach((cb) => cb());
+      }
+
       const blockedRes = {
         statusCode: 200,
         status: jest.fn().mockReturnThis(),
@@ -81,15 +126,10 @@ describe('Security and Defense Middleware Tests', () => {
       };
       const blockedNext = jest.fn();
 
-      authFailRateLimiter(req, blockedRes, blockedNext);
+      authFailRateLimiter(validationReq, blockedRes, blockedNext);
 
-      expect(blockedRes.status).toHaveBeenCalledWith(429);
-      expect(blockedRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'TOO_MANY_REQUESTS',
-        }),
-      );
-      expect(blockedNext).not.toHaveBeenCalled();
+      expect(blockedRes.status).not.toHaveBeenCalledWith(429);
+      expect(blockedNext).toHaveBeenCalled();
     });
   });
 });

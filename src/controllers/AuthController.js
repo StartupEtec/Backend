@@ -7,6 +7,7 @@ import {
   registerSchema,
   loginSchema,
   verifyOtpSchema,
+  resendOtpSchema,
   refreshTokenSchema,
   forgotPasswordSchema,
   verifyResetCodeSchema,
@@ -51,7 +52,7 @@ class AuthController {
           password_hash: passwordHash,
           is_verified: false,
         })
-        .returning(['id', 'email', 'phone']);
+        .returning(['id', 'email', 'phone', 'is_verified']);
 
       // Generate and send OTP
       const otpCode = await otpService.generateAndSaveOtp(newUser.id);
@@ -64,6 +65,7 @@ class AuthController {
           id: newUser.id,
           email: newUser.email,
           phone: newUser.phone,
+          is_verified: newUser.is_verified,
         },
       });
     } catch (err) {
@@ -154,15 +156,36 @@ class AuthController {
       const { email, phone, otp_code } = value;
       const targetIdentifier = email || phone;
 
-      const user = await otpService.verifyOtp(targetIdentifier, otp_code);
-      if (!user) {
-        return res.status(400).json({
-          error: 'INVALID_OTP',
-          message: 'Código OTP inválido o expirado',
-          statusCode: 400,
-          timestamp: new Date().toISOString(),
-        });
+      const result = await otpService.verifyOtp(targetIdentifier, otp_code);
+      if (!result.valid) {
+        switch (result.reason) {
+          case 'EXPIRED':
+            return res.status(410).json({
+              error: 'EXPIRED_OTP',
+              message: 'El código OTP ha expirado. Solicita uno nuevo.',
+              statusCode: 410,
+              timestamp: new Date().toISOString(),
+            });
+          case 'ATTEMPTS_EXCEEDED':
+            return res.status(429).json({
+              error: 'OTP_ATTEMPTS_EXCEEDED',
+              message:
+                'Demasiados intentos fallidos. El código fue invalidado, solicita uno nuevo.',
+              statusCode: 429,
+              timestamp: new Date().toISOString(),
+            });
+          default:
+            // 'NOT_FOUND' e 'INVALID' no revelan si el usuario/email existe
+            return res.status(400).json({
+              error: 'INVALID_OTP',
+              message: 'El código OTP es inválido. Verifica e intenta de nuevo.',
+              statusCode: 400,
+              timestamp: new Date().toISOString(),
+            });
+        }
       }
+
+      const user = result.user;
 
       // Issue tokens
       const accessToken = authService.generateAccessToken(user);
@@ -180,6 +203,52 @@ class AuthController {
       });
     } catch (err) {
       logger.error('Error al verificar el OTP:', err);
+      next(err);
+    }
+  }
+
+  async resendOtp(req, res, next) {
+    try {
+      const { error, value } = resendOtpSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { email, phone } = value;
+
+      // El teléfono llega canonicalizado a E.164 desde la validación (see phone.js)
+      const query = db('users');
+      if (email) {
+        query.where({ email });
+      } else if (phone) {
+        query.where({ phone });
+      }
+
+      const user = await query.first();
+
+      // Antienumeración: misma respuesta aunque el usuario no exista.
+      if (!user) {
+        logger.warn('Intento de reenvío de OTP para usuario no registrado', { email, phone });
+        return res.status(200).json({
+          message:
+            'Si el correo o teléfono está registrado, recibirás un nuevo código OTP en 10 minutos.',
+        });
+      }
+
+      // Regenera el código (invalida el anterior y resetea el contador de intentos)
+      const otpCode = await otpService.generateAndSaveOtp(user.id);
+      await otpService.sendOtp(user.email, user.phone, otpCode);
+
+      return res.status(200).json({
+        message: 'Se ha enviado un nuevo código OTP a tu correo/teléfono registrado.',
+      });
+    } catch (err) {
+      logger.error('Error al reenviar el OTP:', err);
       next(err);
     }
   }

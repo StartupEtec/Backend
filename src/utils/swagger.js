@@ -13,8 +13,9 @@ const options = {
 La API implementa un sistema de autenticación con JWT y verificación OTP de dos pasos.
 
 ### Flujo de Registro
-1. \`POST /auth/register\` — Crea el usuario y envía un OTP por Email/SMS.
+1. \`POST /auth/register\` — Crea el usuario y envía un OTP por Email/SMS. Responde \`is_verified: false\`.
 2. \`POST /auth/verify-otp\` — Valida el OTP. Devuelve \`accessToken\` + \`refreshToken\`.
+3. \`POST /auth/resend-otp\` — Regenera el OTP (por ejemplo si expiró o se agotaron los intentos).
 
 ### Flujo de Login
 1. \`POST /auth/login\` — Valida credenciales. Si son correctas, envía OTP y retorna estado \`PENDING_VERIFICATION\`.
@@ -27,8 +28,27 @@ La API implementa un sistema de autenticación con JWT y verificación OTP de do
 - **accessToken**: JWT firmado, payload \`{ user_id, email, current_role, iat, exp }\`. Expira en **1 hora**.
 - **refreshToken**: JWT firmado, payload \`{ user_id, jti, exp }\`. Expira en **7 días**. Almacenado en BD para revocación.
 
+### Contrato de errores OTP
+El endpoint \`/auth/verify-otp\` devuelve errores diferenciados:
+
+| Código error | HTTP status | Significado |
+|---|---|---|
+| \`VALIDATION_ERROR\` | 400 | Payload inválido (email/phone/otp_code) |
+| \`INVALID_OTP\` | 400 | Código incorrecto o usuario no encontrado |
+| \`EXPIRED_OTP\` | 410 | El código venció (10 minutos) |
+| \`OTP_ATTEMPTS_EXCEEDED\` | 429 | 5 intentos fallidos: el código fue invalidado, usa \`/auth/resend-otp\` |
+
+### Canonicalización de teléfonos (E.164)
+Todos los endpoints que reciben \`phone\` (\`register\`, \`login\`, \`forgot-password\`, \`verify-otp\`,
+\`verify-reset-code\`, \`resend-otp\`) canonicalizan la entrada a **E.164** (\`+57…\`) en el servidor antes
+de validar o hacer lookup. Esto permite que el cliente envíe el número en cualquier formato
+(con guiones, espacios, \`+\`, \`00\` o sin código de país) sin romper el match.
+El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
+
 ### Rate Limiting
-Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15 minutos**.
+- **Intento fallidos de auth por IP**: 5 fallos **reales** (credenciales/OTP inválidos) cada 15 minutos.
+  Errores de validación del payload (\`VALIDATION_ERROR\`) NO cuentan.
+- **Intentos OTP por código/usuario**: máximo 5 en el servidor; al superarlos el OTP se invalida.
       `,
     },
     servers: [
@@ -77,7 +97,7 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           properties: {
             id: { type: 'string', format: 'uuid' },
             email: { type: 'string', format: 'email', example: 'usuario@example.com' },
-            phone: { type: 'string', example: '3001234567' },
+            phone: { type: 'string', format: 'phone', example: '+573001234567' },
             current_role: { type: 'string', example: 'client' },
             is_verified: { type: 'boolean', example: true },
             verified_email: { type: 'boolean', example: false },
@@ -561,9 +581,10 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             phone: {
               type: 'string',
               minLength: 8,
-              maxLength: 15,
-              example: '3001234567',
-              description: 'Número de teléfono (8–15 dígitos)',
+              maxLength: 16,
+              example: '+573001234567',
+              description:
+                'Número de teléfono. Se canonicaliza a E.164 (+57…) en el servidor; se acepta con o sin código de país, guiones, espacios o 00.',
             },
             password: {
               type: 'string',
@@ -586,8 +607,9 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             },
             phone: {
               type: 'string',
-              example: '3001234567',
-              description: 'Requerido si no se proporciona email',
+              example: '+573001234567',
+              description:
+                'Requerido si no se proporciona email. Se canonicaliza a E.164 en el servidor.',
             },
             password: { type: 'string', format: 'password', example: 'P@ssword123!' },
           },
@@ -604,8 +626,9 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
             },
             phone: {
               type: 'string',
-              example: '3001234567',
-              description: 'Requerido si no se proporciona email',
+              example: '+573001234567',
+              description:
+                'Requerido si no se proporciona email. Se canonicaliza a E.164 en el servidor.',
             },
             otp_code: {
               type: 'string',
@@ -615,6 +638,25 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
               description: 'Código OTP de 6 dígitos recibido por Email/SMS',
             },
           },
+        },
+        ResendOtpRequest: {
+          type: 'object',
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'usuario@example.com',
+              description: 'Requerido si no se proporciona phone',
+            },
+            phone: {
+              type: 'string',
+              example: '+573001234567',
+              description:
+                'Requerido si no se proporciona email. Se canonicaliza a E.164 en el servidor.',
+            },
+          },
+          description:
+            'Debe proporcionarse al menos email o phone. Regenera el OTP (invalida el anterior y resetea los intentos).',
         },
         RefreshTokenRequest: {
           type: 'object',
@@ -631,7 +673,11 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           type: 'object',
           properties: {
             email: { type: 'string', format: 'email', example: 'usuario@example.com' },
-            phone: { type: 'string', example: '3001234567' },
+            phone: {
+              type: 'string',
+              example: '+573001234567',
+              description: 'Se canonicaliza a E.164 en el servidor.',
+            },
           },
           description: 'Debe proporcionarse al menos email o phone',
         },
@@ -640,7 +686,11 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           required: ['reset_code'],
           properties: {
             email: { type: 'string', format: 'email', example: 'usuario@example.com' },
-            phone: { type: 'string', example: '3001234567' },
+            phone: {
+              type: 'string',
+              example: '+573001234567',
+              description: 'Se canonicaliza a E.164 en el servidor.',
+            },
             reset_code: {
               type: 'string',
               minLength: 6,
@@ -694,7 +744,8 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
               properties: {
                 id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
                 email: { type: 'string', example: 'usuario@example.com' },
-                phone: { type: 'string', example: '3001234567' },
+                phone: { type: 'string', example: '+573001234567' },
+                is_verified: { type: 'boolean', example: false },
               },
             },
           },
@@ -779,10 +830,44 @@ Los endpoints de autenticación tienen un límite de **5 intentos por IP cada 15
           type: 'object',
           properties: {
             error: { type: 'string', example: 'INVALID_OTP' },
-            message: { type: 'string', example: 'Código OTP inválido o expirado' },
+            message: {
+              type: 'string',
+              example: 'El código OTP es inválido. Verifica e intenta de nuevo.',
+            },
             statusCode: { type: 'integer', example: 400 },
             timestamp: { type: 'string', format: 'date-time' },
           },
+          description:
+            'Código incorrecto o usuario no encontrado. No se expone si el usuario existe.',
+        },
+        ExpiredOtpError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'EXPIRED_OTP' },
+            message: {
+              type: 'string',
+              example: 'El código OTP ha expirado. Solicita uno nuevo.',
+            },
+            statusCode: { type: 'integer', example: 410 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+          description:
+            'El código OTP venció (10 minutos). Debe solicitarse uno nuevo con /auth/resend-otp.',
+        },
+        OtpAttemptsExceededError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'OTP_ATTEMPTS_EXCEEDED' },
+            message: {
+              type: 'string',
+              example:
+                'Demasiados intentos fallidos. El código fue invalidado, solicita uno nuevo.',
+            },
+            statusCode: { type: 'integer', example: 429 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+          description:
+            'Tras 5 intentos fallidos el OTP se invalida. Uso de /auth/resend-otp para obtener uno nuevo.',
         },
         ConflictError: {
           type: 'object',
@@ -1973,7 +2058,7 @@ export { swaggerSpec };
  *             $ref: '#/components/schemas/RegisterRequest'
  *           example:
  *             email: usuario@example.com
- *             phone: "3001234567"
+ *             phone: "+573001234567"
  *             password: "P@ssword123!"
  *     responses:
  *       201:
@@ -2030,7 +2115,7 @@ export { swaggerSpec };
  *             loginConTelefono:
  *               summary: Login con teléfono
  *               value:
- *                 phone: "3001234567"
+ *                 phone: "+573001234567"
  *                 password: "P@ssword123!"
  *     responses:
  *       200:
@@ -2068,9 +2153,12 @@ export { swaggerSpec };
  *   post:
  *     summary: Verificar código OTP (2FA)
  *     description: |
- *       Valida el código OTP de 6 dígitos enviado durante el registro o login.
+ *       Valida el código OTP de 6 dígitos enviado durante el registro, login o resend.
  *       Si el OTP es válido y no ha expirado (10 minutos), devuelve un JWT de acceso
- *       y un refresh token. El OTP se invalida automáticamente tras un uso exitoso.
+ *       y un refresh token. El OTP se invalida automáticamente tras un uso exitoso o
+ *       después de 5 intentos fallidos.
+ *       Contrato de errores: `VALIDATION_ERROR` (400), `INVALID_OTP` (400),
+ *       `EXPIRED_OTP` (410), `OTP_ATTEMPTS_EXCEEDED` (429).
  *     tags: [Autenticación]
  *     requestBody:
  *       required: true
@@ -2089,17 +2177,80 @@ export { swaggerSpec };
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
- *         description: OTP inválido, incorrecto o expirado.
+ *         description: Error de validación o código OTP inválido.
+ *         content:
+ *           application/json:
+ *             oneOf:
+ *               - $ref: '#/components/schemas/ValidationError'
+ *               - $ref: '#/components/schemas/InvalidOtpError'
+ *       410:
+ *         description: El código OTP expiró (10 minutos). Solicita uno nuevo.
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/InvalidOtpError'
+ *               $ref: '#/components/schemas/ExpiredOtpError'
  *       429:
- *         description: Rate limit excedido.
+ *         description: Se superó el límite de intentos (5) y el código fue invalidado.
+ *         content:
+ *           application/json:
+ *             oneOf:
+ *               - $ref: '#/components/schemas/OtpAttemptsExceededError'
+ *               - $ref: '#/components/schemas/RateLimitError'
+ *
+ * /auth/resend-otp:
+ *   post:
+ *     summary: Reenviar (regenerar) código OTP
+ *     description: |
+ *       Regenera un nuevo OTP de 6 dígitos para el usuario identificado por email o phone.
+ *       Invalida el OTP anterior y resetea el contador de intentos fallidos.
+ *       Útil cuando el código expiró (410) o se agotaron los intentos (429).
+ *       El teléfono se canonicaliza a E.164 en el servidor.
+ *       Respuesta idéntica (200) aunque el usuario no exista para evitar enumeración de cuentas.
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendOtpRequest'
+ *           examples:
+ *             resendPorEmail:
+ *               summary: Reenvío por email
+ *               value:
+ *                 email: usuario@example.com
+ *             resendPorTelefono:
+ *               summary: Reenvío por teléfono
+ *               value:
+ *                 phone: "+573001234567"
+ *     responses:
+ *       200:
+ *         description: Nuevo código OTP generado y enviado (o respuesta neutra si el usuario no existe).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Se ha enviado un nuevo código OTP a tu correo/teléfono registrado.
+ *       400:
+ *         description: Error de validación (email/phone inválidos o ninguno proporcionado).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       429:
+ *         description: Rate limit de IP excedido.
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RateLimitError'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InternalServerError'
  *
  * /auth/refresh-token:
  *   post:
