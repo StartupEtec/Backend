@@ -1,5 +1,21 @@
 import * as validation from '../src/utils/validation.js';
 
+/**
+ * Este archivo importa `validation.js` directo, sin pasar por `src/app.js`, así que
+ * nunca corre `dotenv.config()`. Se fija el país explícitamente para que los casos de
+ * teléfono sean deterministas y no dependan del fallback ni del .env de cada máquina.
+ */
+const ORIGINAL_PHONE_COUNTRY = process.env.DEFAULT_PHONE_COUNTRY_CODE;
+process.env.DEFAULT_PHONE_COUNTRY_CODE = '+54';
+
+afterAll(() => {
+  if (ORIGINAL_PHONE_COUNTRY === undefined) {
+    delete process.env.DEFAULT_PHONE_COUNTRY_CODE;
+  } else {
+    process.env.DEFAULT_PHONE_COUNTRY_CODE = ORIGINAL_PHONE_COUNTRY;
+  }
+});
+
 const UUID = '12345678-1234-1234-1234-123456789012';
 
 const expectValid = (schema, value) => {
@@ -21,7 +37,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     it('registerSchema: acepta credenciales válidas', () => {
       expectValid(validation.registerSchema, {
         email: 'user@example.com',
-        phone: '12345678',
+        phone: '011 15-1234-5678',
         password: 'Strong1!',
       });
     });
@@ -29,7 +45,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     it('registerSchema: rechaza email inválido y contraseña débil', () => {
       const messages = expectInvalid(validation.registerSchema, {
         email: 'not-an-email',
-        phone: '12345678',
+        phone: '011 15-1234-5678',
         password: 'weak',
       });
       expect(messages).toContain('formato del correo');
@@ -46,7 +62,11 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     });
 
     it('verifyOtpSchema: el OTP debe tener 6 dígitos', () => {
-      expectInvalid(validation.verifyOtpSchema, { phone: '12345678', otp_code: '12' }, '6 dígitos');
+      expectInvalid(
+        validation.verifyOtpSchema,
+        { phone: '011 15-1234-5678', otp_code: '12' },
+        '6 dígitos',
+      );
       expectValid(validation.verifyOtpSchema, { email: 'user@example.com', otp_code: '123456' });
     });
 
@@ -78,27 +98,30 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     });
 
     it('canonicaliza teléfonos a E.164 en todos los flujos', () => {
+      // Números argentinos: la plataforma opera con +54 (ver .env.example y los
+      // seeds). Antes este test usaba números colombianos y codificaba el default
+      // +57, que era justamente el bug.
       const res = expectValid(validation.registerSchema, {
         email: 'user@example.com',
-        phone: '300 123-45-67',
+        phone: '011 15-1234-5678',
         password: 'Strong1!',
       });
-      expect(res.phone).toBe('+573001234567');
+      expect(res.phone).toBe('+5491112345678');
 
       const login = expectValid(validation.loginSchema, {
-        phone: '+57 300 123 45 67',
+        phone: '+54 9 11 1234-5678',
         password: 'Strong1!',
       });
-      expect(login.phone).toBe('+573001234567');
+      expect(login.phone).toBe('+5491112345678');
 
       const otp = expectValid(validation.verifyOtpSchema, {
-        phone: '03001234567',
+        phone: '0111512345678',
         otp_code: '123456',
       });
-      expect(otp.phone).toBe('+573001234567');
+      expect(otp.phone).toBe('+5491112345678');
 
-      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '3001234567' });
-      expect(forgot.phone).toBe('+573001234567');
+      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '9112345678' });
+      expect(forgot.phone).toBe('+549112345678');
     });
 
     it('rechaza teléfonos inválidos', () => {
@@ -106,10 +129,16 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       expectInvalid(validation.registerSchema, { phone: '123' }, '8 dígitos');
     });
 
+    it('rechaza fragmentos que no se pueden atribuir a un país', () => {
+      // '12345678' con default +54 no es ni un móvil ni un fijo identifiable: antes
+      // la heurística lo aceptaba y lo convertía en '+5712345678' (pais equivocado).
+      expectInvalid(validation.registerSchema, { phone: '12345678' }, 'formato del teléfono');
+    });
+
     it('resendOtpSchema: requiere email o teléfono y canonicaliza', () => {
       expectInvalid(validation.resendOtpSchema, {}, 'correo electrónico');
-      const res = expectValid(validation.resendOtpSchema, { phone: '3001234567' });
-      expect(res.phone).toBe('+573001234567');
+      const res = expectValid(validation.resendOtpSchema, { phone: '011 15-1234-5678' });
+      expect(res.phone).toBe('+5491112345678');
     });
   });
 
