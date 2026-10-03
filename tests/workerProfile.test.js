@@ -46,6 +46,63 @@ describe('Worker Profile Service', () => {
   });
 
   describe('getProfile', () => {
+    it('should expose the 4 identity fields of the "Completar Perfil" flow', async () => {
+      const mockProfile = {
+        id: 'profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'Carlos García',
+        date_of_birth: new Date(1988, 10, 2),
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+        bio: null,
+        category_id: null,
+        category_name: null,
+        hourly_rate: null,
+        availability_status: 'AVAILABLE',
+        certification_status: 'PENDING',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(mockProfile);
+      mockQueryBuilder.avg.mockReturnThis();
+      mockQueryBuilder.first.mockResolvedValueOnce({ average: null });
+
+      const result = await workerProfileService.getProfile('user-uuid');
+
+      // pg devuelve DATE como Date en medianoche local; la API la devuelve como YYYY-MM-DD.
+      expect(result.date_of_birth).toBe('1988-11-02');
+      expect(result.avatar_url).toBe('/uploads/profiles/avatar.jpg');
+      expect(result.dni_front_url).toBe('/uploads/profiles/front.jpg');
+      expect(result.dni_back_url).toBe('/uploads/profiles/back.jpg');
+    });
+
+    it('should return hourly_rate as null, not 0, when the rate is not set yet', async () => {
+      const mockProfile = {
+        id: 'profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'Carlos García',
+        date_of_birth: '1988-11-02',
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+        category_id: null,
+        category_name: null,
+        hourly_rate: null,
+        availability_status: 'AVAILABLE',
+        certification_status: 'PENDING',
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(mockProfile);
+      mockQueryBuilder.avg.mockReturnThis();
+      mockQueryBuilder.first.mockResolvedValueOnce({ average: null });
+
+      const result = await workerProfileService.getProfile('user-uuid');
+
+      expect(result.hourly_rate).toBeNull();
+    });
+
     it('should return null when profile does not exist', async () => {
       const result = await workerProfileService.getProfile('nonexistent-uuid');
       expect(result).toBeNull();
@@ -154,6 +211,44 @@ describe('Worker Profile Service', () => {
       expect(result.full_name).toBe('New Worker');
       expect(result.hourly_rate).toBe(25.0);
     });
+
+    it('should persist the 4 identity fields and leave worker specifics null', async () => {
+      const newProfile = {
+        id: 'new-profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'New Worker',
+        date_of_birth: '1990-05-14',
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+        category_id: null,
+        hourly_rate: null,
+        availability_status: 'AVAILABLE',
+        certification_status: 'PENDING',
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(null);
+      mockQueryBuilder.returning.mockResolvedValueOnce([newProfile]);
+
+      const result = await workerProfileService.createProfile('user-uuid', {
+        full_name: 'New Worker',
+        date_of_birth: '1990-05-14',
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+      });
+
+      const inserted = mockQueryBuilder.insert.mock.calls[0][0];
+      expect(inserted.date_of_birth).toBe('1990-05-14');
+      expect(inserted.avatar_url).toBe('/uploads/profiles/avatar.jpg');
+      expect(inserted.dni_front_url).toBe('/uploads/profiles/front.jpg');
+      expect(inserted.dni_back_url).toBe('/uploads/profiles/back.jpg');
+      // La categoría y la tarifa se definen en un flujo posterior, no en el alta.
+      expect(inserted.category_id).toBeNull();
+      expect(inserted.hourly_rate).toBeNull();
+      expect(result.date_of_birth).toBe('1990-05-14');
+      expect(result.hourly_rate).toBeNull();
+    });
   });
 
   describe('updateProfile', () => {
@@ -207,40 +302,66 @@ describe('Worker Profile Service', () => {
 });
 
 describe('Worker Profile Validation Schema', () => {
+  // El alta de perfil es universal: exige los mismos 4 datos de identidad que el
+  // perfil de cliente y deja categoría, tarifa y disponibilidad para un flujo posterior.
+  const identity = {
+    date_of_birth: '1988-11-02',
+    avatar_url: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+    dni_front_url: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+    dni_back_url: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+  };
+  const workerExtras = {
+    category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    hourly_rate: 35.5,
+  };
+
   describe('createWorkerProfileSchema', () => {
     it('should accept valid profile data', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Carlos García',
-        avatar_url: 'https://example.com/avatar.jpg',
+        ...identity,
         bio: 'Técnico reparador',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
+        ...workerExtras,
         availability_status: 'AVAILABLE',
       });
       expect(error).toBeUndefined();
     });
 
+    it('should require the same 4 identity fields as the client profile', () => {
+      for (const campo of Object.keys(identity)) {
+        const payload = { full_name: 'Carlos García', ...identity, ...workerExtras };
+        delete payload[campo];
+        const { error } = createWorkerProfileSchema.validate(payload);
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should reject local file:// image URIs', () => {
+      const { error } = createWorkerProfileSchema.validate({
+        full_name: 'Carlos García',
+        ...identity,
+        ...workerExtras,
+        dni_back_url: 'file:///data/user/0/com.app/files/dni_back.jpg',
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should accept a profile without category_id, hourly_rate nor availability_status', () => {
+      const { error, value } = createWorkerProfileSchema.validate({
+        full_name: 'Carlos García',
+        ...identity,
+      });
+      expect(error).toBeUndefined();
+      expect(value.category_id).toBeUndefined();
+      expect(value.hourly_rate).toBeUndefined();
+      expect(value.availability_status).toBeUndefined();
+    });
+
     it('should reject empty full_name', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: '',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
-      });
-      expect(error).toBeDefined();
-    });
-
-    it('should reject missing category_id', () => {
-      const { error } = createWorkerProfileSchema.validate({
-        full_name: 'Test',
-        hourly_rate: 35.5,
-      });
-      expect(error).toBeDefined();
-    });
-
-    it('should reject missing hourly_rate', () => {
-      const { error } = createWorkerProfileSchema.validate({
-        full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        ...identity,
+        ...workerExtras,
       });
       expect(error).toBeDefined();
     });
@@ -248,7 +369,8 @@ describe('Worker Profile Validation Schema', () => {
     it('should reject zero hourly_rate', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        ...identity,
+        ...workerExtras,
         hourly_rate: 0,
       });
       expect(error).toBeDefined();
@@ -257,7 +379,8 @@ describe('Worker Profile Validation Schema', () => {
     it('should reject negative hourly_rate', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        ...identity,
+        ...workerExtras,
         hourly_rate: -10,
       });
       expect(error).toBeDefined();
@@ -266,28 +389,18 @@ describe('Worker Profile Validation Schema', () => {
     it('should reject invalid availability_status', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
+        ...identity,
+        ...workerExtras,
         availability_status: 'INVALID',
       });
       expect(error).toBeDefined();
     });
 
-    it('should default availability_status to AVAILABLE when omitted', () => {
-      const { error, value } = createWorkerProfileSchema.validate({
-        full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
-      });
-      expect(error).toBeUndefined();
-      expect(value.availability_status).toBe('AVAILABLE');
-    });
-
     it('should reject bio over 500 characters', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
+        ...identity,
+        ...workerExtras,
         bio: 'x'.repeat(501),
       });
       expect(error).toBeDefined();
@@ -296,8 +409,8 @@ describe('Worker Profile Validation Schema', () => {
     it('should reject non-JPG avatar URL', () => {
       const { error } = createWorkerProfileSchema.validate({
         full_name: 'Test',
-        category_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        hourly_rate: 35.5,
+        ...identity,
+        ...workerExtras,
         avatar_url: 'https://example.com/file.gif',
       });
       expect(error).toBeDefined();

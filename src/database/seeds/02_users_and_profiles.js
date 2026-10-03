@@ -1,8 +1,35 @@
 import bcrypt from 'bcrypt';
 import { encrypt } from '../../utils/encryption.js';
+import { seedId } from '../seedId.js';
 
 // Password hasheado para todos los usuarios de prueba: 'test123!'
 const TEST_PASSWORD_HASH = bcrypt.hashSync('test123!', 10);
+
+/**
+ * Los perfiles seedeados arrancan con el flujo "Completar Perfil" ya completo,
+ * para poder probar en desarrollo el estado "perfil completado" de la app. Las
+ * URLs siguen el formato que devuelve POST /api/v1/uploads/profile-image.
+ */
+const identityFor = (profileId, dateOfBirth) => ({
+  date_of_birth: dateOfBirth,
+  dni_front_url: `/uploads/profiles/dni-front-${profileId}.jpg`,
+  dni_back_url: `/uploads/profiles/dni-back-${profileId}.jpg`,
+});
+
+const CLIENT_DATES_OF_BIRTH = [
+  '1985-03-22',
+  '1992-11-08',
+  '1978-06-30',
+  '1996-01-19',
+  '1989-09-04',
+];
+const WORKER_DATES_OF_BIRTH = [
+  '1982-04-17',
+  '1975-12-01',
+  '1990-07-25',
+  '1987-02-13',
+  '1993-10-29',
+];
 
 // --- 5 Clientes de Test ---
 export const testClients = [
@@ -19,7 +46,7 @@ export const testClients = [
       current_role: 'client',
     },
     profile: {
-      id: 'cp111111-1111-4111-8111-111111111111',
+      id: seedId('cp-111111'),
       full_name: 'Juan Carlos Pérez',
       avatar_url:
         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
@@ -32,14 +59,14 @@ export const testClients = [
       average_rating: 5.0,
     },
     location: {
-      id: 'loc11111-1111-4111-8111-111111111111',
+      id: seedId('loc-11111'),
       address: 'Av. Santa Fe 3200, Palermo, CABA',
       latitude: -34.5885,
       longitude: -58.411,
     },
     paymentMethods: [
       {
-        id: 'pm111111-1111-4111-8111-111111111111',
+        id: seedId('pm-111111'),
         card_number_masked: '**** **** **** 4242',
         card_brand: 'Visa',
         exp_month: 12,
@@ -63,7 +90,7 @@ export const testClients = [
       current_role: 'client',
     },
     profile: {
-      id: 'cp222222-2222-4222-8222-222222222222',
+      id: seedId('cp-222222'),
       full_name: 'María Eugenia González',
       avatar_url:
         'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
@@ -76,14 +103,14 @@ export const testClients = [
       average_rating: 5.0,
     },
     location: {
-      id: 'loc22222-2222-4222-8222-222222222222',
+      id: seedId('loc-22222'),
       address: 'Av. Cabildo 2100, Belgrano, CABA',
       latitude: -34.562,
       longitude: -58.456,
     },
     paymentMethods: [
       {
-        id: 'pm222222-2222-4222-8222-222222222222',
+        id: seedId('pm-222222'),
         card_number_masked: '**** **** **** 5555',
         card_brand: 'Mastercard',
         exp_month: 10,
@@ -107,7 +134,7 @@ export const testClients = [
       current_role: 'client',
     },
     profile: {
-      id: 'cp333333-3333-4333-8333-333333333333',
+      id: seedId('cp-333333'),
       full_name: 'Lucas Rodríguez',
       avatar_url:
         'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
@@ -116,14 +143,14 @@ export const testClients = [
       average_rating: 4.8,
     },
     location: {
-      id: 'loc33333-3333-4333-8333-333333333333',
+      id: seedId('loc-33333'),
       address: 'Av. Rivadavia 5400, Caballito, CABA',
       latitude: -34.618,
       longitude: -58.441,
     },
     paymentMethods: [
       {
-        id: 'pm333333-3333-4333-8333-333333333333',
+        id: seedId('pm-333333'),
         card_number_masked: '**** **** **** 1234',
         card_brand: 'Visa',
         exp_month: 8,
@@ -147,7 +174,7 @@ export const testClients = [
       current_role: 'client',
     },
     profile: {
-      id: 'cp444444-4444-4444-8444-444444444444',
+      id: seedId('cp-444444'),
       full_name: 'Sofía Martínez',
       avatar_url:
         'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
@@ -156,14 +183,14 @@ export const testClients = [
       average_rating: 5.0,
     },
     location: {
-      id: 'loc44444-4444-4444-8444-444444444444',
+      id: seedId('loc-44444'),
       address: 'Av. Callao 1400, Recoleta, CABA',
       latitude: -34.593,
       longitude: -58.391,
     },
     paymentMethods: [
       {
-        id: 'pm444444-4444-4444-8444-444444444444',
+        id: seedId('pm-444444'),
         card_number_masked: '**** **** **** 8888',
         card_brand: 'Visa',
         exp_month: 11,
@@ -187,7 +214,7 @@ export const testClients = [
       current_role: 'client',
     },
     profile: {
-      id: 'cp555555-5555-4555-8555-555555555555',
+      id: seedId('cp-555555'),
       full_name: 'Carlos Alberto Gómez',
       avatar_url:
         'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
@@ -196,14 +223,14 @@ export const testClients = [
       average_rating: 4.9,
     },
     location: {
-      id: 'loc55555-5555-4555-8555-555555555555',
+      id: seedId('loc-55555'),
       address: 'Av. Triunvirato 4500, Villa Urquiza, CABA',
       latitude: -34.577,
       longitude: -58.489,
     },
     paymentMethods: [
       {
-        id: 'pm555555-5555-4555-8555-555555555555',
+        id: seedId('pm-555555'),
         card_number_masked: '**** **** **** 7777',
         card_brand: 'Mastercard',
         exp_month: 5,
@@ -231,7 +258,7 @@ export const testWorkers = [
       current_role: 'worker',
     },
     clientProfile: {
-      id: 'cpw11111-1111-4111-8111-111111111111',
+      id: seedId('cpw-11111'),
       full_name: 'Roberto Fernández',
       avatar_url:
         'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
@@ -239,7 +266,7 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     workerProfile: {
-      id: 'wp111111-1111-4111-8111-111111111111',
+      id: seedId('wp-111111'),
       full_name: 'Roberto Fernández',
       avatar_url:
         'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
@@ -251,20 +278,20 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     location: {
-      id: 'locw1111-1111-4111-8111-111111111111',
+      id: seedId('locw-1111'),
       address: 'Av. Corrientes 4800, Villa Crespo, CABA',
       latitude: -34.601,
       longitude: -58.435,
     },
     certifications: [
       {
-        id: 'cert1111-1111-4111-8111-111111111111',
+        id: seedId('cert-1111'),
         document_type: 'PROFESSIONAL_LICENSE',
         document_url: 'https://cdn.startup.com/certs/worker1_gas_license.pdf',
         verification_status: 'APPROVED',
       },
       {
-        id: 'cert1112-1111-4111-8111-111111111111',
+        id: seedId('cert-1112'),
         document_type: 'ID_VERIFICATION',
         document_url: 'https://cdn.startup.com/certs/worker1_dni.pdf',
         verification_status: 'APPROVED',
@@ -284,7 +311,7 @@ export const testWorkers = [
       current_role: 'worker',
     },
     clientProfile: {
-      id: 'cpw22222-2222-4222-8222-222222222222',
+      id: seedId('cpw-22222'),
       full_name: 'Diego Álvarez',
       avatar_url:
         'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80',
@@ -292,7 +319,7 @@ export const testWorkers = [
       average_rating: 4.9,
     },
     workerProfile: {
-      id: 'wp222222-2222-4222-8222-222222222222',
+      id: seedId('wp-222222'),
       full_name: 'Diego Álvarez',
       avatar_url:
         'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80',
@@ -304,20 +331,20 @@ export const testWorkers = [
       average_rating: 4.9,
     },
     location: {
-      id: 'locw2222-2222-4222-8222-222222222222',
+      id: seedId('locw-2222'),
       address: 'Av. Juramento 2800, Belgrano, CABA',
       latitude: -34.5635,
       longitude: -58.461,
     },
     certifications: [
       {
-        id: 'cert2221-2222-4222-8222-222222222222',
+        id: seedId('cert-2221'),
         document_type: 'PROFESSIONAL_LICENSE',
         document_url: 'https://cdn.startup.com/certs/worker2_copime.pdf',
         verification_status: 'APPROVED',
       },
       {
-        id: 'cert2222-2222-4222-8222-222222222222',
+        id: seedId('cert-2222'),
         document_type: 'ID_VERIFICATION',
         document_url: 'https://cdn.startup.com/certs/worker2_dni.pdf',
         verification_status: 'APPROVED',
@@ -337,7 +364,7 @@ export const testWorkers = [
       current_role: 'worker',
     },
     clientProfile: {
-      id: 'cpw33333-3333-4333-8333-333333333333',
+      id: seedId('cpw-33333'),
       full_name: 'Laura Benítez',
       avatar_url:
         'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
@@ -345,7 +372,7 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     workerProfile: {
-      id: 'wp333333-3333-4333-8333-333333333333',
+      id: seedId('wp-333333'),
       full_name: 'Laura Benítez',
       avatar_url:
         'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
@@ -357,20 +384,20 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     location: {
-      id: 'locw3333-3333-4333-8333-333333333333',
+      id: seedId('locw-3333'),
       address: 'Av. Las Heras 2300, Recoleta, CABA',
       latitude: -34.589,
       longitude: -58.397,
     },
     certifications: [
       {
-        id: 'cert3331-3333-4333-8333-333333333333',
+        id: seedId('cert-3331'),
         document_type: 'BACKGROUND_CHECK',
         document_url: 'https://cdn.startup.com/certs/worker3_antecedentes.pdf',
         verification_status: 'APPROVED',
       },
       {
-        id: 'cert3332-3333-4333-8333-333333333333',
+        id: seedId('cert-3332'),
         document_type: 'ID_VERIFICATION',
         document_url: 'https://cdn.startup.com/certs/worker3_dni.pdf',
         verification_status: 'APPROVED',
@@ -390,7 +417,7 @@ export const testWorkers = [
       current_role: 'worker',
     },
     clientProfile: {
-      id: 'cpw44444-4444-4444-8444-444444444444',
+      id: seedId('cpw-44444'),
       full_name: 'Martín Díaz',
       avatar_url:
         'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80',
@@ -398,7 +425,7 @@ export const testWorkers = [
       average_rating: 4.8,
     },
     workerProfile: {
-      id: 'wp444444-4444-4444-8444-444444444444',
+      id: seedId('wp-444444'),
       full_name: 'Martín Díaz',
       avatar_url:
         'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80',
@@ -410,20 +437,20 @@ export const testWorkers = [
       average_rating: 4.8,
     },
     location: {
-      id: 'locw4444-4444-4444-8444-444444444444',
+      id: seedId('locw-4444'),
       address: 'Av. San Martín 2900, Villa del Parque, CABA',
       latitude: -34.604,
       longitude: -58.482,
     },
     certifications: [
       {
-        id: 'cert4441-4444-4444-8444-444444444444',
+        id: seedId('cert-4441'),
         document_type: 'BACKGROUND_CHECK',
         document_url: 'https://cdn.startup.com/certs/worker4_antecedentes.pdf',
         verification_status: 'APPROVED',
       },
       {
-        id: 'cert4442-4444-4444-8444-444444444444',
+        id: seedId('cert-4442'),
         document_type: 'ID_VERIFICATION',
         document_url: 'https://cdn.startup.com/certs/worker4_dni.pdf',
         verification_status: 'APPROVED',
@@ -443,7 +470,7 @@ export const testWorkers = [
       current_role: 'worker',
     },
     clientProfile: {
-      id: 'cpw55555-5555-4555-8555-555555555555',
+      id: seedId('cpw-55555'),
       full_name: 'Esteban Rossi',
       avatar_url:
         'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80',
@@ -451,7 +478,7 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     workerProfile: {
-      id: 'wp555555-5555-4555-8555-555555555555',
+      id: seedId('wp-555555'),
       full_name: 'Esteban Rossi',
       avatar_url:
         'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80',
@@ -463,20 +490,20 @@ export const testWorkers = [
       average_rating: 5.0,
     },
     location: {
-      id: 'locw5555-5555-4555-8555-555555555555',
+      id: seedId('locw-5555'),
       address: 'Av. Monroe 3400, Coghlan, CABA',
       latitude: -34.568,
       longitude: -58.472,
     },
     certifications: [
       {
-        id: 'cert5551-5555-4555-8555-555555555555',
+        id: seedId('cert-5551'),
         document_type: 'PROFESSIONAL_LICENSE',
         document_url: 'https://cdn.startup.com/certs/worker5_matricula_clima.pdf',
         verification_status: 'APPROVED',
       },
       {
-        id: 'cert5552-5555-4555-8555-555555555555',
+        id: seedId('cert-5552'),
         document_type: 'ID_VERIFICATION',
         document_url: 'https://cdn.startup.com/certs/worker5_dni.pdf',
         verification_status: 'APPROVED',
@@ -489,6 +516,23 @@ export const testWorkers = [
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
+// La identidad se asigna sobre los fixtures (y no en el `insert`) para que los
+// datos exportados ya representen el perfil completo, tal como los devuelve la
+// API. `testWorkers` comparte objetos con los archivos de seed posteriores.
+for (const [index, client] of testClients.entries()) {
+  Object.assign(client.profile, identityFor(client.profile.id, CLIENT_DATES_OF_BIRTH[index]));
+}
+for (const [index, worker] of testWorkers.entries()) {
+  Object.assign(
+    worker.clientProfile,
+    identityFor(worker.clientProfile.id, WORKER_DATES_OF_BIRTH[index]),
+  );
+  Object.assign(
+    worker.workerProfile,
+    identityFor(worker.workerProfile.id, WORKER_DATES_OF_BIRTH[index]),
+  );
+}
+
 export async function seed(knex) {
   // 1. Insertar todos los usuarios
   const allUsers = [...testClients.map((c) => c.user), ...testWorkers.map((w) => w.user)];
@@ -526,12 +570,15 @@ export async function seed(knex) {
   }
 
   // 3. Insertar Perfiles de Clientes
-  for (const client of testClients) {
+  for (const [index, client] of testClients.entries()) {
     await knex('client_profiles').insert({
       id: client.profile.id,
       user_id: client.user.id,
       full_name: client.profile.full_name,
       avatar_url: client.profile.avatar_url,
+      date_of_birth: client.profile.date_of_birth,
+      dni_front_url: client.profile.dni_front_url,
+      dni_back_url: client.profile.dni_back_url,
       bio: client.profile.bio,
       default_location_id: client.location.id,
       preferences: client.profile.preferences,
@@ -540,12 +587,15 @@ export async function seed(knex) {
   }
 
   // Los trabajadores también cuentan con perfil de cliente (Rol Dual)
-  for (const worker of testWorkers) {
+  for (const [index, worker] of testWorkers.entries()) {
     await knex('client_profiles').insert({
       id: worker.clientProfile.id,
       user_id: worker.user.id,
       full_name: worker.clientProfile.full_name,
       avatar_url: worker.clientProfile.avatar_url,
+      date_of_birth: worker.clientProfile.date_of_birth,
+      dni_front_url: worker.clientProfile.dni_front_url,
+      dni_back_url: worker.clientProfile.dni_back_url,
       bio: worker.clientProfile.bio,
       default_location_id: worker.location.id,
       average_rating: worker.clientProfile.average_rating,
@@ -553,12 +603,15 @@ export async function seed(knex) {
   }
 
   // 4. Insertar Perfiles de Trabajador
-  for (const worker of testWorkers) {
+  for (const [index, worker] of testWorkers.entries()) {
     await knex('worker_profiles').insert({
       id: worker.workerProfile.id,
       user_id: worker.user.id,
       full_name: worker.workerProfile.full_name,
       avatar_url: worker.workerProfile.avatar_url,
+      date_of_birth: worker.workerProfile.date_of_birth,
+      dni_front_url: worker.workerProfile.dni_front_url,
+      dni_back_url: worker.workerProfile.dni_back_url,
       bio: worker.workerProfile.bio,
       category_id: worker.workerProfile.category_id,
       hourly_rate: worker.workerProfile.hourly_rate,

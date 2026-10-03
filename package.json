@@ -16,7 +16,7 @@
     "seed": "knex seed:run",
     "seed:dev": "knex seed:run",
     "seed:run": "knex seed:run",
-    "seed:clear": "node src/database/seeds/clear.js",
+    "seed:clear": "node src/database/clear.js",
     "swagger:export": "node scripts/export-openapi.js"
   },
   "dependencies": {
@@ -29,6 +29,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
+    "libphonenumber-js": "^1.13.14",
     "multer": "^2.2.0",
     "pg": "^8.12.0",
     "redis": "^4.7.1",

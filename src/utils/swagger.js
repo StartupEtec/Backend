@@ -1,6 +1,48 @@
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 
+/**
+ * Campos de identidad del flujo "Completar Perfil". Son los mismos para cliente
+ * y trabajador porque el formulario de la app es universal. Se reutilizan en las
+ * requests de creación (obligatorios) y en las de actualización (opcionales).
+ */
+const identityFieldsRequired = {
+  date_of_birth: {
+    type: 'string',
+    format: 'date',
+    example: '1990-05-14',
+    description:
+      'Fecha de nacimiento en formato YYYY-MM-DD exacto, sin hora ni zona horaria. Requerida: ' +
+      'no puede ser futura, anterior a 1900, ni una fecha inexistente (1990-02-31).',
+  },
+  avatar_url: {
+    type: 'string',
+    example: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+    description:
+      'URL de la foto de perfil. Obtenerla con POST /uploads/profile-image. No se aceptan URIs locales (file://, content://).',
+  },
+  dni_front_url: {
+    type: 'string',
+    example: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+    description: 'URL de la foto del frente del DNI. Obtenerla con POST /uploads/profile-image.',
+  },
+  dni_back_url: {
+    type: 'string',
+    example: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+    description: 'URL de la foto del dorso del DNI. Obtenerla con POST /uploads/profile-image.',
+  },
+};
+
+const identityFieldsOptional = {
+  date_of_birth: {
+    ...identityFieldsRequired.date_of_birth,
+    description: 'Fecha de nacimiento (YYYY-MM-DD).',
+  },
+  avatar_url: { ...identityFieldsRequired.avatar_url },
+  dni_front_url: { ...identityFieldsRequired.dni_front_url },
+  dni_back_url: { ...identityFieldsRequired.dni_back_url },
+};
+
 const options = {
   definition: {
     openapi: '3.0.0',
@@ -143,11 +185,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             full_name: { type: 'string', example: 'Juan Pérez' },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              nullable: true,
-            },
+            ...identityFieldsRequired,
             bio: { type: 'string', example: 'Cliente desde 2024', nullable: true },
             default_location_id: { type: 'string', format: 'uuid', nullable: true },
             preferences: {
@@ -162,7 +200,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
         },
         CreateClientProfileRequest: {
           type: 'object',
-          required: ['full_name'],
+          required: ['full_name', 'date_of_birth', 'avatar_url', 'dni_front_url', 'dni_back_url'],
           properties: {
             full_name: {
               type: 'string',
@@ -171,12 +209,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: 'Juan Pérez',
               description: 'Nombre completo del cliente',
             },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              description: 'URL del avatar (JPG/PNG)',
-              nullable: true,
-            },
+            ...identityFieldsRequired,
             bio: {
               type: 'string',
               maxLength: 500,
@@ -209,12 +242,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: 'Juan Pérez',
               description: 'Nombre completo del cliente',
             },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              description: 'URL del avatar (JPG/PNG)',
-              nullable: true,
-            },
+            ...identityFieldsOptional,
             bio: {
               type: 'string',
               maxLength: 500,
@@ -284,11 +312,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             user_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             full_name: { type: 'string', example: 'Carlos García' },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              nullable: true,
-            },
+            ...identityFieldsRequired,
             bio: {
               type: 'string',
               example: 'Técnico especialista en reparaciones',
@@ -301,7 +325,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               nullable: true,
             },
             category_name: { type: 'string', example: 'Plumbing', nullable: true },
-            hourly_rate: { type: 'number', example: 35.5 },
+            hourly_rate: { type: 'number', example: 35.5, nullable: true },
             availability_status: {
               type: 'string',
               example: 'AVAILABLE',
@@ -323,7 +347,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
         },
         CreateWorkerProfileRequest: {
           type: 'object',
-          required: ['full_name', 'category_id', 'hourly_rate'],
+          required: ['full_name', 'date_of_birth', 'avatar_url', 'dni_front_url', 'dni_back_url'],
           properties: {
             full_name: {
               type: 'string',
@@ -332,12 +356,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: 'Carlos García',
               description: 'Nombre completo del trabajador',
             },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              description: 'URL del avatar (JPG/PNG)',
-              nullable: true,
-            },
+            ...identityFieldsRequired,
             bio: {
               type: 'string',
               maxLength: 500,
@@ -349,18 +368,23 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               type: 'string',
               format: 'uuid',
               example: 'b2c3d4e5-...',
-              description: 'ID de la categoría de servicio',
+              description:
+                'ID de la categoría de servicio. Opcional: se define en el flujo posterior de categorización.',
+              nullable: true,
             },
             hourly_rate: {
               type: 'number',
               example: 35.5,
-              description: 'Tarifa por hora (valor positivo)',
+              description:
+                'Tarifa por hora (valor positivo). Opcional: se define en el flujo posterior de tarifación.',
+              nullable: true,
             },
             availability_status: {
               type: 'string',
               example: 'AVAILABLE',
               enum: ['AVAILABLE', 'BUSY', 'OFFLINE'],
-              description: 'Estado de disponibilidad (por defecto AVAILABLE)',
+              description: 'Estado de disponibilidad (la BD lo defaultea en AVAILABLE)',
+              nullable: true,
             },
           },
         },
@@ -374,12 +398,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: 'Carlos García',
               description: 'Nombre completo del trabajador',
             },
-            avatar_url: {
-              type: 'string',
-              example: 'https://example.com/avatar.jpg',
-              description: 'URL del avatar (JPG/PNG)',
-              nullable: true,
-            },
+            ...identityFieldsOptional,
             bio: {
               type: 'string',
               maxLength: 500,
@@ -2640,7 +2659,10 @@ export { swaggerSpec };
  *             $ref: '#/components/schemas/CreateClientProfileRequest'
  *           example:
  *             full_name: "Juan Pérez"
- *             avatar_url: "https://example.com/avatar.jpg"
+ *             date_of_birth: "1990-05-14"
+ *             avatar_url: "/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg"
+ *             dni_front_url: "/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg"
+ *             dni_back_url: "/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg"
  *             bio: "Cliente desde 2024"
  *             default_location_id: "a1b2c3d4-..."
  *             preferences:
@@ -2743,8 +2765,8 @@ export { swaggerSpec };
  *   get:
  *     summary: Obtener perfil de trabajador
  *     description: |
- *       Retorna el perfil de trabajador del usuario autenticado con rol worker.
- *       Solo el propio usuario puede acceder a su perfil (validación por JWT y rol worker).
+ *       Retorna el perfil de trabajador del usuario autenticado.
+ *       Solo el propio usuario puede acceder a su perfil (validación por JWT + propiedad del recurso).
  *       Incluye nombre, categoría, tarifa, biografía, rating promedio y disponibilidad.
  *       Si no existe, retorna 404 con indicación de usar POST.
  *     tags: [Trabajadores]
@@ -2772,7 +2794,7 @@ export { swaggerSpec };
  *             schema:
  *               $ref: '#/components/schemas/UnauthorizedError'
  *       403:
- *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         description: No autorizado (acceso a un perfil de otro usuario)
  *         content:
  *           application/json:
  *             schema:
@@ -2786,8 +2808,9 @@ export { swaggerSpec };
  *   post:
  *     summary: Crear perfil de trabajador
  *     description: |
- *       Crea un nuevo perfil de trabajador para el usuario autenticado con rol worker.
- *       Solo el propio usuario puede crear su perfil (validación por JWT y rol worker).
+ *       Crea un nuevo perfil de trabajador para el usuario autenticado.
+ *       Solo el propio usuario puede crear su perfil (validación por JWT + propiedad del recurso):
+ *       con el modelo de rol dual no se exige el rol activo, que viaja en el JWT.
  *       Si el perfil ya existe, retorna 409.
  *     tags: [Trabajadores]
  *     security:
@@ -2808,7 +2831,10 @@ export { swaggerSpec };
  *             $ref: '#/components/schemas/CreateWorkerProfileRequest'
  *           example:
  *             full_name: "Carlos García"
- *             avatar_url: "https://example.com/avatar.jpg"
+ *             date_of_birth: "1988-11-02"
+ *             avatar_url: "/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg"
+ *             dni_front_url: "/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg"
+ *             dni_back_url: "/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg"
  *             bio: "Técnico especialista en reparaciones"
  *             category_id: "b2c3d4e5-..."
  *             hourly_rate: 35.5
@@ -2833,7 +2859,7 @@ export { swaggerSpec };
  *             schema:
  *               $ref: '#/components/schemas/UnauthorizedError'
  *       403:
- *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         description: No autorizado (acceso a un perfil de otro usuario)
  *         content:
  *           application/json:
  *             schema:
@@ -2848,7 +2874,7 @@ export { swaggerSpec };
  *     summary: Actualizar perfil de trabajador
  *     description: |
  *       Actualiza los datos del perfil de trabajador del usuario autenticado.
- *       Solo el propio usuario puede actualizar su perfil (validación por JWT y rol worker).
+ *       Solo el propio usuario puede actualizar su perfil (validación por JWT + propiedad del recurso).
  *       Todos los campos son opcionales. Si el perfil no existe, retorna 404.
  *     tags: [Trabajadores]
  *     security:
@@ -2891,7 +2917,7 @@ export { swaggerSpec };
  *             schema:
  *               $ref: '#/components/schemas/UnauthorizedError'
  *       403:
- *         description: No autorizado (rol incorrecto o acceso a otro perfil)
+ *         description: No autorizado (acceso a un perfil de otro usuario)
  *         content:
  *           application/json:
  *             schema:

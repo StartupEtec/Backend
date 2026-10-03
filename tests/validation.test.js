@@ -1,5 +1,21 @@
 import * as validation from '../src/utils/validation.js';
 
+/**
+ * Este archivo importa `validation.js` directo, sin pasar por `src/app.js`, así que
+ * nunca corre `dotenv.config()`. Se fija el país explícitamente para que los casos de
+ * teléfono sean deterministas y no dependan del fallback ni del .env de cada máquina.
+ */
+const ORIGINAL_PHONE_COUNTRY = process.env.DEFAULT_PHONE_COUNTRY_CODE;
+process.env.DEFAULT_PHONE_COUNTRY_CODE = '+54';
+
+afterAll(() => {
+  if (ORIGINAL_PHONE_COUNTRY === undefined) {
+    delete process.env.DEFAULT_PHONE_COUNTRY_CODE;
+  } else {
+    process.env.DEFAULT_PHONE_COUNTRY_CODE = ORIGINAL_PHONE_COUNTRY;
+  }
+});
+
 const UUID = '12345678-1234-1234-1234-123456789012';
 
 const expectValid = (schema, value) => {
@@ -21,7 +37,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     it('registerSchema: acepta credenciales válidas', () => {
       expectValid(validation.registerSchema, {
         email: 'user@example.com',
-        phone: '12345678',
+        phone: '011 15-1234-5678',
         password: 'Strong1!',
       });
     });
@@ -29,7 +45,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     it('registerSchema: rechaza email inválido y contraseña débil', () => {
       const messages = expectInvalid(validation.registerSchema, {
         email: 'not-an-email',
-        phone: '12345678',
+        phone: '011 15-1234-5678',
         password: 'weak',
       });
       expect(messages).toContain('formato del correo');
@@ -46,7 +62,11 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     });
 
     it('verifyOtpSchema: el OTP debe tener 6 dígitos', () => {
-      expectInvalid(validation.verifyOtpSchema, { phone: '12345678', otp_code: '12' }, '6 dígitos');
+      expectInvalid(
+        validation.verifyOtpSchema,
+        { phone: '011 15-1234-5678', otp_code: '12' },
+        '6 dígitos',
+      );
       expectValid(validation.verifyOtpSchema, { email: 'user@example.com', otp_code: '123456' });
     });
 
@@ -78,27 +98,30 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     });
 
     it('canonicaliza teléfonos a E.164 en todos los flujos', () => {
+      // Números argentinos: la plataforma opera con +54 (ver .env.example y los
+      // seeds). Antes este test usaba números colombianos y codificaba el default
+      // +57, que era justamente el bug.
       const res = expectValid(validation.registerSchema, {
         email: 'user@example.com',
-        phone: '300 123-45-67',
+        phone: '011 15-1234-5678',
         password: 'Strong1!',
       });
-      expect(res.phone).toBe('+573001234567');
+      expect(res.phone).toBe('+5491112345678');
 
       const login = expectValid(validation.loginSchema, {
-        phone: '+57 300 123 45 67',
+        phone: '+54 9 11 1234-5678',
         password: 'Strong1!',
       });
-      expect(login.phone).toBe('+573001234567');
+      expect(login.phone).toBe('+5491112345678');
 
       const otp = expectValid(validation.verifyOtpSchema, {
-        phone: '03001234567',
+        phone: '0111512345678',
         otp_code: '123456',
       });
-      expect(otp.phone).toBe('+573001234567');
+      expect(otp.phone).toBe('+5491112345678');
 
-      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '3001234567' });
-      expect(forgot.phone).toBe('+573001234567');
+      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '9112345678' });
+      expect(forgot.phone).toBe('+549112345678');
     });
 
     it('rechaza teléfonos inválidos', () => {
@@ -106,27 +129,170 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       expectInvalid(validation.registerSchema, { phone: '123' }, '8 dígitos');
     });
 
+    it('rechaza fragmentos que no se pueden atribuir a un país', () => {
+      // '12345678' con default +54 no es ni un móvil ni un fijo identifiable: antes
+      // la heurística lo aceptaba y lo convertía en '+5712345678' (pais equivocado).
+      expectInvalid(validation.registerSchema, { phone: '12345678' }, 'formato del teléfono');
+    });
+
     it('resendOtpSchema: requiere email o teléfono y canonicaliza', () => {
       expectInvalid(validation.resendOtpSchema, {}, 'correo electrónico');
-      const res = expectValid(validation.resendOtpSchema, { phone: '3001234567' });
-      expect(res.phone).toBe('+573001234567');
+      const res = expectValid(validation.resendOtpSchema, { phone: '011 15-1234-5678' });
+      expect(res.phone).toBe('+5491112345678');
     });
   });
 
   describe('Perfiles', () => {
-    it('createClientProfileSchema: valida avatar, bio y ubicación', () => {
-      expectValid(validation.createClientProfileSchema, { full_name: 'Ana' });
+    // Payload mínimo válido del flujo "Completar Perfil": los mismos 4 campos de
+    // identidad para cliente y trabajador.
+    const identityPayload = {
+      full_name: 'Ana',
+      date_of_birth: '1990-05-14',
+      avatar_url: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+      dni_front_url: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+      dni_back_url: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+    };
+
+    it('createClientProfileSchema: exige los 4 datos de identidad', () => {
+      expectValid(validation.createClientProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
+      };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createClientProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createClientProfileSchema: rechaza URI locales de imagen', () => {
+      // El backend no puede servir un file:// del dispositivo: se aceptaba antes
+      // y se guardaba una ruta local inútil que ningún otro usuario podía ver.
       expectInvalid(
         validation.createClientProfileSchema,
-        { full_name: 'Ana', avatar_url: 'https://x.com/a.txt' },
-        'JPG o PNG',
+        { ...identityPayload, avatar_url: 'file:///data/user/0/com.app/files/selfie.jpg' },
+        'no se aceptan URIs locales',
       );
       expectInvalid(
         validation.createClientProfileSchema,
-        { full_name: 'Ana', default_location_id: 'not-a-uuid' },
+        { ...identityPayload, dni_front_url: 'content://media/external/images/1' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/a.txt' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/../etc/passwd' },
+        'no se aceptan URIs locales',
+      );
+    });
+
+    it('createClientProfileSchema: valida la fecha de nacimiento', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '14/05/1990' },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it('createClientProfileSchema: bio y ubicación siguen siendo opcionales', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, default_location_id: 'not-a-uuid' },
         'UUID válido',
       );
       expectInvalid(validation.createClientProfileSchema, {}, 'nombre es requerido');
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        bio: 'hola',
+        default_location_id: UUID,
+      });
+    });
+
+    it.each([
+      ['solo el año', '1990'],
+      ['año y mes', '1990-05'],
+      ['con hora y zona horaria', '1990-05-14T10:00:00Z'],
+      ['con milisegundos', '1990-05-14T00:00:00.000Z'],
+      ['sin ceros a la izquierda', '1990-5-4'],
+      ['formato local', '14/05/1990'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it.each([
+      ['fecha inexistente', '1990-02-31'],
+      ['29/02 en año no bisiesto', '2023-02-29'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'fecha válida',
+      );
+    });
+
+    it('date_of_birth rechaza fechas futuras y anteriores a 1900', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '1899-12-31' },
+        'posterior al 01/01/1900',
+      );
+    });
+
+    it('date_of_birth no acepta números', () => {
+      expect(
+        validation.createClientProfileSchema.validate({
+          ...identityPayload,
+          date_of_birth: 19900514,
+        }).error,
+      ).toBeDefined();
+    });
+
+    it('date_of_birth devuelve el string sin convertirlo a Date', () => {
+      const { value } = validation.createClientProfileSchema.validate(identityPayload);
+      expect(typeof value.date_of_birth).toBe('string');
+      expect(value.date_of_birth).toBe('1990-05-14');
+    });
+
+    it('date_of_birth acepta el día de hoy y un 29/02 válido', () => {
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: new Date().toISOString().slice(0, 10),
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '2024-02-29',
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '1900-01-01',
+      });
+    });
+
+    it('updateClientProfileSchema aplica el mismo formato estricto de fecha', () => {
+      expectInvalid(validation.updateClientProfileSchema, { date_of_birth: '1990' }, 'YYYY-MM-DD');
+      expectValid(validation.updateClientProfileSchema, { date_of_birth: '1990-05-14' });
     });
 
     it('updateClientProfileSchema: requiere al menos un campo', () => {
@@ -139,13 +305,26 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       expectValid(validation.updateProfileSchema, { full_name: 'Ana', bio: 'x' });
     });
 
-    it('createWorkerProfileSchema: valida categoría, tarifa y disponibilidad', () => {
-      const base = {
-        full_name: 'Ana',
-        category_id: UUID,
-        hourly_rate: 25,
+    it('createWorkerProfileSchema: exige los mismos 4 datos que el cliente', () => {
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
       };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createWorkerProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createWorkerProfileSchema: categoría, tarifa y disponibilidad son opcionales', () => {
+      const base = { ...identityPayload, category_id: UUID, hourly_rate: 25 };
       expectValid(validation.createWorkerProfileSchema, base);
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
       expectInvalid(validation.createWorkerProfileSchema, { ...base, hourly_rate: -1 }, 'positivo');
       expectInvalid(
         validation.createWorkerProfileSchema,

@@ -4,7 +4,8 @@ import { initialCategories } from '../src/database/seeds/01_categories.js';
 import { testClients, testWorkers } from '../src/database/seeds/02_users_and_profiles.js';
 import { sampleOrders } from '../src/database/seeds/03_orders_and_escrow.js';
 import { sampleRatings, sampleChats } from '../src/database/seeds/04_ratings_and_chats.js';
-import { clearDatabase } from '../src/database/seeds/clear.js';
+import { clearDatabase } from '../src/database/clear.js';
+import { seedId } from '../src/database/seedId.js';
 import { decrypt } from '../src/utils/encryption.js';
 
 describe('Database Seeds and Clear Script Suite', () => {
@@ -142,6 +143,76 @@ describe('Database Seeds and Clear Script Suite', () => {
       const chat = sampleChats[0];
       expect(chat.participants.length).toBe(2);
       expect(chat.messages.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Integridad de identificadores (columnas uuid en Postgres)', () => {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    const collectIds = (entries, pick) =>
+      entries.flatMap((entry, index) =>
+        pick(entry)
+          .filter((item) => item?.id != null)
+          .map((item) => ({ id: item.id, label: `${entry.kind ?? 'item'}#${index}` })),
+      );
+
+    it('todos los ids de client_profiles, locations, payment_methods y certifications son UUID válidos', () => {
+      const ids = collectIds(testClients, (c) => [
+        c.profile,
+        c.location,
+        ...(c.paymentMethods ?? []),
+      ]).concat(
+        collectIds(testWorkers, (w) => [w.clientProfile, w.location, ...(w.certifications ?? [])]),
+      );
+
+      expect(ids.length).toBeGreaterThan(0);
+      const invalid = ids.filter(({ id }) => !UUID_REGEX.test(id));
+      expect(invalid.map((i) => `${i.label}:${i.id}`)).toEqual([]);
+    });
+
+    it('todos los ids de worker_profiles, quotes y transactions son UUID válidos', () => {
+      const ids = collectIds(testWorkers, (w) => [w.user, w.workerProfile]).concat(
+        collectIds(sampleOrders, (o) => [o.order, ...(o.quotes ?? []), ...(o.transactions ?? [])]),
+      );
+
+      expect(ids.length).toBeGreaterThan(0);
+      const invalid = ids.filter(({ id }) => !UUID_REGEX.test(id));
+      expect(invalid.map((i) => `${i.label}:${i.id}`)).toEqual([]);
+    });
+
+    it('todos los ids de ratings, chats y messages son UUID válidos', () => {
+      const ids = [
+        ...sampleRatings.map((r) => r.id),
+        ...sampleChats.map((c) => c.id),
+        ...sampleChats.flatMap((c) => (c.messages ?? []).map((m) => m.id)),
+      ];
+
+      expect(ids.length).toBeGreaterThan(0);
+      expect(ids.filter((id) => !UUID_REGEX.test(id))).toEqual([]);
+    });
+
+    it('seedId es determinista y devuelve UUID v4 válidos', () => {
+      expect(seedId('cp-111111')).toBe(seedId('cp-111111'));
+      expect(seedId('cp-111111')).not.toBe(seedId('cp-222222'));
+      expect(seedId('cp-111111')).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    });
+
+    it('seedId deja intacto un slug que ya es un UUID válido', () => {
+      expect(seedId('11111111-1111-4111-8111-111111111111')).toBe(
+        '11111111-1111-4111-8111-111111111111',
+      );
+    });
+
+    it('los perfiles seedeados arrancan con el flujo de identidad completo', () => {
+      for (const { profile, clientProfile } of [...testClients, ...testWorkers]) {
+        const target = profile ?? clientProfile;
+        expect(target.date_of_birth).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(target.dni_front_url).toMatch(/^\/uploads\/profiles\/.+\.jpg$/);
+        expect(target.dni_back_url).toMatch(/^\/uploads\/profiles\/.+\.jpg$/);
+        expect(target.avatar_url).toBeTruthy();
+      }
     });
   });
 

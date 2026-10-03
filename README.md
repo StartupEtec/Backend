@@ -90,6 +90,34 @@ npm run swagger:export
 | `worker4@test.com` | `test123!` | Martín Díaz | Pintura | $7.500 | Antecedentes + DNI (Aprobados) | Villa del Parque |
 | `worker5@test.com` | `test123!` | Esteban Rossi | Climatización | $11.000 | Matrícula Climatización + DNI (Aprobados) | Coghlan |
 
+> **Los perfiles sembrados arrancan con el flujo de identidad completo**
+> (`date_of_birth`, `avatar_url`, `dni_front_url` y `dni_back_url`), para poder
+> probar en desarrollo el estado "perfil completado". Las URLs de DNI y avatar
+> apuntan a `/uploads/profiles/...` con fines ilustrativos: son placeholders y no
+> corresponden a archivos reales en disco. Los avatares de los workers sí usan
+> URLs públicas de Unsplash.
+
+### 🆔 Identificadores de los seeds
+
+Las columnas `id` son `uuid` en Postgres, por lo que los seeds **no** pueden usar
+identificadores legibles literales: algo como `cp111111-1111-4111-8111-111111111111`
+tiene un primer grupo no hexadecimal y aborta el seed completo. En su lugar se
+usa el helper `seedId('cp-111111')` (`src/database/seedId.js`), que deriva un
+UUID v4 **determinista** a partir de un slug legible: el mismo slug siempre
+produce el mismo UUID, así las referencias cruzadas entre archivos de seed siguen
+resolviendo al mismo registro.
+
+```js
+import { seedId } from '../seedId.js';
+
+const id = seedId('cp-111111'); // → 'dbb3c996-5eef-479b-9f34-ae10aea90a26' (estable)
+```
+
+Los archivos de seed están fuera del directorio que Knex escanea para migraciones:
+`clear.js` vive en `src/database/clear.js` (no en `seeds/`), porque de lo
+contrario Knex lo intentaría ejecutar como un seed más y fallaría con
+`Invalid seed file: clear.js must have a seed function`.
+
 ---
 
 ### 📦 Órdenes de Ejemplo en Diferentes Estados
@@ -145,8 +173,14 @@ npm run swagger:export
 
 ### 💡 Ejemplo de Uso con cURL
 
+> ⚠️ **El login es de dos pasos.** `POST /auth/login` solo valida credenciales y
+> **no devuelve token**: manda un OTP y responde `PENDING_VERIFICATION`. El token
+> se obtiene de `POST /auth/verify-otp`. En desarrollo el OTP se imprime en el log
+> del backend (`[OTP] … Tu código … es: 468716`), y el campo del token en la
+> respuesta es **`accessToken`** (camelCase).
+
 ```bash
-# Iniciar sesión con un cliente sembrado
+# 1. Iniciar sesión con un cliente sembrado → dispara el OTP
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -154,13 +188,16 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
     "password": "test123!"
   }'
 
-# Iniciar sesión con un trabajador sembrado
-curl -X POST http://localhost:3000/api/v1/auth/login \
+# 2. Canjear el OTP (leído del log del server) por el token
+curl -X POST http://localhost:3000/api/v1/auth/verify-otp \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "worker1@test.com",
-    "password": "test123!"
+    "email": "cliente1@test.com",
+    "otp_code": "468716"
   }'
+# → { "message": "Verificación exitosa", "accessToken": "…", "refreshToken": "…" }
+
+# Lo mismo con un trabajador sembrado: worker1@test.com / test123!
 ```
 
 
@@ -187,13 +224,15 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 ```
 ├── config/             # Archivos de configuración general
 ├── docs/               # Documentación técnica y diagramas
+├── scripts/            # Utilidades de mantenimiento (exportar OpenAPI)
 ├── src/
 │   ├── controllers/    # Controladores de la API (HTTP endpoints)
-│   ├── middlewares/    # Middlewares de Express (Auth, Rate Limiting, etc.)
+│   ├── database/       # Migraciones Knex y seeds (`clear.js`, `seedId.js`)
+│   ├── middlewares/    # Middlewares de Express (Auth, Rate Limiting, Upload, etc.)
 │   ├── models/         # Modelos de base de datos y esquemas
 │   ├── routes/         # Definición de rutas Express
 │   ├── services/       # Lógica de negocio core
-│   ├── utils/          # Utilidades y funciones helper
+│   ├── utils/          # Utilidades y funciones helper (Joi validation, Swagger)
 │   ├── app.js          # Configuración de Express
 │   └── server.js       # Punto de entrada del servidor
 ├── tests/              # Pruebas unitarias y de integración
@@ -277,8 +316,148 @@ docker-compose down -v
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
 | `GET` | `/users/:id/client-profile` | JWT | Obtener perfil de cliente |
-| `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente |
+| `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente (ver [Flujo Completar Perfil](#-flujo-completar-perfil)) |
 | `PATCH` | `/users/:id/client-profile` | JWT | Actualizar perfil de cliente |
+
+### Perfil de Trabajador (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id/worker-profile` | JWT | Obtener perfil de trabajador |
+| `POST` | `/users/:id/worker-profile` | JWT | Crear perfil de trabajador (ver [Flujo Completar Perfil](#-flujo-completar-perfil)) |
+| `PATCH` | `/users/:id/worker-profile` | JWT | Actualizar perfil de trabajador |
+
+> **No requiere rol activo `worker`.** Estos endpoints aceptan cualquier JWT del
+> usuario dueño (`req.user.user_id === :id`). Esto permite que un usuario con rol
+> `client` registre también su perfil de trabajador sin pasar por `switch-role`,
+> que a su vez exige un trabajador aprobado. Un JWT de otro usuario siempre
+> devuelve `403 FORBIDDEN`.
+
+### Imágenes de Perfil (`/api/v1/uploads`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/uploads/profile-image` | JWT | Subir una imagen de perfil (avatar o DNI). `multipart/form-data`, campo `file` |
+
+```bash
+curl -X POST http://localhost:3000/api/v1/uploads/profile-image \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@/ruta/a/mi/selfie.jpg"
+```
+
+```json
+{
+  "message": "Imagen subida exitosamente",
+  "url": "/uploads/profiles/77f80d8a-6f85-4b21-99db-b4c817754e45.jpg",
+  "size": 148213
+}
+```
+
+- **Formato:** JPG o PNG. Se normaliza a JPEG con `sharp` y se limita el lado
+  mayor a 1600 px (calidad 80), igual que las imágenes de mensajes.
+- **Tamaño máximo:** 10 MB (`UPLOAD_MAX_FILE_SIZE`).
+- **Destino:** `<UPLOAD_DIR>/profiles/` (default `uploads/profiles/`), separada de
+  `<UPLOAD_DIR>/messages/`. La URL devuelta es relativa y se sirve como archivo
+  estático en `GET /uploads/...`.
+- **Errores:** `400 UPLOAD_ERROR` (`Solo se permiten imágenes JPG o PNG`,
+  `El archivo excede el límite de 10 MB`), `401 UNAUTHORIZED`.
+- El mismo endpoint sirve para las tres imágenes del flujo de identidad: subí
+  cada archivo por separado y usá la `url` devuelta en el body del perfil.
+
+## 🧾 Flujo Completar Perfil
+
+Flujo universal de onboarding: **cliente y trabajador comparten los mismos campos
+de identidad**. Requiere subir 3 imágenes (`avatar`, frente del DNI, dorso del
+DNI) y registrar la fecha de nacimiento.
+
+> 📖 **[Guía de pruebas paso a paso desde el frontend →](docs/COMPLETAR_PERFIL_GUIDA.md)**:
+> checklist de 14 casos, ejemplos de código, valores esperados de cada respuesta y
+> troubleshooting. Incluye los dos bugs de auth que hay que conocer para testear
+> (`POST /auth/login` no devuelve token, y el campo es `accessToken`).
+
+### 1. Campos de identidad (obligatorios en ambos perfiles)
+
+| Campo | Tipo | Formato | Notas |
+|---|---|---|---|
+| `date_of_birth` | `string` | `YYYY-MM-DD` **exacto** | Entre `1900-01-01` y hoy. Sin hora ni zona horaria. Se persiste como columna `date` |
+| `avatar_url` | `string` | URL | Debe ser `.jpg`/`.jpeg`/`.png`. Ver [validación de URLs](#-validación-de-urls-de-imagen) |
+| `dni_front_url` | `string` | URL | Idem |
+| `dni_back_url` | `string` | URL | Idem |
+
+Las columnas son `NULL`-able en la base (para no romper filas existentes), pero
+Joi las **exige al crear el perfil**. `PATCH` es parcial: los campos omitidos no
+se tocan.
+
+La fecha se valida como string, no como `Date`: se exige el formato exacto
+`YYYY-MM-DD` y se verifica que la fecha exista en el calendario. Formatos como
+`1990`, `1990-05`, `1990-5-4` o `1990-05-14T10:00:00Z` devuelven `400`, igual que
+las fechas inexistentes (`1990-02-31`) y las futuras.
+
+### 2. Orden de las llamadas
+
+```
+POST /api/v1/uploads/profile-image   (x3: avatar, dni_front, dni_back)
+   ↓  devuelve { "url": "/uploads/profiles/<uuid>.jpg" }
+POST /api/v1/users/:id/client-profile   { full_name, date_of_birth, avatar_url, dni_front_url, dni_back_url }
+POST /api/v1/users/:id/worker-profile   { full_name, date_of_birth, avatar_url, dni_front_url, dni_back_url }
+   ↓
+GET  /api/v1/users/:id/client-profile   → incluye los 4 campos
+GET  /api/v1/users/:id/worker-profile   → incluye los 4 campos
+```
+
+Ambos `POST` comparten **exactamente el mismo body**. Un usuario con rol dual
+completa los dos perfiles con el mismo token, sin logout ni `switch-role`
+intermedio.
+
+### 3. Campos opcionales del perfil de trabajador
+
+`category_id`, `hourly_rate`, `availability_status`, `certification_status`,
+`bio`, `default_location_id` y `language` **no son obligatorios** al crear. Se
+pueden completar después con `PATCH` (o al cambiar a rol `worker`, que sigue
+exigiendo categoría, disponibilidad y certificación aprobada).
+
+Sin valor explícito, la base aplica sus defaults: `hourly_rate` queda en `NULL`
+(un `NULL` real, no `0`), `availability_status: 'AVAILABLE'` y
+`certification_status: 'PENDING'`.
+
+### 4. Validación de URLs de imagen
+
+Las URLs deben ser públicas y con extensión de imagen. El patrón acepta
+`http(s)://…​.jpg|png` y `/uploads/…​.jpg|png`, y **rechaza URIs locales**
+(`file://`, `content://`), que antes pasaban la validación y terminaban
+guardando una ruta del dispositivo en la base:
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "La URL de la imagen debe ser una URL pública JPG o PNG válida (no se aceptan URIs locales file:// o content://)",
+  "statusCode": 400
+}
+```
+
+### 5. Notas de implementación
+
+- **Formato estricto, sin conversión a `Date`.** El campo se valida como **string**
+  con el patrón exacto `^\d{4}-\d{2}-\d{2}$`, y la existencia en calendario se
+  verifica por round-trip. Con `Joi.date().iso()` el backend aceptaba ISO 8601 de
+  **precisión reducida** (`"1990"`, `"1990-05"`, `"1990-05-14T10:00:00Z"`), que se
+  normalizaba a `1990-01-01`: un DNI con una fecha de nacimiento que el usuario
+  nunca envió. Al no pasar por `Date`, tampoco hay corrimiento por zona horaria en
+  el camino de escritura (pg serializa un `Date` a columna `date` con la fecha
+  **local**; en UTC-3 eso guardaba un día antes). Los services leen con componentes
+  locales, siguiendo la convención ya usada por `QuoteService` para
+  `proposed_date`. La API siempre devuelve `YYYY-MM-DD`, sin `Z` ni componente
+  horario, para que el frontend pueda comparar sin parsear.
+- **404 antes que 403.** `GET` de un perfil inexistente devuelve
+  `404 CLIENT_PROFILE_NOT_FOUND` / `404 WORKER_PROFILE_NOT_FOUND` con un mensaje
+  que indica crear el perfil. `403` queda reservado para cuando `:id` no es del
+  usuario autenticado.
+- **`down` de la migración.** Revertir deja `hourly_rate` en `NULL`; si ya
+  existen tarifas nulas, el `down` falla por la restricción `NOT NULL` original.
+- **Limpieza de archivos.** `ImageService.deleteStoredFile` acepta URLs de
+  `messages/` y `profiles/`, pero nunca borra URLs externas (CDN). Reemplazar un
+  avatar no elimina el archivo anterior del disco: no hay endpoint de borrado de
+  imágenes de perfil.
 
 ### Ubicaciones (`/api/v1/locations`)
 
@@ -588,7 +767,8 @@ Evento que el cliente envía al servidor:
 | `user:typing` | `{ chat_id, is_typing }` | Para notificar que el usuario está escribiendo (el servidor lo reenvía a los demás participantes) |
 
 Adjuntos: las imágenes de mensajes se guardan en `<UPLOAD_DIR>/messages/` (default `uploads/`,
-ver `.env.example`) y se sirven desde `GET /uploads/...`.
+ver `.env.example`) y se sirven desde `GET /uploads/...`. Las imágenes de perfil usan
+`<UPLOAD_DIR>/profiles/` vía `POST /api/v1/uploads/profile-image`.
 
 ### Salud y Documentación
 
@@ -702,7 +882,11 @@ Todos los endpoints que reciben `phone` (`register`, `login`, `forgot-password`,
 - Todas las consultas a la base de datos se realizan a través del constructor de consultas **Knex.js**, el cual utiliza de forma nativa parámetros y sentencias preparadas (Prepared Statements).
 
 ### 5. CORS Enforzado
-- Intercepción estricta en base al dominio autorizado especificado en la variable `ALLOWED_ORIGINS` del entorno.
+- Intercepción estricta en base al dominio autorizado especificado en la variable `ALLOWED_ORIGINS` del entorno. La lista se separa por comas y se compara **exactamente**; un origin no listado recibe `403 CORS_ERROR`.
+- **Peticiones sin `Origin` pasan siempre** (lógica de navegadores y apps nativas). React Native no manda ese header, así que desde **Expo Go** no hace falta configurar nada.
+- **Para Expo Web o Metro** sí hace falta: el origen del bundler es `http://localhost:8081`. Agregalo a `ALLOWED_ORIGINS`.
+- `docker-compose.yml` **interpola** `ALLOWED_ORIGINS` desde el `.env` del proyecto (con fallback al valor de `.env.example`), así el contenedor y el run local usan la misma lista. Cambiarla requiere `docker compose up -d --force-recreate api`.
+- Guía completa para probar desde un teléfono físico (Expo Go + IP LAN): [`docs/COMPLETAR_PERFIL_GUIDA.md`](docs/COMPLETAR_PERFIL_GUIDA.md#-probar-desde-el-teléfono-con-expo-go).
 
 ---
 

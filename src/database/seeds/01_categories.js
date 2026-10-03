@@ -1,4 +1,4 @@
-import { clearDatabase } from './clear.js';
+import { clearDatabase } from '../clear.js';
 
 /**
  * 32 categorías de servicios iniciales para la plataforma on-demand.

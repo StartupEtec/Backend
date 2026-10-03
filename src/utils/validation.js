@@ -112,8 +112,79 @@ export const resetPasswordSchema = Joi.object({
   }),
 });
 
-const imageUrlPattern = /\.(jpg|jpeg|png)(\?.*)?$/i;
+/**
+ * Acepta URLs públicas de imagen servidas por el backend (absolutas http/https o
+ * relativas a /uploads/) y descarta URIs locales del dispositivo como file:// o
+ * content://, que no son resolubles desde el servidor ni desde otros usuarios.
+ */
+const imageUrlPattern = /^(https?:\/\/|\/uploads\/)\S+\.(jpg|jpeg|png)(\?.*)?$/i;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const imageUrlMessages = {
+  'string.pattern.base':
+    'La URL de la imagen debe ser una URL pública JPG o PNG válida (no se aceptan URIs locales file:// o content://)',
+  'string.empty': 'La URL de la imagen no puede estar vacía',
+  'any.required': 'La URL de la imagen es requerida',
+};
+
+/**
+ * Fecha de nacimiento del flujo "Completar Perfil". Además de ser una fecha ISO
+ * válida, se rechaza una edad incoherente: el titular del DNI tiene que ser
+ * mayor de edad y menor de 120 años.
+ */
+/**
+ * Fecha de nacimiento del titular del DNI.
+ *
+ * Se valida como **string** y no con `Joi.date()` a propósito: `Joi.date().iso()`
+ * acepta ISO 8601 de precisión reducida, así que `"1990"` o `"1990-05"` pasaban
+ * la validación y se normalizaban a `1990-01-01`, dejando un DNI con una fecha
+ * de nacimiento que el usuario nunca envió. Acá se exige el formato exacto
+ * `YYYY-MM-DD` que documenta el contrato.
+ *
+ * - `.regex()` exige la forma `YYYY-MM-DD` (diez caracteres, sin hora ni zona).
+ * - `.isoDate()` rechaza fechas que no existen en el calendario (1990-02-31).
+ * - `.min()`/`.max()` comparan strings: es correcto para fechas ISO, y evita el
+ *   corrimiento de zona horaria queСТВroduce pasar por `Date`. La fecha de
+ *   corte se resuelve en cada validación, no al cargar el módulo, para que un
+ *   proceso de larga duración no quede con el día de arranque.
+ */
+const MIN_DATE_OF_BIRTH = '1900-01-01';
+
+const todayIso = () =>
+  [
+    new Date().getFullYear(),
+    String(new Date().getMonth() + 1).padStart(2, '0'),
+    String(new Date().getDate()).padStart(2, '0'),
+  ].join('-');
+
+const dateOfBirthField = Joi.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .custom((value, helpers) => {
+    const [year, month, day] = value.split('-').map(Number);
+
+    // `.isoDate()` de Joi no se puede usar acá: convierte el valor a un ISO
+    // datetime completo (`1990-05-14T00:00:00.000Z`) antes de evaluar el
+    // pattern, y el string original se pierde. La existencia en calendario se
+    // verifica por round-trip, sin convertir nada.
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    const existsInCalendar =
+      probe.getUTCFullYear() === year &&
+      probe.getUTCMonth() === month - 1 &&
+      probe.getUTCDate() === day;
+    if (!existsInCalendar) return helpers.error('dateOfBirth.invalidDate');
+
+    if (value < MIN_DATE_OF_BIRTH) return helpers.error('dateOfBirth.min');
+    if (value > todayIso()) return helpers.error('dateOfBirth.max');
+    return value;
+  })
+  .required()
+  .messages({
+    'string.pattern.base': 'La fecha de nacimiento debe tener formato ISO (YYYY-MM-DD)',
+    'dateOfBirth.invalidDate': 'La fecha de nacimiento debe ser una fecha válida',
+    'dateOfBirth.min': 'La fecha de nacimiento debe ser posterior al 01/01/1900',
+    'dateOfBirth.max': 'La fecha de nacimiento no puede ser futura',
+    'any.required': 'La fecha de nacimiento es requerida',
+  });
 
 export const createClientProfileSchema = Joi.object({
   full_name: Joi.string().min(1).max(100).required().messages({
@@ -122,9 +193,10 @@ export const createClientProfileSchema = Joi.object({
     'string.max': 'El nombre no debe exceder los 100 caracteres',
     'any.required': 'El nombre es requerido',
   }),
-  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
-    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
-  }),
+  date_of_birth: dateOfBirthField,
+  avatar_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_front_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_back_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
   bio: Joi.string().max(500).allow('', null).messages({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
@@ -142,9 +214,10 @@ export const updateClientProfileSchema = Joi.object({
     'string.min': 'El nombre debe tener al menos 1 caracter',
     'string.max': 'El nombre no debe exceder los 100 caracteres',
   }),
-  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
-    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
-  }),
+  date_of_birth: dateOfBirthField.optional(),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_front_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_back_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
   bio: Joi.string().max(500).allow('', null).messages({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
@@ -167,9 +240,7 @@ export const updateProfileSchema = Joi.object({
     'string.max': 'El nombre no debe exceder los 100 caracteres',
     'any.required': 'El nombre es requerido',
   }),
-  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
-    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
-  }),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
   bio: Joi.string().max(500).allow('', null).messages({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
@@ -182,27 +253,25 @@ export const createWorkerProfileSchema = Joi.object({
     'string.max': 'El nombre no debe exceder los 100 caracteres',
     'any.required': 'El nombre es requerido',
   }),
-  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
-    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
-  }),
+  date_of_birth: dateOfBirthField,
+  avatar_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_front_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_back_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
   bio: Joi.string().max(500).allow('', null).messages({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
-  category_id: Joi.string().pattern(uuidPattern).required().messages({
+  // Datos específicos del trabajador: se definitivos en el flujo posterior de
+  // "elegir categoría, tarifa y certificación", no en el alta universal de perfil.
+  category_id: Joi.string().pattern(uuidPattern).allow(null).messages({
     'string.pattern.base': 'La categoría debe ser un UUID válido',
-    'any.required': 'La categoría es requerida',
   }),
-  hourly_rate: Joi.number().positive().precision(2).required().messages({
+  hourly_rate: Joi.number().positive().precision(2).allow(null).messages({
     'number.base': 'La tarifa por hora debe ser un número',
     'number.positive': 'La tarifa por hora debe ser un valor positivo',
-    'any.required': 'La tarifa por hora es requerida',
   }),
-  availability_status: Joi.string()
-    .valid('AVAILABLE', 'BUSY', 'OFFLINE')
-    .default('AVAILABLE')
-    .messages({
-      'any.only': 'El estado de disponibilidad debe ser AVAILABLE, BUSY u OFFLINE',
-    }),
+  availability_status: Joi.string().valid('AVAILABLE', 'BUSY', 'OFFLINE').messages({
+    'any.only': 'El estado de disponibilidad debe ser AVAILABLE, BUSY u OFFLINE',
+  }),
 });
 
 export const switchRoleSchema = Joi.object({
@@ -218,16 +287,17 @@ export const updateWorkerProfileSchema = Joi.object({
     'string.min': 'El nombre debe tener al menos 1 caracter',
     'string.max': 'El nombre no debe exceder los 100 caracteres',
   }),
-  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages({
-    'string.pattern.base': 'La URL del avatar debe ser una imagen JPG o PNG válida',
-  }),
+  date_of_birth: dateOfBirthField.optional(),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_front_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_back_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
   bio: Joi.string().max(500).allow('', null).messages({
     'string.max': 'La biografía no debe exceder los 500 caracteres',
   }),
-  category_id: Joi.string().pattern(uuidPattern).messages({
+  category_id: Joi.string().pattern(uuidPattern).allow(null).messages({
     'string.pattern.base': 'La categoría debe ser un UUID válido',
   }),
-  hourly_rate: Joi.number().positive().precision(2).messages({
+  hourly_rate: Joi.number().positive().precision(2).allow(null).messages({
     'number.base': 'La tarifa por hora debe ser un número',
     'number.positive': 'La tarifa por hora debe ser un valor positivo',
   }),

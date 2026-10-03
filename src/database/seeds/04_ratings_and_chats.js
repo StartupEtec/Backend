@@ -1,10 +1,11 @@
 import { testClients, testWorkers } from './02_users_and_profiles.js';
 import { sampleOrders } from './03_orders_and_escrow.js';
+import { seedId } from '../seedId.js';
 
 export const sampleRatings = [
   // Rating 1: Cliente 4 califica a Worker 4 (Pintura) - Orden COMPLETED c4444444
   {
-    id: 'r1111111-1111-4111-8111-111111111111',
+    id: seedId('r-1111111'),
     order_id: sampleOrders[3].order.id,
     rater_id: testClients[3].user.id,
     ratee_id: testWorkers[3].user.id,
@@ -14,7 +15,7 @@ export const sampleRatings = [
   },
   // Rating 2: Worker 4 califica a Cliente 4 - Orden COMPLETED c4444444
   {
-    id: 'r1111112-1111-4111-8111-111111111111',
+    id: seedId('r-1111112'),
     order_id: sampleOrders[3].order.id,
     rater_id: testWorkers[3].user.id,
     ratee_id: testClients[3].user.id,
@@ -24,7 +25,7 @@ export const sampleRatings = [
   },
   // Rating 3: Cliente 5 califica a Worker 5 (Climatización) - Orden COMPLETED c5555555
   {
-    id: 'r2222221-2222-4222-8222-222222222222',
+    id: seedId('r-2222221'),
     order_id: sampleOrders[4].order.id,
     rater_id: testClients[4].user.id,
     ratee_id: testWorkers[4].user.id,
@@ -34,7 +35,7 @@ export const sampleRatings = [
   },
   // Rating 4: Worker 5 califica a Cliente 5 - Orden COMPLETED c5555555
   {
-    id: 'r2222222-2222-4222-8222-222222222222',
+    id: seedId('r-2222222'),
     order_id: sampleOrders[4].order.id,
     rater_id: testWorkers[4].user.id,
     ratee_id: testClients[4].user.id,
@@ -47,7 +48,7 @@ export const sampleChats = [
   // Chat entre Cliente 4 y Worker 4 vinculado a la orden de Pintura
   {
     chat: {
-      id: 'chat1111-1111-4111-8111-111111111111',
+      id: seedId('chat-1111'),
       user_id_1:
         testClients[3].user.id < testWorkers[3].user.id
           ? testClients[3].user.id
@@ -65,21 +66,21 @@ export const sampleChats = [
     ],
     messages: [
       {
-        id: 'm1111111-1111-4111-8111-111111111111',
+        id: seedId('m-1111111'),
         sender_id: testClients[3].user.id,
         content: '¡Hola Martín! ¿A qué hora calculás que podés pasar a ver los colores de pintura?',
         message_type: 'TEXT',
         created_at: '2026-08-24T09:00:00.000Z',
       },
       {
-        id: 'm1111112-1111-4111-8111-111111111111',
+        id: seedId('m-1111112'),
         sender_id: testWorkers[3].user.id,
         content: '¡Hola Sofía! Paso a las 14hs con el muestrario completo de colores.',
         message_type: 'TEXT',
         created_at: '2026-08-24T09:15:00.000Z',
       },
       {
-        id: 'm1111113-1111-4111-8111-111111111111',
+        id: seedId('m-1111113'),
         sender_id: testClients[3].user.id,
         content: '¡Perfecto! El trabajo quedó increíble, ya confirmé la finalización del servicio.',
         message_type: 'TEXT',

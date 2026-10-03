@@ -1,4 +1,5 @@
 import { testClients, testWorkers } from './02_users_and_profiles.js';
+import { seedId } from '../seedId.js';
 
 export const sampleOrders = [
   // 1. Orden PENDING (Cliente 1 solicita servicio a Worker 1 - Plomería)
@@ -13,7 +14,7 @@ export const sampleOrders = [
       status: 'PENDING',
     },
     quote: {
-      id: 'q1111111-1111-4111-8111-111111111111',
+      id: seedId('q-1111111'),
       proposed_price: 15000.0,
       proposed_date: '2026-09-05',
       proposed_time: '10:00:00',
@@ -33,14 +34,14 @@ export const sampleOrders = [
       status: 'ACCEPTED',
     },
     quote: {
-      id: 'q2222222-2222-4222-8222-222222222222',
+      id: seedId('q-2222222'),
       proposed_price: 25000.0,
       proposed_date: '2026-09-06',
       proposed_time: '14:30:00',
       status: 'ACCEPTED',
     },
     transaction: {
-      id: 'tx222222-2222-4222-8222-222222222222',
+      id: seedId('tx-222222'),
       payer_id: testClients[1].user.id,
       receiver_id: testWorkers[1].user.id,
       amount: 25000.0,
@@ -64,14 +65,14 @@ export const sampleOrders = [
       status: 'IN_PROGRESS',
     },
     quote: {
-      id: 'q3333333-3333-4333-8333-333333333333',
+      id: seedId('q-3333333'),
       proposed_price: 32000.0,
       proposed_date: '2026-09-04',
       proposed_time: '09:00:00',
       status: 'ACCEPTED',
     },
     transaction: {
-      id: 'tx333333-3333-4333-8333-333333333333',
+      id: seedId('tx-333333'),
       payer_id: testClients[2].user.id,
       receiver_id: testWorkers[2].user.id,
       amount: 32000.0,
@@ -102,14 +103,14 @@ export const sampleOrders = [
       worker_confirmed_by: testWorkers[3].user.id,
     },
     quote: {
-      id: 'q4444444-4444-4444-8444-444444444444',
+      id: seedId('q-4444444'),
       proposed_price: 65000.0,
       proposed_date: '2026-08-24',
       proposed_time: '08:30:00',
       status: 'ACCEPTED',
     },
     transaction: {
-      id: 'tx444444-4444-4444-8444-444444444444',
+      id: seedId('tx-444444'),
       payer_id: testClients[3].user.id,
       receiver_id: testWorkers[3].user.id,
       amount: 65000.0,
@@ -142,14 +143,14 @@ export const sampleOrders = [
       worker_confirmed_by: testWorkers[4].user.id,
     },
     quote: {
-      id: 'q5555555-5555-4555-8555-555555555555',
+      id: seedId('q-5555555'),
       proposed_price: 85000.0,
       proposed_date: '2026-08-28',
       proposed_time: '13:00:00',
       status: 'ACCEPTED',
     },
     transaction: {
-      id: 'tx555555-5555-4555-8555-555555555555',
+      id: seedId('tx-555555'),
       payer_id: testClients[4].user.id,
       receiver_id: testWorkers[4].user.id,
       amount: 85000.0,
@@ -175,7 +176,7 @@ export const sampleOrders = [
       status: 'CANCELLED',
     },
     quote: {
-      id: 'q6666666-6666-4666-8666-666666666666',
+      id: seedId('q-6666666'),
       proposed_price: 18000.0,
       proposed_date: '2026-08-20',
       proposed_time: '11:00:00',
@@ -198,7 +199,7 @@ export const sampleOrders = [
       status: 'REJECTED',
     },
     quote: {
-      id: 'q7777777-7777-4777-8777-777777777777',
+      id: seedId('q-7777777'),
       proposed_price: 220000.0,
       proposed_date: '2026-08-22',
       proposed_time: '09:00:00',
