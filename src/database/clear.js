@@ -1,5 +1,5 @@
-import db from '../db.js';
-import logger from '../../utils/logger.js';
+import db from './db.js';
+import logger from '../utils/logger.js';
 
 /**
  * Limpia todas las tablas de la base de datos en orden estricto de dependencias
@@ -49,7 +49,7 @@ export async function clearDatabase(knexInstance = db) {
   logger.info('[SEED] Limpieza de base de datos finalizada correctamente.');
 }
 
-// Ejecución directa por CLI: node src/database/seeds/clear.js
+// Ejecución directa por CLI: node src/database/clear.js
 if (process.argv[1] && process.argv[1].endsWith('clear.js')) {
   clearDatabase(db)
     .then(() => {

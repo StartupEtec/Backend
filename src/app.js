@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 import workerRoutes from './routes/workerRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
@@ -73,6 +74,7 @@ setupSwagger(app);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/locations', locationRoutes);
+app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/workers', workerRoutes);
 app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/messages', messageRoutes);
@@ -86,7 +88,7 @@ app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1', availabilityRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 
-// Archivos adjuntos (imágenes de mensajes comprimidas)
+// Archivos adjuntos (imágenes de mensajes e imágenes de perfil, ambas comprimidas)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || 'uploads')));
 
 // Rutas de Health Check y Monitoreo (Dashboard /health)

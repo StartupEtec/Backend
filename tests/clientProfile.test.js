@@ -44,6 +44,31 @@ describe('Client Profile Service', () => {
   });
 
   describe('getProfile', () => {
+    it('should expose the 4 identity fields with date_of_birth as YYYY-MM-DD', async () => {
+      const mockProfile = {
+        id: 'profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'Juan Pérez',
+        // pg devuelve las columnas DATE como Date en medianoche local.
+        date_of_birth: new Date(1990, 4, 14),
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+        bio: null,
+        default_location_id: null,
+        preferences: null,
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(mockProfile);
+
+      const result = await clientProfileService.getProfile('user-uuid');
+
+      expect(result.date_of_birth).toBe('1990-05-14');
+      expect(result.avatar_url).toBe('/uploads/profiles/avatar.jpg');
+      expect(result.dni_front_url).toBe('/uploads/profiles/front.jpg');
+      expect(result.dni_back_url).toBe('/uploads/profiles/back.jpg');
+    });
+
     it('should return null when profile does not exist', async () => {
       const result = await clientProfileService.getProfile('nonexistent-uuid');
       expect(result).toBeNull();
@@ -108,6 +133,69 @@ describe('Client Profile Service', () => {
       expect(mockQueryBuilder.insert).toHaveBeenCalled();
       expect(result.full_name).toBe('New Client');
     });
+
+    it('should store date_of_birth as the exact date the client sent', async () => {
+      // Joi convierte '1990-05-14' a un Date en medianoche UTC y pg serializa un
+      // Date a DATE con la fecha local: sin normalizar se guardaba 1990-05-13.
+      const newProfile = {
+        id: 'new-profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'New Client',
+        date_of_birth: new Date(1990, 4, 14),
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(null);
+      mockQueryBuilder.returning.mockResolvedValueOnce([newProfile]);
+
+      const result = await clientProfileService.createProfile('user-uuid', {
+        full_name: 'New Client',
+        date_of_birth: new Date('1990-05-14T00:00:00.000Z'),
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+      });
+
+      expect(mockQueryBuilder.insert.mock.calls[0][0].date_of_birth).toBe('1990-05-14');
+      expect(result.date_of_birth).toBe('1990-05-14');
+    });
+
+    it('should persist the 4 identity fields', async () => {
+      const newProfile = {
+        id: 'new-profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'New Client',
+        date_of_birth: '1990-05-14',
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+        bio: null,
+        default_location_id: null,
+        preferences: null,
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(null);
+      mockQueryBuilder.returning.mockResolvedValueOnce([newProfile]);
+
+      const result = await clientProfileService.createProfile('user-uuid', {
+        full_name: 'New Client',
+        date_of_birth: '1990-05-14',
+        avatar_url: '/uploads/profiles/avatar.jpg',
+        dni_front_url: '/uploads/profiles/front.jpg',
+        dni_back_url: '/uploads/profiles/back.jpg',
+      });
+
+      const inserted = mockQueryBuilder.insert.mock.calls[0][0];
+      expect(inserted.date_of_birth).toBe('1990-05-14');
+      expect(inserted.avatar_url).toBe('/uploads/profiles/avatar.jpg');
+      expect(inserted.dni_front_url).toBe('/uploads/profiles/front.jpg');
+      expect(inserted.dni_back_url).toBe('/uploads/profiles/back.jpg');
+      expect(result.date_of_birth).toBe('1990-05-14');
+      expect(result.dni_front_url).toBe('/uploads/profiles/front.jpg');
+      expect(result.dni_back_url).toBe('/uploads/profiles/back.jpg');
+    });
   });
 
   describe('updateProfile', () => {
@@ -158,16 +246,52 @@ describe('Client Profile Service', () => {
 });
 
 describe('Client Profile Validation Schema', () => {
+  // Payload mínimo del flujo "Completar Perfil": los 4 datos de identidad son
+  // obligatorios y los mismos que exige el perfil de trabajador.
+  const identity = {
+    date_of_birth: '1990-05-14',
+    avatar_url: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+    dni_front_url: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+    dni_back_url: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+  };
+
   describe('createClientProfileSchema', () => {
     it('should accept valid profile data', () => {
       const { error } = createClientProfileSchema.validate({
         full_name: 'Juan Pérez',
-        avatar_url: 'https://example.com/avatar.jpg',
+        ...identity,
         bio: 'Cliente',
         default_location_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         preferences: { notifications: true },
       });
       expect(error).toBeUndefined();
+    });
+
+    it('should require the 4 identity fields', () => {
+      for (const campo of Object.keys(identity)) {
+        const payload = { full_name: 'Juan Pérez', ...identity };
+        delete payload[campo];
+        const { error } = createClientProfileSchema.validate(payload);
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should reject local file:// image URIs', () => {
+      const { error } = createClientProfileSchema.validate({
+        full_name: 'Juan Pérez',
+        ...identity,
+        avatar_url: 'file:///data/user/0/com.app/files/selfie.jpg',
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should reject a future date_of_birth', () => {
+      const { error } = createClientProfileSchema.validate({
+        full_name: 'Juan Pérez',
+        ...identity,
+        date_of_birth: '2999-01-01',
+      });
+      expect(error).toBeDefined();
     });
 
     it('should reject empty full_name', () => {
@@ -196,6 +320,7 @@ describe('Client Profile Validation Schema', () => {
     it('should accept null preferences', () => {
       const { error } = createClientProfileSchema.validate({
         full_name: 'Test',
+        ...identity,
         preferences: null,
       });
       expect(error).toBeUndefined();

@@ -31,7 +31,11 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=development
-      - ALLOWED_ORIGINS=http://localhost:3000
+      # Se interpola desde el `.env` del proyecto (Compose lo lee automáticamente),
+      # con fallback equivalente a la variable de ejemplo. Hace falta incluir el
+      # origen de Metro (http://localhost:8081) para probar con Expo Web: React
+      # Native no manda header Origin, pero el navegador sí.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres

@@ -13,7 +13,9 @@ class WorkerSearchService {
       avatar_url: row.avatar_url,
       category_id: row.category_id,
       category_name: row.category_name,
-      hourly_rate: Number(row.hourly_rate),
+      // hourly_rate admite NULL desde que la tarifa se define en un flujo
+      // posterior al alta del perfil: Number(null) lo publicaría como 0.
+      hourly_rate: row.hourly_rate == null ? null : Number(row.hourly_rate),
       availability_status: row.availability_status,
       certification_status: row.certification_status,
       average_rating: row.average_rating != null ? Number(row.average_rating).toFixed(1) : null,

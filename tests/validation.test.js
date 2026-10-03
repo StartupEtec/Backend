@@ -143,19 +143,156 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
   });
 
   describe('Perfiles', () => {
-    it('createClientProfileSchema: valida avatar, bio y ubicación', () => {
-      expectValid(validation.createClientProfileSchema, { full_name: 'Ana' });
+    // Payload mínimo válido del flujo "Completar Perfil": los mismos 4 campos de
+    // identidad para cliente y trabajador.
+    const identityPayload = {
+      full_name: 'Ana',
+      date_of_birth: '1990-05-14',
+      avatar_url: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+      dni_front_url: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+      dni_back_url: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+    };
+
+    it('createClientProfileSchema: exige los 4 datos de identidad', () => {
+      expectValid(validation.createClientProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
+      };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createClientProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createClientProfileSchema: rechaza URI locales de imagen', () => {
+      // El backend no puede servir un file:// del dispositivo: se aceptaba antes
+      // y se guardaba una ruta local inútil que ningún otro usuario podía ver.
       expectInvalid(
         validation.createClientProfileSchema,
-        { full_name: 'Ana', avatar_url: 'https://x.com/a.txt' },
-        'JPG o PNG',
+        { ...identityPayload, avatar_url: 'file:///data/user/0/com.app/files/selfie.jpg' },
+        'no se aceptan URIs locales',
       );
       expectInvalid(
         validation.createClientProfileSchema,
-        { full_name: 'Ana', default_location_id: 'not-a-uuid' },
+        { ...identityPayload, dni_front_url: 'content://media/external/images/1' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/a.txt' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/../etc/passwd' },
+        'no se aceptan URIs locales',
+      );
+    });
+
+    it('createClientProfileSchema: valida la fecha de nacimiento', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '14/05/1990' },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it('createClientProfileSchema: bio y ubicación siguen siendo opcionales', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, default_location_id: 'not-a-uuid' },
         'UUID válido',
       );
       expectInvalid(validation.createClientProfileSchema, {}, 'nombre es requerido');
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        bio: 'hola',
+        default_location_id: UUID,
+      });
+    });
+
+    it.each([
+      ['solo el año', '1990'],
+      ['año y mes', '1990-05'],
+      ['con hora y zona horaria', '1990-05-14T10:00:00Z'],
+      ['con milisegundos', '1990-05-14T00:00:00.000Z'],
+      ['sin ceros a la izquierda', '1990-5-4'],
+      ['formato local', '14/05/1990'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it.each([
+      ['fecha inexistente', '1990-02-31'],
+      ['29/02 en año no bisiesto', '2023-02-29'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'fecha válida',
+      );
+    });
+
+    it('date_of_birth rechaza fechas futuras y anteriores a 1900', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '1899-12-31' },
+        'posterior al 01/01/1900',
+      );
+    });
+
+    it('date_of_birth no acepta números', () => {
+      expect(
+        validation.createClientProfileSchema.validate({
+          ...identityPayload,
+          date_of_birth: 19900514,
+        }).error,
+      ).toBeDefined();
+    });
+
+    it('date_of_birth devuelve el string sin convertirlo a Date', () => {
+      const { value } = validation.createClientProfileSchema.validate(identityPayload);
+      expect(typeof value.date_of_birth).toBe('string');
+      expect(value.date_of_birth).toBe('1990-05-14');
+    });
+
+    it('date_of_birth acepta el día de hoy y un 29/02 válido', () => {
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: new Date().toISOString().slice(0, 10),
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '2024-02-29',
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '1900-01-01',
+      });
+    });
+
+    it('updateClientProfileSchema aplica el mismo formato estricto de fecha', () => {
+      expectInvalid(validation.updateClientProfileSchema, { date_of_birth: '1990' }, 'YYYY-MM-DD');
+      expectValid(validation.updateClientProfileSchema, { date_of_birth: '1990-05-14' });
     });
 
     it('updateClientProfileSchema: requiere al menos un campo', () => {
@@ -168,13 +305,26 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       expectValid(validation.updateProfileSchema, { full_name: 'Ana', bio: 'x' });
     });
 
-    it('createWorkerProfileSchema: valida categoría, tarifa y disponibilidad', () => {
-      const base = {
-        full_name: 'Ana',
-        category_id: UUID,
-        hourly_rate: 25,
+    it('createWorkerProfileSchema: exige los mismos 4 datos que el cliente', () => {
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
       };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createWorkerProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createWorkerProfileSchema: categoría, tarifa y disponibilidad son opcionales', () => {
+      const base = { ...identityPayload, category_id: UUID, hourly_rate: 25 };
       expectValid(validation.createWorkerProfileSchema, base);
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
       expectInvalid(validation.createWorkerProfileSchema, { ...base, hourly_rate: -1 }, 'positivo');
       expectInvalid(
         validation.createWorkerProfileSchema,

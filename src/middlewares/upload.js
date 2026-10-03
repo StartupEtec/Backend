@@ -53,3 +53,14 @@ export const uploadCertificationDocument = multer({
   limits: { fileSize: MAX_DOC_SIZE, files: 1 },
   fileFilter: docFileFilter,
 });
+
+// Imágenes de identidad del perfil (avatar, frente y dorso del DNI). Límite
+// mayor que el de mensajes porque la app móvil sube fotos de cámara, que
+// suelen pesar bastante más que una captura comprimida.
+const MAX_PROFILE_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
+export const uploadProfileImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PROFILE_IMAGE_SIZE, files: 1 },
+  fileFilter,
+});
