@@ -10,6 +10,10 @@ import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 const router = Router();
 
+// Identidad única ("Completar Perfil" una sola vez, vale para ambos roles)
+router.get('/:id/identity', authenticateToken, userController.getIdentity);
+router.patch('/:id/identity', authenticateToken, userController.upsertIdentity);
+
 // Rutas específicas de perfil de cliente (deben ir ANTES de /:id genérico)
 router.get('/:id/client-profile', authenticateToken, clientProfileController.getProfile);
 router.post('/:id/client-profile', authenticateToken, clientProfileController.createProfile);

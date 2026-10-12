@@ -288,7 +288,7 @@ describe('User Profile Service', () => {
       expect(result.error).toBe('MISSING_WORKER_PROFILE');
     });
 
-    it('should return error if worker certification is not approved', async () => {
+    it('should allow switch to worker without approval, flagging certification_pending', async () => {
       const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
       const mockWorkerProfile = {
         id: 'worker-uuid',
@@ -299,11 +299,54 @@ describe('User Profile Service', () => {
       mockQueryBuilder.first
         .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'client' })
         .mockResolvedValueOnce(mockClientProfile)
-        .mockResolvedValueOnce(mockWorkerProfile);
+        .mockResolvedValueOnce(mockWorkerProfile)
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'worker' });
 
       const result = await userService.switchRole('user-uuid', 'worker');
 
-      expect(result.error).toBe('WORKER_NOT_CERTIFIED');
+      expect(result.error).toBeUndefined();
+      expect(result.certificationPending).toBe(true);
+      expect(result.user.current_role).toBe('worker');
+    });
+
+    it('should auto-create the missing worker profile from complete identity', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        current_role: 'client',
+        full_name: 'Juan',
+        date_of_birth: '1990-05-14',
+        avatar_url: '/uploads/a.jpg',
+        dni_front_url: '/uploads/f.jpg',
+        dni_back_url: '/uploads/b.jpg',
+      };
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'worker-uuid', user_id: 'user-uuid' })
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'worker' });
+
+      const result = await userService.switchRole('user-uuid', 'worker');
+
+      expect(result.error).toBeUndefined();
+      expect(mockQueryBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: 'user-uuid', full_name: 'Juan' }),
+      );
+    });
+
+    it('should still require the worker profile when identity is incomplete', async () => {
+      const mockClientProfile = { id: 'client-uuid', user_id: 'user-uuid' };
+
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'user-uuid', current_role: 'client' })
+        .mockResolvedValueOnce(mockClientProfile)
+        .mockResolvedValueOnce(null);
+
+      const result = await userService.switchRole('user-uuid', 'worker');
+
+      expect(result.error).toBe('MISSING_WORKER_PROFILE');
     });
 
     it('should switch role successfully from client to worker', async () => {

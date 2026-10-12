@@ -310,6 +310,38 @@ export const updateWorkerProfileSchema = Joi.object({
     'object.min': 'Debe proporcionar al menos un campo para actualizar',
   });
 
+/**
+ * Identidad única del usuario (flujo "Completar Perfil" una sola vez).
+ * Solo identidad: nombre, fecha de nacimiento, foto y DNI frente/dorso.
+ */
+const identityNameField = Joi.string().min(1).max(100).messages({
+  'string.empty': 'El nombre no puede estar vacío',
+  'string.min': 'El nombre debe tener al menos 1 caracter',
+  'string.max': 'El nombre no debe exceder los 100 caracteres',
+});
+
+export const createIdentitySchema = Joi.object({
+  full_name: identityNameField.required().messages({
+    'any.required': 'El nombre es requerido',
+  }),
+  date_of_birth: dateOfBirthField,
+  avatar_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_front_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+  dni_back_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
+});
+
+export const updateIdentitySchema = Joi.object({
+  full_name: identityNameField,
+  date_of_birth: dateOfBirthField.optional(),
+  avatar_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_front_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+  dni_back_url: Joi.string().allow('', null).pattern(imageUrlPattern).messages(imageUrlMessages),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
+
 export const createLocationSchema = Joi.object({
   address: Joi.string().min(3).max(255).required().messages({
     'string.empty': 'La dirección no puede estar vacía',
