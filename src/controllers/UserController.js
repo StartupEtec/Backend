@@ -1,9 +1,91 @@
 import userService from '../services/UserService.js';
 import authService from '../services/AuthService.js';
 import logger from '../utils/logger.js';
-import { updateProfileSchema, switchRoleSchema } from '../utils/validation.js';
+import {
+  updateProfileSchema,
+  switchRoleSchema,
+  createIdentitySchema,
+  updateIdentitySchema,
+} from '../utils/validation.js';
 
 class UserController {
+  async getIdentity(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (req.user.user_id !== id) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'No tienes permiso para acceder a este perfil',
+          statusCode: 403,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const identity = await userService.getIdentity(id);
+
+      if (!identity) {
+        return res.status(404).json({
+          error: 'USER_NOT_FOUND',
+          message: 'Usuario no encontrado',
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return res.status(200).json(identity);
+    } catch (err) {
+      logger.error('Error al obtener identidad:', err);
+      next(err);
+    }
+  }
+
+  async upsertIdentity(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (req.user.user_id !== id) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'No tienes permiso para editar este perfil',
+          statusCode: 403,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const existing = await userService.getIdentity(id);
+      const schema = existing?.is_complete ? updateIdentitySchema : createIdentitySchema;
+      const { error, value } = schema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const identity = await userService.upsertIdentity(id, value);
+
+      if (!identity) {
+        return res.status(404).json({
+          error: 'USER_NOT_FOUND',
+          message: 'Usuario no encontrado',
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Perfil completado correctamente',
+        profile: identity,
+      });
+    } catch (err) {
+      logger.error('Error al guardar identidad:', err);
+      next(err);
+    }
+  }
+
   async getUserById(req, res, next) {
     try {
       const { id } = req.params;
@@ -134,6 +216,7 @@ class UserController {
         new_role: result.user.current_role,
         previous_role: result.previousRole,
         accessToken,
+        certification_pending: Boolean(result.certificationPending),
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
