@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estado del Repositorio Local de Backend</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --panel: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --new: #10b981;
+    --mod: #3b82f6;
+    --unpushed: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 24px;
+    line-height: 1.6;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  h1 { margin: 0 0 8px 0; font-size: 24px; color: var(--text); }
+  h2 {
+    font-size: 18px;
+    margin: 24px 0 12px 0;
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 6px;
+  }
+  h3 { font-size: 16px; margin: 16px 0 8px 0; color: var(--text); }
+  p { margin: 6px 0; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .meta-card {
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .meta-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .meta-card .value { font-size: 15px; font-weight: 600; word-break: break-all; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #fff;
+    margin-right: 6px;
+  }
+  .badge-unpushed { background: var(--unpushed); }
+  .badge-new { background: var(--new); }
+  .badge-mod { background: var(--mod); }
+  .alert {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: #f1f5f9; font-weight: 700; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .file-list { list-style: none; padding: 0; margin: 8px 0; }
+  .file-list li { padding: 4px 0; font-size: 14px; color: var(--text); }
+  .file-list li::before { content: "• "; color: var(--accent); font-weight: 700; }
+  .section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .area {
+    margin-bottom: 20px;
+  }
+  .area-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .area-title .count { background: #eef2ff; color: var(--accent); padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 10px 0;
+  }
+  .steps {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .steps ol { margin: 8px 0 0 20px; padding: 0; }
+  .steps li { margin-bottom: 8px; }
+  .footer {
+    margin-top: 32px;
+    padding: 16px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .tag {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 6px;
+    color: #fff;
+    vertical-align: middle;
+  }
+  .tag-new { background: var(--new); }
+  .tag-mod { background: var(--mod); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Estado del Repositorio Local de Backend</h1>
+    <p>Informe detallado para el equipo de Backend. Contiene cambios locales no pusheados, archivos nuevos, archivos modificados y pasos recomendados para dejar todo definitivo en el repositorio remoto.</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="label">Rama actual</div>
+        <div class="value">develop</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Remoto (origin)</div>
+        <div class="value">git@github.com:StartupEtec/Backend.git</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Ruta local</div>
+        <div class="value">/home/nicomanescau/StartUp 6I/Backend</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Estado general</div>
+        <div class="value">
+          <span class="badge badge-unpushed">1 commit sin pushear</span>
+          <span class="badge badge-mod">22 archivos modificados</span>
+          <span class="badge badge-new">5 archivos nuevos (untracked)</span>
+        </div>
+      </div>
+    </div>
+    <div class="alert">
+      <strong>Atención:</strong> hay <strong>1 commit en develop local que aún no está en origin/develop</strong> (<code>5cb222f</code>). Además, el working tree tiene cambios sin commitear que deben incluirse antes de pushear.
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>1. Commit local SIN pushear (debe ir a remoto)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 14%">Commit</th>
+          <th style="width: 30%">Mensaje</th>
+          <th style="width: 28%">Archivos afectados</th>
+          <th>Qué hace</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>5cb222f</code></td>
+          <td>Seed: ubicaciones de los 5 trabajadores de test en Provincia de Mendoza</td>
+          <td><code>README.md</code>, <code>src/database/seeds/02_users_and_profiles.js</code></td>
+          <td>Mueve a Mendoza las ubicaciones de los 5 trabajadores de test (antes estaban en CABA). Documenta que las ubicaciones están en Mendoza para probar la búsqueda de trabajadores con el equipo local.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>Nota:</strong> este commit ya está en <code>develop</code> local pero <strong>no</strong> está en <code>origin/develop</code>. La rama <code>develop</code> está <strong>1 commit adelante</strong> de <code>origin/develop</code>.</p>
+  </section>
+
+  <section class="section">
+    <h2>2. Archivos nuevos (untracked, nunca subidos)</h2>
+    <div class="area">
+      <div class="area-title">A) <span class="tag tag-new">NUEVO</span> src/controllers/CategoryController.js</div>
+      <p>Controlador para <code>GET /api/v1/categories</code>. Llama a <code>categoryService.listActive()</code> y devuelve <code>{ categories }</code> con estado 200. Maneja errores pasando a <code>next(err)</code>.</p>
+    </div>
+    <div class="area">
+      <div class="area-title">B) <span class="tag tag-new">NUEVO</span> src/services/CategoryService.js</div>
+      <p>Servicio <code>listActive()</code> que consulta la tabla <code>categories</code> donde <code>active = true</code>, ordenadas por <code>name</code> asc, seleccionando <code>id</code>, <code>name</code>, <code>description</code>, <code>icon_url</code>.</p>
+    </div>
+    <div class="area">
+      <div class="area-title">C) <span class="tag tag-new">NUEVO</span> src/routes/categoryRoutes.js</div>
+      <p>Ruta <code>GET /api/v1/categories</code> (pública, sin autenticación), con documentación OpenAPI inline. Devuelve lista de categorías con <code>id</code>, <code>name</code>, <code>description</code>, <code>icon_url</code>.</p>
+    </div>
+    <div class="area">
+      <div class="area-title">D) <span class="tag tag-new">NUEVO</span> src/database/migrations/20261017000000_add_coverage_radius_to_locations.js</div>
+      <p>Migración que añade la columna <code>coverage_radius_km</code> (<code>NUMERIC(6,3)</code>, nullable, default null) a la tabla <code>locations</code>. Es el radio de cobertura circular (km) de la ubicación de un trabajador. <code>down()</code> borra la columna.</p>
+    </div>
+    <div class="area">
+      <div class="area-title">E) <span class="tag tag-new">NUEVO</span> tests/category.test.js</div>
+      <p>Tests del <code>CategoryController</code>: verifica que lista categorías activas (200) y que delega errores al middleware <code>next(err)</code>.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>3. Archivos modificados (22) — detalle por área</h2>
+
+    <div class="area">
+      <h3 class="area-title">3.1 Autenticación y registro <span class="count">8 archivos</span></h3>
+      <ul class="file-list">
+        <li><code>AuthController.js</code> (modificado)</li>
+        <li><code>OtpService.js</code> (modificado)</li>
+        <li><code>SecurityConfigService.js</code> (modificado)</li>
+        <li><code>rateLimiter.js</code> (modificado)</li>
+        <li><code>swagger.js</code> (modificado)</li>
+        <li><code>openapi.yaml</code> (modificado)</li>
+        <li><code>tests/authController.test.js</code> (modificado)</li>
+        <li><code>tests/userIdentity.test.js</code> (modificado)</li>
+      </ul>
+      <h4>Registro de usuario (POST /auth/register)</h4>
+      <ul>
+        <li>Ahora acepta y <strong>requiere</strong> <code>full_name</code> en el payload (antes no se pedía).</li>
+        <li>Consulta email y teléfono <strong>por separado</strong> para devolver un <strong>409 desambiguado</strong>: indica exactamente qué campo está duplicado (<code>email</code>, <code>phone</code> o ambos) en el cuerpo <code>fields: [...]</code>.</li>
+        <li>Inserta <code>full_name</code> en la tabla <code>users</code>.</li>
+      </ul>
+      <h4>Login (POST /auth/login)</h4>
+      <ul>
+        <li>Usuario no encontrado → ahora devuelve <strong>404 <code>USER_NOT_FOUND</code></strong> (antes era 401 <code>AUTH_FAILED</code> con mensaje genérico "Credenciales incorrectas").</li>
+        <li>Contraseña incorrecta → ahora devuelve <strong>401 <code>INVALID_PASSWORD</code></strong> (antes 401 <code>AUTH_FAILED</code> genérico).</li>
+        <li>Esto permite al frontend distinguir "el usuario no existe" de "la contraseña está mal".</li>
+      </ul>
+      <h4>Recuperación de contraseña</h4>
+      <ul>
+        <li>Código de expiración reducido de <strong>30 min → 5 min</strong>.</li>
+        <li>Mensaje simulado actualizado a "Expira en 5 minutos".</li>
+        <li>Nueva validación <strong><code>PASSWORD_REUSE</code> (400)</strong>: no permite reutilizar la contraseña anterior.</li>
+      </ul>
+      <h4>OTP</h4>
+      <ul>
+        <li>Expiración del código OTP reducida de <strong>10 min → 5 min</strong> en <code>OtpService.js</code>, <code>SecurityConfigService.js</code> (cambio de email y de teléfono), y <code>swagger.js</code> / <code>openapi.yaml</code>.</li>
+        <li>Mensajes simulados actualizados a "Expira en 5 minutos".</li>
+      </ul>
+      <h4>Rate limiter</h4>
+      <ul>
+        <li><code>AUTH_FAILURE_CODES</code> ahora incluye <code>USER_NOT_FOUND</code> e <code>INVALID_PASSWORD</code>, para que estos intentos también cuenten hacia el límite de 5 fallos por IP / 15 min.</li>
+      </ul>
+      <h4>Validación (<code>validation.js</code>)</h4>
+      <ul>
+        <li><code>registerSchema</code>: añade <code>full_name</code> como campo requerido (string 1-100).</li>
+        <li><code>createIdentitySchema</code>: <code>full_name</code> pasa de requerido a opcional (el nombre ya se captura en el registro).</li>
+        <li><code>createLocationSchema</code> y <code>updateLocationSchema</code>: añaden <code>coverage_radius_km</code> (número 0-999.999, permite null).</li>
+      </ul>
+      <h4>Identity (<code>UserService.js</code>)</h4>
+      <ul>
+        <li><code>isIdentityComplete()</code> ya no exige <code>full_name</code> (se considera completo con <code>date_of_birth</code>, <code>avatar_url</code>, <code>dni_front_url</code>, <code>dni_back_url</code>).</li>
+        <li><code>full_name</code> se guarda con fallback <code>|| ''</code> para no violar NOT NULL.</li>
+        <li><code>getIdentity()</code> devuelve <code>full_name: user.full_name || null</code>.</li>
+        <li><code>upsertIdentity()</code> resuelve <code>full_name</code> con cadena de prioridad: dato enviado → perfil existente → <code>users.full_name</code> → <code>''</code>.</li>
+        <li><code>getProfile()</code> ahora incluye <code>category_id</code> y <code>category_name</code> del trabajador (joins con tabla <code>categories</code>).</li>
+      </ul>
+      <h4>Perfiles cliente/trabajador (<code>ClientProfileService.js</code>, <code>WorkerProfileService.js</code>)</h4>
+      <ul>
+        <li><code>full_name</code> se inserta/actualiza con <code>data.full_name || ''</code>.</li>
+      </ul>
+    </div>
+
+    <div class="area">
+      <h3 class="area-title">3.2 Radio de cobertura de ubicaciones <span class="count">9 archivos</span></h3>
+      <ul class="file-list">
+        <li><code>LocationService.js</code> (modificado)</li>
+        <li><code>WorkerSearchService.js</code> (modificado)</li>
+        <li><code>utils/validation.js</code> (modificado)</li>
+        <li><code>docs/DATABASE_SCHEMA.md</code> (modificado)</li>
+        <li><code>docs/openapi.yaml</code> (modificado)</li>
+        <li><code>tests/location.test.js</code> (modificado)</li>
+        <li><code>tests/workerSearch.test.js</code> (modificado)</li>
+        <li><code>src/database/seeds/02_users_and_profiles.js</code> (modificado)</li>
+        <li><code>src/database/migrations/20261017000000_add_coverage_radius_to_locations.js</code> (nuevo, ya listado en sección 2)</li>
+      </ul>
+      <ul>
+        <li>Nueva columna <code>coverage_radius_km</code> en <code>locations</code> (migración + service + validación + OpenAPI).</li>
+        <li><code>LocationService</code>: lee/escribe <code>coverage_radius_km</code> en <code>createLocation</code>, <code>updateLocation</code>, <code>getLocationById</code> (convierte a Number o null).</li>
+        <li><code>WorkerSearchService</code>: expone <code>coverage_radius_km</code> en cada trabajador encontrado y lo selecciona en la consulta SQL.</li>
+        <li>Seed: las 5 ubicaciones de trabajadores ahora tienen <code>coverage_radius_km</code> (5, 2, 1, 8, 4 km respectivamente). cliente1 tiene una segunda ubicación extra (Luján de Cuyo) para probar el pop-up de selección de búsqueda.</li>
+        <li><code>docker-compose.yml</code>: bind mount ahora usa <code>:z</code> (re-etiquetado SELinux) para evitar EACCES en Fedora.</li>
+      </ul>
+    </div>
+
+    <div class="area">
+      <h3 class="area-title">3.3 Categorías <span class="count">3 archivos</span></h3>
+      <ul class="file-list">
+        <li><code>CategoryController.js</code> (nuevo, ya listado en sección 2)</li>
+        <li><code>CategoryService.js</code> (nuevo, ya listado en sección 2)</li>
+        <li><code>categoryRoutes.js</code> (nuevo, ya listado en sección 2)</li>
+        <li><code>src/app.js</code> (modificado)</li>
+      </ul>
+      <ul>
+        <li><code>src/app.js</code>: importa y monta <code>categoryRoutes</code> bajo <code>/api/v1/categories</code>.</li>
+        <li>Endpoint público <code>GET /api/v1/categories</code> que lista categorías activas ordenadas por nombre. Usado por el formulario "Editar Perfil" y los filtros de búsqueda del frontend.</li>
+      </ul>
+    </div>
+
+    <div class="area">
+      <h3 class="area-title">3.4 Documentación y datos de prueba <span class="count">3 archivos</span></h3>
+      <ul class="file-list">
+        <li><code>README.md</code> (modificado)</li>
+        <li><code>docs/DATABASE_SCHEMA.md</code> (modificado)</li>
+        <li><code>docs/openapi.yaml</code> (modificado)</li>
+        <li><code>src/database/seeds/02_users_and_profiles.js</code> (modificado, ya listado en 3.2)</li>
+      </ul>
+      <ul>
+        <li><code>README.md</code>: tablas de clientes y trabajadores actualizadas. Trabajadores en Mendoza con cobertura. cliente1 tiene 2 ubicaciones (Mendoza + Luján de Cuyo). Documenta el comportamiento de colores de pin según cobertura.</li>
+        <li><code>docs/DATABASE_SCHEMA.md</code>: documenta la nueva columna <code>coverage_radius_km</code> y sus endpoints (POST/PATCH locations la aceptan).</li>
+        <li><code>docs/openapi.yaml</code>: añade <code>coverage_radius_km</code> a <code>Location</code> y <code>CreateLocationRequest</code>/<code>UpdateLocationRequest</code>; actualiza <code>RegisterRequest</code> (requiere <code>full_name</code>); añade schemas <code>InvalidPasswordError</code> y <code>NotFoundError</code>; documenta el 409 con <code>fields</code>; actualiza tiempos de expiración OTP (5 min).</li>
+        <li><code>src/database/seeds/02_users_and_profiles.js</code>: clientes movidos a Mendoza (cliente1 con segunda ubicación en Luján de Cuyo); trabajadores con <code>coverage_radius_km</code>; se insertan ubicaciones extra no-principales en el seed.</li>
+      </ul>
+    </div>
+
+    <div class="area">
+      <h3 class="area-title">3.5 Tests <span class="count">6 archivos</span></h3>
+      <ul class="file-list">
+        <li><code>tests/authController.test.js</code> (modificado)</li>
+        <li><code>tests/location.test.js</code> (modificado)</li>
+        <li><code>tests/userIdentity.test.js</code> (modificado)</li>
+        <li><code>tests/workerSearch.test.js</code> (modificado)</li>
+        <li><code>tests/validation.test.js</code> (modificado)</li>
+        <li><code>tests/category.test.js</code> (nuevo, ya listado en sección 2)</li>
+      </ul>
+      <ul>
+        <li><code>tests/authController.test.js</code>: register ahora envía <code>full_name</code>; verifica que <code>insert</code> recibe <code>full_name</code>; 3 nuevos tests de 409 desambiguado (solo email, solo teléfono, ambos).</li>
+        <li><code>tests/location.test.js</code>: tests de <code>coverage_radius_km</code> en create/list/update (número, null, negativo, no numérico, omitido).</li>
+        <li><code>tests/userIdentity.test.js</code>: <code>is_complete</code> es true aunque <code>full_name</code> sea null; <code>createIdentitySchema</code> acepta sin <code>full_name</code>.</li>
+        <li><code>tests/workerSearch.test.js</code>: <code>BASE_ROW</code> incluye <code>coverage_radius_km: '6.500'</code>; verifica exposición como número y como null.</li>
+        <li><code>tests/validation.test.js</code>: <code>registerSchema</code> ahora requiere <code>full_name</code>.</li>
+        <li><code>tests/category.test.js</code> (nuevo): 2 tests del <code>CategoryController</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>4. Resumen de intenciones funcionales (para el otro Opencode)</h2>
+    <p>Estos cambios están orientados a que el <strong>frontend (Issues #24 y #25) no dependa del equipo de backend</strong>:</p>
+    <ol>
+      <li><strong>Búsqueda de trabajadores por geolocalización con cobertura:</strong> los trabajadores tienen un <code>coverage_radius_km</code> y el frontend puede pintar pines de color según si el cliente cae dentro del área del trabajador.</li>
+      <li><strong>Registro con <code>full_name</code>:</strong> el nombre se captura al registrarse, no se pide después en "Completar Perfil".</li>
+      <li><strong>Errores de auth diferenciados:</strong> el frontend puede distinguir usuario inexistente (404) de contraseña wrong (401) y campos duplicados (409 con <code>fields</code>).</li>
+      <li><strong>Categorías públicas:</strong> endpoint para llenar selects de especialidades.</li>
+      <li><strong>OTP y expiraciones más cortas (5 min):</strong> flujo de verificación más ágil para pruebas.</li>
+      <li><strong>Datos de prueba en Mendoza:</strong> ubicaciones realistas para probar el mapa/búsqueda con el equipo local.</li>
+    </ol>
+  </section>
+
+  <section class="section steps">
+    <h2>5. Pasos recomendados para dejarlo definitivo en remoto</h2>
+    <p>Ejecutar desde el directorio <code>/home/nicomanescau/StartUp 6I/Backend</code>:</p>
+    <ol>
+      <li><strong>Revisar que todo esté en orden:</strong>
+        <pre>git status
+git diff --stat
+git log origin/develop..develop --oneline</pre>
+      </li>
+      <li><strong>Ejecutar tests para validar:</strong>
+        <pre>npm test</pre>
+      </li>
+      <li><strong>Añadir todo y commitear los cambios en working tree:</strong>
+        <pre>git add -A
+git commit -m "Backend: cambios para soporte de frontend Issues #24 y #25 (cobertura, categorías, auth diferenciado, OTP 5 min, seed Mendoza)"</pre>
+      </li>
+      <li><strong>Pushear a origin/develop (incluye el commit 5cb222f que ya estaba local):</strong>
+        <pre>git push origin develop</pre>
+      </li>
+    </ol>
+    <p>Una vez pusheado, el repositorio remoto contendrá:</p>
+    <ul>
+      <li>El commit <code>5cb222f</code> (seed Mendoza).</li>
+      <li>Todos los cambios de working tree (22 archivos modificados + 5 archivos nuevos).</li>
+      <li>La nueva migración <code>coverage_radius_km</code> lista para aplicar con <code>npm run migrate:latest</code>.</li>
+      <li>El endpoint público <code>GET /api/v1/categories</code> disponible.</li>
+    </ul>
+  </section>
+
+  <footer class="footer">
+    Estado del Backend Local — generado para el equipo de Backend. Rama: <code>develop</code> | Remoto: <code>git@github.com:StartupEtec/Backend.git</code> | Fecha del informe: 12 de noviembre de 2026.
+  </footer>
+</div>
+
+</body>
+</html>
