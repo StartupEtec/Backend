@@ -36,6 +36,7 @@ const BASE_LOCATION = {
   address: 'Calle Falsa 123, Bogotá',
   latitude: '4.711',
   longitude: '-74.0721',
+  coverage_radius_km: '5.000',
   is_primary: false,
   created_at: new Date(),
   updated_at: new Date(),
@@ -118,6 +119,7 @@ describe('Location Service', () => {
       const result = await locationService.getLocationById('loc-uuid');
       expect(result).toBeDefined();
       expect(result.address).toBe('Calle Falsa 123, Bogotá');
+      expect(result.coverage_radius_km).toBe(5);
       expect(result.latitude).toBe(4.711);
     });
   });

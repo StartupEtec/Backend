@@ -31,6 +31,7 @@ Docs específicos por funcionalidad e issue de GitHub:
 | [NOTIFICATION_SYSTEM.md](./NOTIFICATION_SYSTEM.md) | #58 | Sistema centralizado de notificaciones multicanal (Push/Email/SMS). |
 | [MESSAGING_WS_IMPLEMENTATION.md](./MESSAGING_WS_IMPLEMENTATION.md) | #27 | Implementación de mensajería + WebSocket. |
 | [ratings-feature.md](./ratings-feature.md) | — | Sistema de calificaciones. |
+| [estado_repositorio.html](./estado_repositorio.html) | #82 | Reporte HTML del estado del repositorio local y sincronización. |
 
 ---
 

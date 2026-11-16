@@ -73,6 +73,22 @@ describe('User Identity (perfil único)', () => {
       expect(result.date_of_birth).toBe('1990-05-14');
       expect(result.is_complete).toBe(true);
     });
+
+    it('returns is_complete:true even if full_name is null', async () => {
+      mockQueryBuilder.first.mockResolvedValueOnce({
+        id: 'u1',
+        full_name: null,
+        date_of_birth: new Date(1990, 4, 14),
+        avatar_url: '/uploads/a.jpg',
+        dni_front_url: '/uploads/f.jpg',
+        dni_back_url: '/uploads/b.jpg',
+      });
+
+      const result = await userService.getIdentity('u1');
+
+      expect(result.date_of_birth).toBe('1990-05-14');
+      expect(result.is_complete).toBe(true);
+    });
   });
 
   describe('upsertIdentity', () => {

@@ -60,6 +60,7 @@ const BASE_ROW = {
   certification_status: 'APPROVED',
   average_rating: '4.5',
   distance_m: '1240.5',
+  coverage_radius_km: '6.500',
   latitude: '4.711',
   longitude: '-74.0721',
 };

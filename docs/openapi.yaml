@@ -53,7 +53,7 @@ info:
 
     | `INVALID_OTP` | 400 | Código incorrecto o usuario no encontrado |
 
-    | `EXPIRED_OTP` | 410 | El código venció (10 minutos) |
+    | `EXPIRED_OTP` | 410 | El código venció (5 minutos) |
 
     | `OTP_ATTEMPTS_EXCEEDED` | 429 | 5 intentos fallidos: el código fue invalidado, usa `/auth/resend-otp` |
 
@@ -787,10 +787,17 @@ components:
     RegisterRequest:
       type: object
       required:
+        - full_name
         - email
         - phone
         - password
       properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Juan Pérez
+          description: Nombre completo del usuario
         email:
           type: string
           format: email
@@ -924,7 +931,7 @@ components:
         token:
           type: string
           example: eyJhbGciOiJIUz...
-          description: Token temporal de restablecimiento. Válido por 10 minutos.
+          description: Token temporal de restablecimiento. Válido por 5 minutos.
     RegisterResponse:
       type: object
       properties:
@@ -1059,7 +1066,7 @@ components:
         timestamp:
           type: string
           format: date-time
-      description: El código OTP venció (10 minutos). Debe solicitarse uno nuevo con /auth/resend-otp.
+      description: El código OTP venció (5 minutos). Debe solicitarse uno nuevo con /auth/resend-otp.
     OtpAttemptsExceededError:
       type: object
       properties:
@@ -1076,6 +1083,21 @@ components:
           type: string
           format: date-time
       description: Tras 5 intentos fallidos el OTP se invalida. Uso de /auth/resend-otp para obtener uno nuevo.
+    InvalidPasswordError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: INVALID_PASSWORD
+        message:
+          type: string
+          example: Contraseña incorrecta
+        statusCode:
+          type: integer
+          example: 401
+        timestamp:
+          type: string
+          format: date-time
     ConflictError:
       type: object
       properties:
@@ -1085,6 +1107,16 @@ components:
         message:
           type: string
           example: El correo electrónico o teléfono ya están registrados
+        fields:
+          type: array
+          items:
+            type: string
+            enum:
+              - email
+              - phone
+          example:
+            - email
+          description: Campos conflictivos que ya existen en la base de datos
         statusCode:
           type: integer
           example: 409
@@ -1166,6 +1198,11 @@ components:
           example: 1240.5
           nullable: true
           description: Distancia en metros desde el punto de referencia (lat/lng). Solo en el listado cuando se provee lat/lng.
+        coverage_radius_km:
+          type: number
+          example: 5
+          nullable: true
+          description: Radio de cobertura en kilómetros (trabajadores)
         created_at:
           type: string
           format: date-time
@@ -1201,6 +1238,13 @@ components:
           type: boolean
           example: false
           description: Marcar como ubicación principal (por defecto la primera lo es)
+        coverage_radius_km:
+          type: number
+          minimum: 0
+          maximum: 999.999
+          example: 5
+          nullable: true
+          description: Radio de cobertura en kilómetros (opcional para trabajadores)
     UpdateLocationRequest:
       type: object
       properties:
@@ -1224,6 +1268,13 @@ components:
           type: boolean
           example: true
           description: Marcar como ubicación principal (quita el flag a las demás)
+        coverage_radius_km:
+          type: number
+          minimum: 0
+          maximum: 999.999
+          example: 10
+          nullable: true
+          description: Radio de cobertura en kilómetros (opcional para trabajadores)
       description: Todos los campos son opcionales en PATCH
     CreateLocationResponse:
       type: object
@@ -2755,6 +2806,36 @@ paths:
           description: Disponibilidad no encontrada o no autorizado
         '500':
           description: Error interno del servidor
+  /categories:
+    get:
+      summary: Listar categorías activas de servicios
+      description: Retorna la lista de categorías activas para selección en perfiles y filtros de búsqueda.
+      tags:
+        - Categorías
+      responses:
+        '200':
+          description: Lista de categorías obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        description:
+                          type: string
+                          nullable: true
+                        icon_url:
+                          type: string
+                          nullable: true
   /workers/{id}/certifications:
     post:
       summary: Subir un documento de certificación
@@ -3830,6 +3911,7 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
             example:
+              full_name: Juan Pérez
               email: usuario@example.com
               phone: '+573001234567'
               password: P@ssword123!
@@ -3904,11 +3986,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationError'
         '401':
-          description: Credenciales incorrectas (usuario no encontrado o contraseña inválida).
+          description: Contraseña incorrecta.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UnauthorizedError'
+                $ref: '#/components/schemas/InvalidPasswordError'
+        '404':
+          description: Usuario no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
         '429':
           description: Rate limit excedido.
           content:
@@ -3926,7 +4014,7 @@ paths:
       summary: Verificar código OTP (2FA)
       description: |
         Valida el código OTP de 6 dígitos enviado durante el registro, login o resend.
-        Si el OTP es válido y no ha expirado (10 minutos), devuelve un JWT de acceso
+        Si el OTP es válido y no ha expirado (5 minutos), devuelve un JWT de acceso
         y un refresh token. El OTP se invalida automáticamente tras un uso exitoso o
         después de 5 intentos fallidos.
         Contrato de errores: `VALIDATION_ERROR` (400), `INVALID_OTP` (400),
@@ -3957,7 +4045,7 @@ paths:
                 - $ref: '#/components/schemas/ValidationError'
                 - $ref: '#/components/schemas/InvalidOtpError'
         '410':
-          description: El código OTP expiró (10 minutos). Solicita uno nuevo.
+          description: El código OTP expiró (5 minutos). Solicita uno nuevo.
           content:
             application/json:
               schema:
@@ -4125,7 +4213,7 @@ paths:
       summary: Validar código de recuperación
       description: |
         Valida el código de recuperación enviado. Si es correcto, retorna un token temporal de JWT
-        válido por 10 minutos. El código se limpia tras la validación.
+        válido por 5 minutos. El código se limpia tras la validación.
       tags:
         - Autenticación
       requestBody:

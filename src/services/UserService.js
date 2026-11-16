@@ -21,7 +21,6 @@ class UserService {
   static isIdentityComplete(identity) {
     return Boolean(
       identity &&
-      identity.full_name &&
       identity.date_of_birth &&
       identity.avatar_url &&
       identity.dni_front_url &&
@@ -65,13 +64,14 @@ class UserService {
     const identity = await this.getIdentity(userId);
 
     if (identity?.is_complete) {
+      const resolvedFullName = identity.full_name || user.full_name || '';
       for (const tableName of ['client_profiles', 'worker_profiles']) {
         const existing = await db(tableName).where({ user_id: userId }).first();
         if (existing) {
           await db(tableName)
             .where({ user_id: userId })
             .update({
-              full_name: identity.full_name,
+              full_name: resolvedFullName || existing.full_name || '',
               date_of_birth: UserService.toDateString(identity.date_of_birth),
               avatar_url: identity.avatar_url,
               dni_front_url: identity.dni_front_url,
@@ -81,7 +81,7 @@ class UserService {
         } else {
           await db(tableName).insert({
             user_id: userId,
-            full_name: identity.full_name,
+            full_name: resolvedFullName,
             date_of_birth: UserService.toDateString(identity.date_of_birth),
             avatar_url: identity.avatar_url,
             dni_front_url: identity.dni_front_url,
@@ -140,7 +140,11 @@ class UserService {
 
     const clientProfile = await db('client_profiles').where({ user_id: userId }).first();
 
-    const workerProfile = await db('worker_profiles').where({ user_id: userId }).first();
+    const workerProfile = await db('worker_profiles as wp')
+      .leftJoin('categories as c', 'wp.category_id', 'c.id')
+      .where({ 'wp.user_id': userId })
+      .select('wp.*', 'c.name as category_name')
+      .first();
 
     const avgRating = await db('ratings')
       .where({ ratee_id: userId })
@@ -190,6 +194,8 @@ class UserService {
               avatar_url: workerProfile.avatar_url,
               bio: workerProfile.bio,
               hourly_rate: workerProfile.hourly_rate,
+              category_id: workerProfile.category_id || null,
+              category_name: workerProfile.category_name || null,
               availability_status: workerProfile.availability_status,
               certification_status: workerProfile.certification_status,
             }

@@ -36,6 +36,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
   describe('Auth', () => {
     it('registerSchema: acepta credenciales válidas', () => {
       expectValid(validation.registerSchema, {
+        full_name: 'Juan Perez',
         email: 'user@example.com',
         phone: '011 15-1234-5678',
         password: 'Strong1!',
@@ -44,6 +45,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
 
     it('registerSchema: rechaza email inválido y contraseña débil', () => {
       const messages = expectInvalid(validation.registerSchema, {
+        full_name: 'Juan Perez',
         email: 'not-an-email',
         phone: '011 15-1234-5678',
         password: 'weak',
@@ -52,8 +54,13 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       expect(messages).toContain('al menos 8 caracteres');
     });
 
-    it('registerSchema: requiere todos los campos', () => {
+    it('registerSchema: requiere todos los campos (incluyendo full_name)', () => {
       expectInvalid(validation.registerSchema, {}, 'es requerido');
+      expectInvalid(
+        validation.registerSchema,
+        { email: 'user@example.com', phone: '011 15-1234-5678', password: 'Strong1!' },
+        'El nombre completo es requerido',
+      );
     });
 
     it('loginSchema: requiere email o teléfono', () => {
@@ -102,6 +109,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
       // seeds). Antes este test usaba números colombianos y codificaba el default
       // +57, que era justamente el bug.
       const res = expectValid(validation.registerSchema, {
+        full_name: 'Juan Perez',
         email: 'user@example.com',
         phone: '011 15-1234-5678',
         password: 'Strong1!',
@@ -341,12 +349,24 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
   });
 
   describe('Ubicaciones y búsqueda', () => {
-    it('createLocationSchema: valida rangos de coordenadas', () => {
+    it('createLocationSchema: valida rangos de coordenadas y coverage_radius_km', () => {
       expectValid(validation.createLocationSchema, {
         address: 'Av. Siempre Viva',
         latitude: -33.4,
         longitude: -70.6,
+        coverage_radius_km: 5.5,
       });
+      expectValid(validation.createLocationSchema, {
+        address: 'Av. Siempre Viva',
+        latitude: -33.4,
+        longitude: -70.6,
+        coverage_radius_km: null,
+      });
+      expectInvalid(
+        validation.createLocationSchema,
+        { address: 'Av. Siempre Viva', latitude: -33.4, longitude: -70.6, coverage_radius_km: -1 },
+        'no puede ser negativo',
+      );
       expectInvalid(
         validation.createLocationSchema,
         { address: 'x', latitude: 91, longitude: 0 },

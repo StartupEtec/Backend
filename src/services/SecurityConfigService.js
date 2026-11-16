@@ -59,7 +59,7 @@ class SecurityConfigService {
 
     const currentOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutos
 
     // Transacción para borrar solicitudes anteriores del mismo tipo del usuario e insertar la nueva
     await db.transaction(async (trx) => {
@@ -77,11 +77,11 @@ class SecurityConfigService {
     // Simulación de envío
     logger.info('[OTP] Email OTP actual enviado (simulación)', {
       email: user.email,
-      message: `Tu código de verificación para confirmar la desvinculación es: ${currentOtp}. Expira en 10 minutos.`,
+      message: `Tu código de verificación para confirmar la desvinculación es: ${currentOtp}. Expira en 5 minutos.`,
     });
     logger.info('[OTP] Email OTP nuevo enviado (simulación)', {
       email: new_email,
-      message: `Tu código de verificación para confirmar tu nuevo correo es: ${newOtp}. Expira en 10 minutos.`,
+      message: `Tu código de verificación para confirmar tu nuevo correo es: ${newOtp}. Expira en 5 minutos.`,
     });
 
     logger.info('[AUDITORIA] Solicitud de cambio de email iniciada', {
@@ -171,7 +171,7 @@ class SecurityConfigService {
 
     const currentOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutos
 
     await db.transaction(async (trx) => {
       await trx('pending_user_changes').where({ user_id: userId, type: 'PHONE' }).del();
@@ -188,11 +188,11 @@ class SecurityConfigService {
     // Simulación de envío
     logger.info('[OTP] SMS OTP actual enviado (simulación)', {
       phone: user.phone,
-      message: `Tu código de verificación para confirmar la desvinculación es: ${currentOtp}. Expira en 10 minutos.`,
+      message: `Tu código de verificación para confirmar la desvinculación es: ${currentOtp}. Expira en 5 minutos.`,
     });
     logger.info('[OTP] SMS OTP nuevo enviado (simulación)', {
       phone: new_phone,
-      message: `Tu código de verificación para confirmar tu nuevo teléfono es: ${newOtp}. Expira en 10 minutos.`,
+      message: `Tu código de verificación para confirmar tu nuevo teléfono es: ${newOtp}. Expira en 5 minutos.`,
     });
 
     logger.info('[AUDITORIA] Solicitud de cambio de teléfono iniciada', {

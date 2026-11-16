@@ -25,6 +25,12 @@ const phoneField = Joi.string()
   });
 
 export const registerSchema = Joi.object({
+  full_name: Joi.string().trim().min(1).max(100).required().messages({
+    'string.empty': 'El nombre completo es requerido',
+    'string.min': 'El nombre completo debe tener al menos 1 caracter',
+    'string.max': 'El nombre completo no debe exceder los 100 caracteres',
+    'any.required': 'El nombre completo es requerido',
+  }),
   email: Joi.string().email().required().messages({
     'string.email': 'El formato del correo electrónico no es válido',
     'any.required': 'El correo electrónico es requerido',
@@ -321,9 +327,7 @@ const identityNameField = Joi.string().min(1).max(100).messages({
 });
 
 export const createIdentitySchema = Joi.object({
-  full_name: identityNameField.required().messages({
-    'any.required': 'El nombre es requerido',
-  }),
+  full_name: identityNameField.optional().allow('', null),
   date_of_birth: dateOfBirthField,
   avatar_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
   dni_front_url: Joi.string().pattern(imageUrlPattern).required().messages(imageUrlMessages),
@@ -361,6 +365,11 @@ export const createLocationSchema = Joi.object({
     'number.max': 'La longitud debe estar entre -180 y 180',
     'any.required': 'La longitud es requerida',
   }),
+  coverage_radius_km: Joi.number().min(0).max(999.999).allow(null).optional().messages({
+    'number.base': 'El radio de cobertura debe ser un número',
+    'number.min': 'El radio de cobertura no puede ser negativo',
+    'number.max': 'El radio de cobertura no debe exceder los 999.999 km',
+  }),
   is_primary: Joi.boolean().messages({
     'boolean.base': 'is_primary debe ser un booleano',
   }),
@@ -381,6 +390,11 @@ export const updateLocationSchema = Joi.object({
     'number.base': 'La longitud debe ser un número',
     'number.min': 'La longitud debe estar entre -180 y 180',
     'number.max': 'La longitud debe estar entre -180 y 180',
+  }),
+  coverage_radius_km: Joi.number().min(0).max(999.999).allow(null).optional().messages({
+    'number.base': 'El radio de cobertura debe ser un número',
+    'number.min': 'El radio de cobertura no puede ser negativo',
+    'number.max': 'El radio de cobertura no debe exceder los 999.999 km',
   }),
   is_primary: Joi.boolean().messages({
     'boolean.base': 'is_primary debe ser un booleano',

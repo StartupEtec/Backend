@@ -90,7 +90,7 @@ class WorkerProfileService {
     const [profile] = await db('worker_profiles')
       .insert({
         user_id: userId,
-        full_name: data.full_name,
+        full_name: data.full_name || '',
         date_of_birth: toDateString(data.date_of_birth),
         avatar_url: data.avatar_url,
         dni_front_url: data.dni_front_url,

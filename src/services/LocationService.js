@@ -15,6 +15,7 @@ class LocationService {
       address: row.address,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),
+      coverage_radius_km: row.coverage_radius_km != null ? Number(row.coverage_radius_km) : null,
       is_primary: row.is_primary,
       distance_m: row.distance_m != null ? Number(row.distance_m) : null,
       created_at: row.created_at,
@@ -40,24 +41,31 @@ class LocationService {
       await db('locations').where({ user_id: userId }).update({ is_primary: false });
     }
 
+    const insertPayload = {
+      user_id: userId,
+      address: data.address,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      is_primary: isPrimary,
+      geography: db.raw('ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography', [
+        data.longitude,
+        data.latitude,
+      ]),
+    };
+    if (data.coverage_radius_km !== undefined) {
+      insertPayload.coverage_radius_km =
+        data.coverage_radius_km != null ? Number(data.coverage_radius_km) : null;
+    }
+
     const [row] = await db('locations')
-      .insert({
-        user_id: userId,
-        address: data.address,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        is_primary: isPrimary,
-        geography: db.raw('ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography', [
-          data.longitude,
-          data.latitude,
-        ]),
-      })
+      .insert(insertPayload)
       .returning([
         'id',
         'user_id',
         'address',
         'latitude',
         'longitude',
+        'coverage_radius_km',
         'is_primary',
         'created_at',
         'updated_at',
@@ -106,6 +114,10 @@ class LocationService {
     if (data.address !== undefined) updates.address = data.address;
     if (data.latitude !== undefined) updates.latitude = data.latitude;
     if (data.longitude !== undefined) updates.longitude = data.longitude;
+    if (data.coverage_radius_km !== undefined) {
+      updates.coverage_radius_km =
+        data.coverage_radius_km != null ? Number(data.coverage_radius_km) : null;
+    }
 
     if (data.latitude !== undefined || data.longitude !== undefined) {
       const lat = data.latitude ?? existing.latitude;
