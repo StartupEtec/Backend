@@ -10,6 +10,8 @@ const mockQueryBuilder = {
   returning: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
   avg: jest.fn().mockReturnThis(),
+  leftJoin: jest.fn().mockReturnThis(),
+  join: jest.fn().mockReturnThis(),
 };
 
 const mockKnex = Object.assign(() => mockQueryBuilder, {
@@ -44,6 +46,8 @@ describe('User Profile Service', () => {
     mockQueryBuilder.returning.mockReset().mockReturnThis();
     mockQueryBuilder.select.mockReset().mockReturnThis();
     mockQueryBuilder.avg.mockReset().mockReturnThis();
+    mockQueryBuilder.leftJoin.mockReset().mockReturnThis();
+    mockQueryBuilder.join.mockReset().mockReturnThis();
   });
 
   describe('getPublicProfile', () => {
@@ -513,6 +517,8 @@ describe('User Profile Controller', () => {
     mockQueryBuilder.returning.mockReset().mockReturnThis();
     mockQueryBuilder.select.mockReset().mockReturnThis();
     mockQueryBuilder.avg.mockReset().mockReturnThis();
+    mockQueryBuilder.leftJoin.mockReset().mockReturnThis();
+    mockQueryBuilder.join.mockReset().mockReturnThis();
   });
 
   describe('getUserById', () => {

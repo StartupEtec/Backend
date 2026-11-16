@@ -77,7 +77,7 @@ El endpoint \`/auth/verify-otp\` devuelve errores diferenciados:
 |---|---|---|
 | \`VALIDATION_ERROR\` | 400 | Payload inválido (email/phone/otp_code) |
 | \`INVALID_OTP\` | 400 | Código incorrecto o usuario no encontrado |
-| \`EXPIRED_OTP\` | 410 | El código venció (10 minutos) |
+| \`EXPIRED_OTP\` | 410 | El código venció (5 minutos) |
 | \`OTP_ATTEMPTS_EXCEEDED\` | 429 | 5 intentos fallidos: el código fue invalidado, usa \`/auth/resend-otp\` |
 
 ### Canonicalización de teléfonos (E.164)
@@ -594,8 +594,15 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
         // ── Request schemas ──────────────────────────────────────────────
         RegisterRequest: {
           type: 'object',
-          required: ['email', 'phone', 'password'],
+          required: ['full_name', 'email', 'phone', 'password'],
           properties: {
+            full_name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100,
+              example: 'Juan Pérez',
+              description: 'Nombre completo del usuario',
+            },
             email: { type: 'string', format: 'email', example: 'usuario@example.com' },
             phone: {
               type: 'string',
@@ -744,7 +751,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             token: {
               type: 'string',
               example: 'eyJhbGciOiJIUz...',
-              description: 'Token temporal de restablecimiento. Válido por 10 minutos.',
+              description: 'Token temporal de restablecimiento. Válido por 5 minutos.',
             },
           },
         },
@@ -871,7 +878,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             timestamp: { type: 'string', format: 'date-time' },
           },
           description:
-            'El código OTP venció (10 minutos). Debe solicitarse uno nuevo con /auth/resend-otp.',
+            'El código OTP venció (5 minutos). Debe solicitarse uno nuevo con /auth/resend-otp.',
         },
         OtpAttemptsExceededError: {
           type: 'object',
@@ -888,6 +895,15 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
           description:
             'Tras 5 intentos fallidos el OTP se invalida. Uso de /auth/resend-otp para obtener uno nuevo.',
         },
+        InvalidPasswordError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'INVALID_PASSWORD' },
+            message: { type: 'string', example: 'Contraseña incorrecta' },
+            statusCode: { type: 'integer', example: 401 },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
         ConflictError: {
           type: 'object',
           properties: {
@@ -895,6 +911,12 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             message: {
               type: 'string',
               example: 'El correo electrónico o teléfono ya están registrados',
+            },
+            fields: {
+              type: 'array',
+              items: { type: 'string', enum: ['email', 'phone'] },
+              example: ['email'],
+              description: 'Campos conflictivos que ya existen en la base de datos',
             },
             statusCode: { type: 'integer', example: 409 },
             timestamp: { type: 'string', format: 'date-time' },
@@ -963,6 +985,12 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               description:
                 'Distancia en metros desde el punto de referencia (lat/lng). Solo en el listado cuando se provee lat/lng.',
             },
+            coverage_radius_km: {
+              type: 'number',
+              example: 5.0,
+              nullable: true,
+              description: 'Radio de cobertura en kilómetros (trabajadores)',
+            },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' },
           },
@@ -997,6 +1025,14 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: false,
               description: 'Marcar como ubicación principal (por defecto la primera lo es)',
             },
+            coverage_radius_km: {
+              type: 'number',
+              minimum: 0,
+              maximum: 999.999,
+              example: 5.0,
+              nullable: true,
+              description: 'Radio de cobertura en kilómetros (opcional para trabajadores)',
+            },
           },
         },
         UpdateLocationRequest: {
@@ -1015,6 +1051,14 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               type: 'boolean',
               example: true,
               description: 'Marcar como ubicación principal (quita el flag a las demás)',
+            },
+            coverage_radius_km: {
+              type: 'number',
+              minimum: 0,
+              maximum: 999.999,
+              example: 10.0,
+              nullable: true,
+              description: 'Radio de cobertura en kilómetros (opcional para trabajadores)',
             },
           },
           description: 'Todos los campos son opcionales en PATCH',
@@ -2076,6 +2120,7 @@ export { swaggerSpec };
  *           schema:
  *             $ref: '#/components/schemas/RegisterRequest'
  *           example:
+ *             full_name: "Juan Pérez"
  *             email: usuario@example.com
  *             phone: "+573001234567"
  *             password: "P@ssword123!"
@@ -2150,11 +2195,17 @@ export { swaggerSpec };
  *             schema:
  *               $ref: '#/components/schemas/ValidationError'
  *       401:
- *         description: Credenciales incorrectas (usuario no encontrado o contraseña inválida).
+ *         description: Contraseña incorrecta.
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/UnauthorizedError'
+ *               $ref: '#/components/schemas/InvalidPasswordError'
+ *       404:
+ *         description: Usuario no encontrado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NotFoundError'
  *       429:
  *         description: Rate limit excedido.
  *         content:
@@ -2173,7 +2224,7 @@ export { swaggerSpec };
  *     summary: Verificar código OTP (2FA)
  *     description: |
  *       Valida el código OTP de 6 dígitos enviado durante el registro, login o resend.
- *       Si el OTP es válido y no ha expirado (10 minutos), devuelve un JWT de acceso
+ *       Si el OTP es válido y no ha expirado (5 minutos), devuelve un JWT de acceso
  *       y un refresh token. El OTP se invalida automáticamente tras un uso exitoso o
  *       después de 5 intentos fallidos.
  *       Contrato de errores: `VALIDATION_ERROR` (400), `INVALID_OTP` (400),
@@ -2203,7 +2254,7 @@ export { swaggerSpec };
  *               - $ref: '#/components/schemas/ValidationError'
  *               - $ref: '#/components/schemas/InvalidOtpError'
  *       410:
- *         description: El código OTP expiró (10 minutos). Solicita uno nuevo.
+ *         description: El código OTP expiró (5 minutos). Solicita uno nuevo.
  *         content:
  *           application/json:
  *             schema:
@@ -2372,7 +2423,7 @@ export { swaggerSpec };
  *     summary: Validar código de recuperación
  *     description: |
  *       Valida el código de recuperación enviado. Si es correcto, retorna un token temporal de JWT
- *       válido por 10 minutos. El código se limpia tras la validación.
+ *       válido por 5 minutos. El código se limpia tras la validación.
  *     tags: [Autenticación]
  *     requestBody:
  *       required: true

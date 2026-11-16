@@ -60,10 +60,19 @@ export const testClients = [
     },
     location: {
       id: seedId('loc-11111'),
-      address: 'Av. Santa Fe 3200, Palermo, CABA',
-      latitude: -34.5885,
-      longitude: -58.411,
+      address: 'Arístides Villanueva 400, Ciudad de Mendoza, Mendoza',
+      latitude: -32.8955,
+      longitude: -68.855,
     },
+    extraLocations: [
+      {
+        id: seedId('loc-11112'),
+        address: 'San Martín 200, Luján de Cuyo, Mendoza',
+        latitude: -33.005,
+        longitude: -68.88,
+        is_primary: false,
+      },
+    ],
     paymentMethods: [
       {
         id: seedId('pm-111111'),
@@ -104,9 +113,9 @@ export const testClients = [
     },
     location: {
       id: seedId('loc-22222'),
-      address: 'Av. Cabildo 2100, Belgrano, CABA',
-      latitude: -34.562,
-      longitude: -58.456,
+      address: 'Colón 500, Ciudad de Mendoza, Mendoza',
+      latitude: -32.894,
+      longitude: -68.842,
     },
     paymentMethods: [
       {
@@ -144,9 +153,9 @@ export const testClients = [
     },
     location: {
       id: seedId('loc-33333'),
-      address: 'Av. Rivadavia 5400, Caballito, CABA',
-      latitude: -34.618,
-      longitude: -58.441,
+      address: 'San Martín Sur 1000, Godoy Cruz, Mendoza',
+      latitude: -32.93,
+      longitude: -68.84,
     },
     paymentMethods: [
       {
@@ -184,9 +193,9 @@ export const testClients = [
     },
     location: {
       id: seedId('loc-44444'),
-      address: 'Av. Callao 1400, Recoleta, CABA',
-      latitude: -34.593,
-      longitude: -58.391,
+      address: 'Libertad 800, Guaymallén, Mendoza',
+      latitude: -32.898,
+      longitude: -68.815,
     },
     paymentMethods: [
       {
@@ -224,9 +233,9 @@ export const testClients = [
     },
     location: {
       id: seedId('loc-55555'),
-      address: 'Av. Triunvirato 4500, Villa Urquiza, CABA',
-      latitude: -34.577,
-      longitude: -58.489,
+      address: 'Boulogne Sur Mer 1500, Ciudad de Mendoza, Mendoza',
+      latitude: -32.888,
+      longitude: -68.86,
     },
     paymentMethods: [
       {
@@ -279,9 +288,10 @@ export const testWorkers = [
     },
     location: {
       id: seedId('locw-1111'),
-      address: 'Av. Corrientes 4800, Villa Crespo, CABA',
-      latitude: -34.601,
-      longitude: -58.435,
+      address: 'Av. San Martín 1200, Ciudad de Mendoza, Mendoza',
+      latitude: -32.8908,
+      longitude: -68.8458,
+      coverage_radius_km: 5.0,
     },
     certifications: [
       {
@@ -332,9 +342,10 @@ export const testWorkers = [
     },
     location: {
       id: seedId('locw-2222'),
-      address: 'Av. Juramento 2800, Belgrano, CABA',
-      latitude: -34.5635,
-      longitude: -58.461,
+      address: 'Belgrano 1200, Godoy Cruz, Mendoza',
+      latitude: -32.925,
+      longitude: -68.844,
+      coverage_radius_km: 2.0,
     },
     certifications: [
       {
@@ -385,9 +396,10 @@ export const testWorkers = [
     },
     location: {
       id: seedId('locw-3333'),
-      address: 'Av. Las Heras 2300, Recoleta, CABA',
-      latitude: -34.589,
-      longitude: -58.397,
+      address: 'Bandera de los Andes 4000, Guaymallén, Mendoza',
+      latitude: -32.895,
+      longitude: -68.81,
+      coverage_radius_km: 1.0,
     },
     certifications: [
       {
@@ -438,9 +450,10 @@ export const testWorkers = [
     },
     location: {
       id: seedId('locw-4444'),
-      address: 'Av. San Martín 2900, Villa del Parque, CABA',
-      latitude: -34.604,
-      longitude: -58.482,
+      address: 'San Martín 2500, Las Heras, Mendoza',
+      latitude: -32.855,
+      longitude: -68.835,
+      coverage_radius_km: 8.0,
     },
     certifications: [
       {
@@ -491,9 +504,10 @@ export const testWorkers = [
     },
     location: {
       id: seedId('locw-5555'),
-      address: 'Av. Monroe 3400, Coghlan, CABA',
-      latitude: -34.568,
-      longitude: -58.472,
+      address: 'Sáenz Peña 1000, Luján de Cuyo, Mendoza',
+      latitude: -33.003,
+      longitude: -68.878,
+      coverage_radius_km: 4.0,
     },
     certifications: [
       {
@@ -552,6 +566,23 @@ export async function seed(knex) {
       ]),
       is_primary: true,
     });
+
+    if (client.extraLocations && client.extraLocations.length > 0) {
+      for (const extraLoc of client.extraLocations) {
+        await knex('locations').insert({
+          id: extraLoc.id,
+          user_id: client.user.id,
+          address: extraLoc.address,
+          latitude: extraLoc.latitude,
+          longitude: extraLoc.longitude,
+          geography: knex.raw('ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography', [
+            extraLoc.longitude,
+            extraLoc.latitude,
+          ]),
+          is_primary: extraLoc.is_primary ?? false,
+        });
+      }
+    }
   }
 
   for (const worker of testWorkers) {
@@ -561,6 +592,7 @@ export async function seed(knex) {
       address: worker.location.address,
       latitude: worker.location.latitude,
       longitude: worker.location.longitude,
+      coverage_radius_km: worker.location.coverage_radius_km || null,
       geography: knex.raw('ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography', [
         worker.location.longitude,
         worker.location.latitude,

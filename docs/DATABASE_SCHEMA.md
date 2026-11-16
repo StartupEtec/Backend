@@ -98,6 +98,7 @@ Direcciones geográficas asociadas a los usuarios mediante coordenadas espaciale
 | `longitude` | `DOUBLE` | `NOT NULL` | Longitud decimal. |
 | `geography` | `GEOGRAPHY(Point, 4326)` | `NOT NULL` | Punto geográfico PostGIS indexado. |
 | `is_primary` | `BOOLEAN` | `DEFAULT false` | Si es la dirección principal. |
+| `coverage_radius_km` | `NUMERIC(6,3)` | `NULL` | Radio de cobertura del trabajador en kilómetros (Issue #82). |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | Fecha de creación del registro. |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | Fecha de última modificación. |
 

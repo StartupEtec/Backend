@@ -37,6 +37,8 @@ export const orderRateLimiter = rateLimit({
 // con un intento de login/OTP real y permitirían un DoS trivial con cuerpos inválidos.
 const AUTH_FAILURE_CODES = new Set([
   'AUTH_FAILED',
+  'USER_NOT_FOUND',
+  'INVALID_PASSWORD',
   'INVALID_OTP',
   'EXPIRED_OTP',
   'OTP_ATTEMPTS_EXCEEDED',

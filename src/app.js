@@ -18,6 +18,7 @@ import ratingRoutes from './routes/ratingRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import availabilityRoutes from './routes/availabilityRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import healthService from './services/HealthService.js';
 import helmet from 'helmet';
@@ -72,6 +73,7 @@ setupSwagger(app);
 
 // Rutas
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/uploads', uploadRoutes);

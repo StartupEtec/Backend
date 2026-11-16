@@ -19,7 +19,7 @@ class NotificationProvider {
    * @param {string} otpCode
    */
   async send({ email, phone }, otpCode) {
-    const message = `Tu código de verificación de 2 pasos es: ${otpCode}. Expira en 10 minutos.`;
+    const message = `Tu código de verificación de 2 pasos es: ${otpCode}. Expira en 5 minutos.`;
 
     // -----------------------------------------------------------------
     // SIMULATION — replace the blocks below with real provider calls.
@@ -50,14 +50,14 @@ class OtpService {
   }
 
   /**
-   * Generates a 6-digit numeric OTP and saves it to the user record with 10-minute expiration.
+   * Generates a 6-digit numeric OTP and saves it to the user record with 5-minute expiration.
    * Any OTP request that regenerates the code resets the failed-attempt counter.
    * @param {string} userId - UUID of the user.
    * @returns {Promise<string>} The generated OTP code.
    */
   async generateAndSaveOtp(userId) {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
     await db('users').where({ id: userId }).update({
       otp_code: otpCode,

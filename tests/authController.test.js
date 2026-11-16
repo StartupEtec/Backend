@@ -154,13 +154,14 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
     });
   });
 
-  describe('register -> shape del response', () => {
+  describe('register -> shape del response y desambiguación 409', () => {
     it('responde 201 con user.id, email, phone canonicalizado e is_verified', async () => {
       mockQueryBuilder.first.mockResolvedValue(null);
       mockQueryBuilder.insert.mockImplementation(() => ({
         returning: jest.fn().mockResolvedValue([
           {
             id: 'u1',
+            full_name: 'Test User',
             email: 'a@b.com',
             phone: '+573001234567',
             is_verified: false,
@@ -170,7 +171,14 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
 
       const res = makeRes();
       await authController.register(
-        { body: { email: 'a@b.com', phone: '3001234567', password: 'Strong1!' } },
+        {
+          body: {
+            full_name: 'Test User',
+            email: 'a@b.com',
+            phone: '3001234567',
+            password: 'Strong1!',
+          },
+        },
         res,
         () => {},
       );
@@ -183,6 +191,78 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
         is_verified: false,
       });
       expect(mockOtpService.generateAndSaveOtp).toHaveBeenCalledWith('u1');
+    });
+
+    it('responde 409 con fields: ["email"] cuando solo el correo está en uso', async () => {
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'u1', email: 'a@b.com' }) // email check
+        .mockResolvedValueOnce(null); // phone check
+
+      const res = makeRes();
+      await authController.register(
+        {
+          body: {
+            full_name: 'Test User',
+            email: 'a@b.com',
+            phone: '3001234567',
+            password: 'Strong1!',
+          },
+        },
+        res,
+        () => {},
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error).toBe('CONFLICT_ERROR');
+      expect(res.body.fields).toEqual(['email']);
+    });
+
+    it('responde 409 con fields: ["phone"] cuando solo el teléfono está en uso', async () => {
+      mockQueryBuilder.first
+        .mockResolvedValueOnce(null) // email check
+        .mockResolvedValueOnce({ id: 'u2', phone: '+573001234567' }); // phone check
+
+      const res = makeRes();
+      await authController.register(
+        {
+          body: {
+            full_name: 'Test User',
+            email: 'a@b.com',
+            phone: '3001234567',
+            password: 'Strong1!',
+          },
+        },
+        res,
+        () => {},
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error).toBe('CONFLICT_ERROR');
+      expect(res.body.fields).toEqual(['phone']);
+    });
+
+    it('responde 409 con fields: ["email", "phone"] cuando ambos están en uso', async () => {
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({ id: 'u1', email: 'a@b.com' }) // email check
+        .mockResolvedValueOnce({ id: 'u2', phone: '+573001234567' }); // phone check
+
+      const res = makeRes();
+      await authController.register(
+        {
+          body: {
+            full_name: 'Test User',
+            email: 'a@b.com',
+            phone: '3001234567',
+            password: 'Strong1!',
+          },
+        },
+        res,
+        () => {},
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error).toBe('CONFLICT_ERROR');
+      expect(res.body.fields).toEqual(['email', 'phone']);
     });
   });
 });

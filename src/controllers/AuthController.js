@@ -27,15 +27,20 @@ class AuthController {
         });
       }
 
-      const { email, phone, password } = value;
+      const { email, phone, password, full_name } = value;
 
-      // Check if user already exists
-      const existingUser = await db('users').where({ email }).orWhere({ phone }).first();
+      // Check if user already exists (consulta separada para 409 desambiguado)
+      const existingByEmail = email ? await db('users').where({ email }).first() : null;
+      const existingByPhone = phone ? await db('users').where({ phone }).first() : null;
 
-      if (existingUser) {
+      if (existingByEmail || existingByPhone) {
+        const fields = [];
+        if (existingByEmail) fields.push('email');
+        if (existingByPhone) fields.push('phone');
         return res.status(409).json({
           error: 'CONFLICT_ERROR',
           message: 'El correo electrónico o teléfono ya están registrados',
+          fields,
           statusCode: 409,
           timestamp: new Date().toISOString(),
         });
@@ -47,12 +52,13 @@ class AuthController {
       // Save user (transactional or simple write)
       const [newUser] = await db('users')
         .insert({
+          full_name,
           email,
           phone,
           password_hash: passwordHash,
           is_verified: false,
         })
-        .returning(['id', 'email', 'phone', 'is_verified']);
+        .returning(['id', 'full_name', 'email', 'phone', 'is_verified']);
 
       // Generate and send OTP
       const otpCode = await otpService.generateAndSaveOtp(newUser.id);
@@ -100,10 +106,10 @@ class AuthController {
 
       if (!user) {
         logger.warn('Intento de inicio de sesión fallido: Usuario no encontrado', { email, phone });
-        return res.status(401).json({
-          error: 'AUTH_FAILED',
-          message: 'Credenciales incorrectas',
-          statusCode: 401,
+        return res.status(404).json({
+          error: 'USER_NOT_FOUND',
+          message: 'Usuario no encontrado',
+          statusCode: 404,
           timestamp: new Date().toISOString(),
         });
       }
@@ -116,8 +122,8 @@ class AuthController {
           phone: user.phone,
         });
         return res.status(401).json({
-          error: 'AUTH_FAILED',
-          message: 'Credenciales incorrectas',
+          error: 'INVALID_PASSWORD',
+          message: 'Contraseña incorrecta',
           statusCode: 401,
           timestamp: new Date().toISOString(),
         });
@@ -236,7 +242,7 @@ class AuthController {
         logger.warn('Intento de reenvío de OTP para usuario no registrado', { email, phone });
         return res.status(200).json({
           message:
-            'Si el correo o teléfono está registrado, recibirás un nuevo código OTP en 10 minutos.',
+            'Si el correo o teléfono está registrado, recibirás un nuevo código OTP en 5 minutos.',
         });
       }
 
@@ -323,7 +329,7 @@ class AuthController {
 
       // Generate 6-digit code
       const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const resetExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+      const resetExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
       // Save code in user record
       await db('users').where({ id: user.id }).update({
@@ -332,7 +338,7 @@ class AuthController {
       });
 
       // Simulation - log sending the code
-      const message = `Tu código de recuperación es: ${resetCode}. Expira en 30 minutos.`;
+      const message = `Tu código de recuperación es: ${resetCode}. Expira en 5 minutos.`;
       if (user.email) {
         logger.info('[PASSWORD_RESET] Email de recuperación enviado (simulación)', {
           email: user.email,
@@ -481,6 +487,17 @@ class AuthController {
         return res.status(400).json({
           error: 'INVALID_TOKEN',
           message: 'Token temporal inválido o expirado',
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Evitar reutilización de la contraseña anterior
+      const isSamePassword = await bcrypt.compare(password, user.password_hash);
+      if (isSamePassword) {
+        return res.status(400).json({
+          error: 'PASSWORD_REUSE',
+          message: 'La nueva contraseña no puede ser igual a la anterior',
           statusCode: 400,
           timestamp: new Date().toISOString(),
         });

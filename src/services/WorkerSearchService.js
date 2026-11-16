@@ -20,6 +20,7 @@ class WorkerSearchService {
       certification_status: row.certification_status,
       average_rating: row.average_rating != null ? Number(row.average_rating).toFixed(1) : null,
       distance_km: Math.round((Number(row.distance_m) / 1000) * 100) / 100,
+      coverage_radius_km: row.coverage_radius_km != null ? Number(row.coverage_radius_km) : null,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),
     };
@@ -61,6 +62,7 @@ class WorkerSearchService {
         'wp.certification_status',
         'loc.latitude',
         'loc.longitude',
+        'loc.coverage_radius_km',
         db.raw(
           'ST_DistanceSphere(loc.geography::geometry, ST_MakePoint(?, ?)::geometry) as distance_m',
           [longitude, latitude],
