@@ -42,6 +42,45 @@ export const sampleRatings = [
     rating_stars: 5,
     review_text: 'Muy cordial y puntual. Gran predisposición durante la instalación.',
   },
+  // Rating 5: Cliente 1 califica a Roberto Fernández (Plomería) - Orden c1111111
+  {
+    id: seedId('r-3333331'),
+    order_id: 'c1111111-1111-4111-8111-111111111111',
+    rater_id: testClients[0].user.id,
+    ratee_id: 'b1111111-1111-4111-8111-111111111111',
+    rating_stars: 5,
+    review_text:
+      'Roberto solucionó la pérdida de agua en mi cocina muy rápido y con profesionalismo. Muy recomendado.',
+  },
+  // Rating 6: Cliente 2 califica a Roberto Fernández (Electricidad) - Orden c8888888
+  {
+    id: seedId('r-3333332'),
+    order_id: 'c8888888-8888-4888-8888-888888888888',
+    rater_id: testClients[1].user.id,
+    ratee_id: 'b1111111-1111-4111-8111-111111111111',
+    rating_stars: 4,
+    review_text:
+      'Buen trabajo de revisión eléctrica. Llegó a la hora acordada y cobró lo que había acordado.',
+  },
+  // Rating 7: Cliente 3 califica a Roberto Fernández (Plomería) - Orden c9999999
+  {
+    id: seedId('r-3333333'),
+    order_id: 'c9999999-9999-4999-8999-999999999999',
+    rater_id: testClients[2].user.id,
+    ratee_id: 'b1111111-1111-4111-8111-111111111111',
+    rating_stars: 3,
+    review_text: 'Revisó la instalación de gas y encontró una fuga. Muy minucioso en la revisión.',
+  },
+  // Rating 8: Cliente 5 califica a Roberto Fernández (Gasista) - Orden c1010101
+  {
+    id: seedId('r-3333334'),
+    order_id: 'c1010101-1010-4010-8010-101010101010',
+    rater_id: testClients[4].user.id,
+    ratee_id: 'b1111111-1111-4111-8111-111111111111',
+    rating_stars: 5,
+    review_text:
+      'Instaló un bomba de agua nueva. Trabajó todo el día y dejó todo limpio. Excelente.',
+  },
 ];
 
 export const sampleChats = [
@@ -88,6 +127,117 @@ export const sampleChats = [
       },
     ],
   },
+  // Chat 2: Cliente 2 (María Eugenia) ↔ Worker 2 (Diego Álvarez - Electricidad) - Orden c2222222
+  {
+    chat: {
+      id: seedId('chat-2222'),
+      user_id_1: 'a2222222-2222-4222-8222-222222222222',
+      user_id_2: 'b2222222-2222-4222-8222-222222222222',
+      order_id: 'c2222222-2222-4222-8222-222222222222',
+      last_message_at: '2026-09-07T10:30:00.000Z',
+    },
+    participants: [
+      { user_id: 'a2222222-2222-4222-8222-222222222222', is_favorite: true, is_archived: false },
+      { user_id: 'b2222222-2222-4222-8222-222222222222', is_favorite: false, is_archived: false },
+    ],
+    messages: [
+      {
+        id: seedId('m-2222221'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Hola Diego, ¿cuándo podrías pasar a revisar el tablero eléctrico?',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T14:00:00.000Z',
+      },
+      {
+        id: seedId('m-2222222'),
+        sender_id: 'b2222222-2222-4222-8222-222222222222',
+        content: 'Hola María. Puedo pasar mañana a las 10 de la mañana. ¿Te sirve?',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T14:05:00.000Z',
+      },
+      {
+        id: seedId('m-2222223'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Sí, perfecto. Estaré en casa.',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T14:10:00.000Z',
+      },
+    ],
+  },
+  // Chat 3: Cliente 2 (María Eugenia) ↔ Roberto Fernández (Plomería) - Orden c8888888
+  {
+    chat: {
+      id: seedId('chat-8888'),
+      user_id_1: 'a2222222-2222-4222-8222-222222222222',
+      user_id_2: 'b1111111-1111-4111-8111-111111111111',
+      order_id: 'c8888888-8888-4888-8888-888888888888',
+      last_message_at: '2026-09-06T16:45:00.000Z',
+    },
+    participants: [
+      { user_id: 'a2222222-2222-4222-8222-222222222222', is_favorite: false, is_archived: false },
+      { user_id: 'b1111111-1111-4111-8111-111111111111', is_favorite: false, is_archived: false },
+    ],
+    messages: [
+      {
+        id: seedId('m-8888221'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Hola Roberto, necesito revisar una fuga de gas en la cocina.',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T15:00:00.000Z',
+      },
+      {
+        id: seedId('m-8888222'),
+        sender_id: 'b1111111-1111-4111-8111-111111111111',
+        content: 'Hola María. Puedo pasar este viernes por la tarde. ¿Te funciona?',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T15:05:00.000Z',
+      },
+      {
+        id: seedId('m-8888223'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Sí, viernes a las 17hs está bien. Gracias.',
+        message_type: 'TEXT',
+        created_at: '2026-09-06T15:10:00.000Z',
+      },
+    ],
+  },
+  // Chat 4: Cliente 2 (María Eugenia) ↔ Laura Benítez (Limpieza) - Orden c2222223
+  {
+    chat: {
+      id: seedId('chat-3333'),
+      user_id_1: 'a2222222-2222-4222-8222-222222222222',
+      user_id_2: 'b3333333-3333-4333-8333-333333333333',
+      order_id: 'c2222223-2222-4222-8222-222222222223',
+      last_message_at: '2026-09-09T11:45:00.000Z',
+    },
+    participants: [
+      { user_id: 'a2222222-2222-4222-8222-222222222222', is_favorite: false, is_archived: false },
+      { user_id: 'b3333333-3333-4333-8333-333333333333', is_favorite: false, is_archived: false },
+    ],
+    messages: [
+      {
+        id: seedId('m-3333221'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Hola Laura, ¿podrías hacer una limpieza profunda este fin de semana?',
+        message_type: 'TEXT',
+        created_at: '2026-09-09T10:00:00.000Z',
+      },
+      {
+        id: seedId('m-3333222'),
+        sender_id: 'b3333333-3333-4333-8333-333333333333',
+        content: 'Hola María. Sí, tengo disponible el sábado por la mañana. ¿Te sirve?',
+        message_type: 'TEXT',
+        created_at: '2026-09-09T10:05:00.000Z',
+      },
+      {
+        id: seedId('m-3333223'),
+        sender_id: 'a2222222-2222-4222-8222-222222222222',
+        content: 'Perfecto, sábado a las 9hs. Gracias Laura.',
+        message_type: 'TEXT',
+        created_at: '2026-09-09T10:10:00.000Z',
+      },
+    ],
+  },
 ];
 
 /**
@@ -109,9 +259,13 @@ export async function seed(knex) {
 
   // 2. Recalcular promedios en perfiles
   const userIdsWithRatings = [
+    testClients[0].user.id, // Cliente 1 - calificó a Roberto Fernández
+    testClients[1].user.id, // Cliente 2 - calificó a Roberto Fernández
+    testClients[2].user.id, // Cliente 3 - calificó a Roberto Fernández
     testClients[3].user.id,
+    testClients[4].user.id, // Cliente 5 - calificó a Roberto Fernández
+    testWorkers[0].user.id, // Roberto Fernández - recibió calificaciones
     testWorkers[3].user.id,
-    testClients[4].user.id,
     testWorkers[4].user.id,
   ];
 

@@ -37,7 +37,12 @@ class ChatService {
     };
   }
 
-  formatChatListItem(row) {
+  formatChatListItem(row, userId) {
+    const lastMessageSentByUser = row.last_message_sender_id === userId;
+    const lastMessageRead =
+      lastMessageSentByUser ||
+      (row.me_last_read_at && row.last_message_created_at <= row.me_last_read_at);
+
     return {
       chat_id: row.chat_id,
       order_id: row.order_id,
@@ -47,9 +52,11 @@ class ChatService {
       last_message:
         row.last_message_content != null
           ? {
-              content: row.last_message_content,
+              message_id: row.last_message_id,
+              text: row.last_message_content,
               sender_id: row.last_message_sender_id,
               created_at: row.last_message_created_at,
+              read: lastMessageRead,
             }
           : null,
       other_user: {
@@ -135,7 +142,7 @@ class ChatService {
       .leftJoin('client_profiles as ocp', 'ocp.user_id', 'p2.user_id')
       .joinRaw(
         `LEFT JOIN LATERAL (
-           SELECT content, sender_id, created_at
+           SELECT id, content, sender_id, created_at
            FROM messages
            WHERE chat_id = c.id
              AND deleted_at IS NULL
@@ -152,9 +159,11 @@ class ChatService {
         'c.last_message_at',
         'me.is_favorite',
         'me.is_archived',
+        'me.last_read_at',
         'p2.user_id as other_user_id',
         db.raw('COALESCE(owp.full_name, ocp.full_name) as other_full_name'),
         db.raw('COALESCE(owp.avatar_url, ocp.avatar_url) as other_avatar_url'),
+        db.raw('lm.id as last_message_id'),
         db.raw('lm.content as last_message_content'),
         db.raw('lm.sender_id as last_message_sender_id'),
         db.raw('lm.created_at as last_message_created_at'),
@@ -195,7 +204,7 @@ class ChatService {
       .limit(safeLimit)
       .offset(offset);
 
-    const chats = rows.map((row) => this.formatChatListItem(row));
+    const chats = rows.map((row) => this.formatChatListItem(row, userId));
 
     return {
       chats,

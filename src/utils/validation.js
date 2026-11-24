@@ -447,6 +447,12 @@ export const listChatsQuerySchema = Joi.object({
     'string.base': 'search debe ser un texto',
     'string.max': 'search no debe exceder los 100 caracteres',
   }),
+  include_archived: Joi.boolean().truthy('1', 'true').falsy('0', 'false').default(false).messages({
+    'boolean.base': 'include_archived debe ser un booleano',
+  }),
+  favorites_only: Joi.boolean().truthy('1', 'true').falsy('0', 'false').default(false).messages({
+    'boolean.base': 'favorites_only debe ser un booleano',
+  }),
 });
 
 export const createMessageSchema = Joi.object({

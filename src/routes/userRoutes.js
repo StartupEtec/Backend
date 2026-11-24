@@ -62,6 +62,8 @@ router.post(
 
 // Rutas genéricas de usuario
 router.get('/me', authenticateToken, userController.getMyProfile);
+router.get('/me/chats', authenticateToken, chatController.list);
+router.post('/me/chats', authenticateToken, chatController.create);
 router.get('/:id', userController.getUserById);
 router.patch('/:id', authenticateToken, userController.updateProfile);
 

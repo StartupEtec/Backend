@@ -48,9 +48,14 @@ class ChatController {
 
   async list(req, res, next) {
     try {
-      const { id } = req.params;
+      let userId = req.params.id;
 
-      if (req.user.user_id !== id) {
+      // Soporta '/me/chats': resuelve al usuario autenticado.
+      if (userId === 'me') {
+        userId = req.user.user_id;
+      }
+
+      if (req.user.user_id !== userId) {
         return res.status(403).json({
           error: 'FORBIDDEN',
           message: 'No tienes permiso para ver los chats de otro usuario',
@@ -69,7 +74,20 @@ class ChatController {
         });
       }
 
-      const result = await chatService.listChats(id, value);
+      // Mapear parámetros del frontend al parámetro 'status' del servicio.
+      let status = 'all';
+      if (value.favorites_only) {
+        status = 'favorites';
+      } else if (value.include_archived) {
+        status = 'archived';
+      }
+
+      const result = await chatService.listChats(userId, {
+        limit: value.limit,
+        offset: value.offset,
+        status,
+        search: value.search || '',
+      });
 
       return res.status(200).json(result);
     } catch (err) {

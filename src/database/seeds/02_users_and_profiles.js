@@ -284,7 +284,7 @@ export const testWorkers = [
       hourly_rate: 8500.0,
       availability_status: 'AVAILABLE',
       certification_status: 'APPROVED',
-      average_rating: 5.0,
+      average_rating: 4.2,
     },
     location: {
       id: seedId('locw-1111'),
@@ -651,6 +651,15 @@ export async function seed(knex) {
       certification_status: worker.workerProfile.certification_status,
       average_rating: worker.workerProfile.average_rating,
     });
+
+    // Categorías múltiples para Roberto Fernández (testWorkers[0]):
+    // además de Plomería (category_id), agregamos Electricidad.
+    if (worker.user.id === 'b1111111-1111-4111-8111-111111111111') {
+      await knex('worker_categories').insert({
+        worker_profile_id: worker.workerProfile.id,
+        category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f003', // Electricidad
+      });
+    }
 
     // Certificaciones
     for (const cert of worker.certifications) {

@@ -2,7 +2,7 @@ import { testClients, testWorkers } from './02_users_and_profiles.js';
 import { seedId } from '../seedId.js';
 
 export const sampleOrders = [
-  // 1. Orden PENDING (Cliente 1 solicita servicio a Worker 1 - Plomería)
+  // 1. Orden COMPLETED (Cliente 1 solicita servicio a Worker 1 - Roberto Fernández, Plomería)
   {
     order: {
       id: 'c1111111-1111-4111-8111-111111111111',
@@ -11,18 +11,37 @@ export const sampleOrders = [
       category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f002', // Plomería
       location_id: testClients[0].location.id,
       description: 'Reparación de pérdida de agua en bajo mesada y cambio de flexible de cocina.',
-      status: 'PENDING',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-05T11:30:00.000Z',
+      client_confirmed_by: testClients[0].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-05T10:00:00.000Z',
+      worker_confirmed_by: testWorkers[0].user.id,
     },
     quote: {
       id: seedId('q-1111111'),
       proposed_price: 15000.0,
       proposed_date: '2026-09-05',
       proposed_time: '10:00:00',
-      status: 'PENDING',
+      status: 'ACCEPTED',
     },
-    events: [{ from_state: null, to_state: 'PENDING', user_id: testClients[0].user.id }],
+    transaction: {
+      id: seedId('tx-1111111'),
+      payer_id: testClients[0].user.id,
+      receiver_id: testWorkers[0].user.id,
+      amount: 15000.0,
+      status: 'COMPLETED',
+      payment_method_id: testClients[0].paymentMethods[0].id,
+    },
+    events: [
+      { from_state: null, to_state: 'PENDING', user_id: testClients[0].user.id },
+      { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[0].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[0].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[0].user.id },
+    ],
   },
-  // 2. Orden ACCEPTED con pago en ESCROW (Cliente 2 a Worker 2 - Electricidad)
+  // 2. Orden COMPLETED con pago en ESCROW (Cliente 2 a Worker 2 - Electricidad)
   {
     order: {
       id: 'c2222222-2222-4222-8222-222222222222',
@@ -31,7 +50,13 @@ export const sampleOrders = [
       category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f003', // Electricidad
       location_id: testClients[1].location.id,
       description: 'Instalación de disyuntor diferencial y 4 llaves térmicas en tablero principal.',
-      status: 'ACCEPTED',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-07T10:00:00.000Z',
+      client_confirmed_by: testClients[1].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-07T09:30:00.000Z',
+      worker_confirmed_by: testWorkers[1].user.id,
     },
     quote: {
       id: seedId('q-2222222'),
@@ -45,12 +70,14 @@ export const sampleOrders = [
       payer_id: testClients[1].user.id,
       receiver_id: testWorkers[1].user.id,
       amount: 25000.0,
-      status: 'ESCROWED',
+      status: 'COMPLETED',
       payment_method_id: testClients[1].paymentMethods[0].id,
     },
     events: [
       { from_state: null, to_state: 'PENDING', user_id: testClients[1].user.id },
       { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[1].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[1].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[1].user.id },
     ],
   },
   // 3. Orden IN_PROGRESS con pago en ESCROW (Cliente 3 a Worker 3 - Limpieza)
@@ -209,6 +236,162 @@ export const sampleOrders = [
     events: [
       { from_state: null, to_state: 'PENDING', user_id: testClients[1].user.id },
       { from_state: 'PENDING', to_state: 'REJECTED', user_id: testClients[1].user.id },
+    ],
+  },
+  // 8. Orden COMPLETED (Cliente 2 a Roberto Fernández - Electricidad)
+  {
+    order: {
+      id: 'c8888888-8888-4888-8888-888888888888',
+      client_id: testClients[1].profile.id,
+      worker_id: testWorkers[0].workerProfile.id,
+      category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f003', // Electricidad
+      location_id: testClients[1].location.id,
+      description: 'Revisión de tablero eléctrico y reemplazo de disyuntor.',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-06T15:00:00.000Z',
+      client_confirmed_by: testClients[1].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-06T14:00:00.000Z',
+      worker_confirmed_by: testWorkers[0].user.id,
+    },
+    quote: {
+      id: seedId('q-8888888'),
+      proposed_price: 22000.0,
+      proposed_date: '2026-09-06',
+      proposed_time: '14:00:00',
+      status: 'ACCEPTED',
+    },
+    transaction: {
+      id: seedId('tx-8888888'),
+      payer_id: testClients[1].user.id,
+      receiver_id: testWorkers[0].user.id,
+      amount: 22000.0,
+      status: 'COMPLETED',
+      payment_method_id: testClients[1].paymentMethods[0].id,
+    },
+    events: [
+      { from_state: null, to_state: 'PENDING', user_id: testClients[1].user.id },
+      { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[1].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[0].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[1].user.id },
+    ],
+  },
+  // 9. Orden COMPLETED (Cliente 3 a Roberto Fernández - Plomería)
+  {
+    order: {
+      id: 'c9999999-9999-4999-8999-999999999999',
+      client_id: testClients[2].profile.id,
+      worker_id: testWorkers[0].workerProfile.id,
+      category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f002', // Plomería
+      location_id: testClients[2].location.id,
+      description: 'Destape de cloaca principal y revisión de grifería.',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-07T12:00:00.000Z',
+      client_confirmed_by: testClients[2].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-07T11:00:00.000Z',
+      worker_confirmed_by: testWorkers[0].user.id,
+    },
+    quote: {
+      id: seedId('q-9999999'),
+      proposed_price: 18000.0,
+      proposed_date: '2026-09-07',
+      proposed_time: '11:00:00',
+      status: 'ACCEPTED',
+    },
+    transaction: {
+      id: seedId('tx-9999999'),
+      payer_id: testClients[2].user.id,
+      receiver_id: testWorkers[0].user.id,
+      amount: 18000.0,
+      status: 'COMPLETED',
+      payment_method_id: testClients[2].paymentMethods[0].id,
+    },
+    events: [
+      { from_state: null, to_state: 'PENDING', user_id: testClients[2].user.id },
+      { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[2].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[0].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[2].user.id },
+    ],
+  },
+  // 10. Orden COMPLETED (Cliente 5 a Roberto Fernández - Gasista)
+  {
+    order: {
+      id: 'c1010101-1010-4010-8010-101010101010',
+      client_id: testClients[4].profile.id,
+      worker_id: testWorkers[0].workerProfile.id,
+      category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f002', // Plomería
+      location_id: testClients[4].location.id,
+      description: 'Revisión de instalación de gas y cambio de regulador.',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-08T10:30:00.000Z',
+      client_confirmed_by: testClients[4].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-08T09:30:00.000Z',
+      worker_confirmed_by: testWorkers[0].user.id,
+    },
+    quote: {
+      id: seedId('q-1010101'),
+      proposed_price: 20000.0,
+      proposed_date: '2026-09-08',
+      proposed_time: '09:30:00',
+      status: 'ACCEPTED',
+    },
+    transaction: {
+      id: seedId('tx-1010101'),
+      payer_id: testClients[4].user.id,
+      receiver_id: testWorkers[0].user.id,
+      amount: 20000.0,
+      status: 'COMPLETED',
+      payment_method_id: testClients[4].paymentMethods[0].id,
+    },
+    events: [
+      { from_state: null, to_state: 'PENDING', user_id: testClients[4].user.id },
+      { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[4].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[0].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[4].user.id },
+    ],
+  },
+  // 11. Orden COMPLETED (Cliente 2 a Worker 3 - Limpieza)
+  {
+    order: {
+      id: 'c2222223-2222-4222-8222-222222222223',
+      client_id: testClients[1].profile.id,
+      worker_id: testWorkers[2].workerProfile.id,
+      category_id: 'd9b936d5-a3d5-45d6-b4d6-a4c3f5d6f001', // Limpieza
+      location_id: testClients[1].location.id,
+      description: 'Limpieza profunda de departamento 2 ambientes.',
+      status: 'COMPLETED',
+      client_confirmed: true,
+      client_confirmed_at: '2026-09-09T11:00:00.000Z',
+      client_confirmed_by: testClients[1].user.id,
+      worker_confirmed: true,
+      worker_confirmed_at: '2026-09-09T10:30:00.000Z',
+      worker_confirmed_by: testWorkers[2].user.id,
+    },
+    quote: {
+      id: seedId('q-2222223'),
+      proposed_price: 15000.0,
+      proposed_date: '2026-09-09',
+      proposed_time: '10:30:00',
+      status: 'ACCEPTED',
+    },
+    transaction: {
+      id: seedId('tx-2222223'),
+      payer_id: testClients[1].user.id,
+      receiver_id: testWorkers[2].user.id,
+      amount: 15000.0,
+      status: 'COMPLETED',
+      payment_method_id: testClients[1].paymentMethods[0].id,
+    },
+    events: [
+      { from_state: null, to_state: 'PENDING', user_id: testClients[1].user.id },
+      { from_state: 'PENDING', to_state: 'ACCEPTED', user_id: testClients[1].user.id },
+      { from_state: 'ACCEPTED', to_state: 'IN_PROGRESS', user_id: testWorkers[2].user.id },
+      { from_state: 'IN_PROGRESS', to_state: 'COMPLETED', user_id: testClients[1].user.id },
     ],
   },
 ];

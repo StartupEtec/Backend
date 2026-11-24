@@ -58,6 +58,14 @@ class WorkerProfileService {
 
     if (!profile) return null;
 
+    // Obtener todas las categorías del trabajador desde la tabla intermedia
+    const workerCategories = await db('worker_categories as wc')
+      .join('categories as c', 'wc.category_id', 'c.id')
+      .where('wc.worker_profile_id', profile.id)
+      .select('c.name as category_name');
+
+    const categoryNames = workerCategories.map((wc) => wc.category_name).filter(Boolean);
+
     const avgRating = await db('ratings')
       .where({ ratee_id: userId })
       .avg('rating_stars as average')
@@ -74,6 +82,10 @@ class WorkerProfileService {
       bio: profile.bio,
       category_id: profile.category_id,
       category_name: profile.category_name,
+      /** Arreglo con el/los nombre(s) de categoría. Incluye la categoría
+       * principal (category_id) más las adicionales de worker_categories. */
+      category_names:
+        categoryNames.length > 0 ? categoryNames : [profile.category_name].filter(Boolean),
       hourly_rate: toRate(profile.hourly_rate),
       availability_status: profile.availability_status,
       certification_status: profile.certification_status,
