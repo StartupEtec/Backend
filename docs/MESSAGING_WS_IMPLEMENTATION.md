@@ -89,7 +89,8 @@ plantilla; el prerrequisito real es la Issue #4 (chats), ya completada.
      `ImageService` → `400 INVALID_IMAGE_TYPE`.
   3. Transacción: `INSERT` en `messages` + `UPDATE chats.last_message_at`.
   4. Si la transacción falla → elimina el archivo escrito y relanza.
-  5. Emite `message:new` a los demás participantes.
+  5. Emite `message:new` a todos los participantes del chat (incluido el autor);
+     las notificaciones push/email/SMS siguen yendo solo a los demás.
   6. Log `[AUDITORIA] Mensaje enviado`.
 - `listMessages(chatId, userId, { limit, offset })`:
   - Excluye `deleted_at`, orden `created_at DESC, id DESC` + `reverse()` (más
@@ -191,8 +192,8 @@ Si el token falta o es inválido → cierre con código `1008`.
 | Evento | Payload | Cuándo |
 |--------|---------|--------|
 | `connected` | `{ user_id }` | Al autenticarse la conexión. |
-| `message:new` | `{ chat_id, message }` | Nuevo mensaje en un chat del usuario (se envía a los demás participantes, no al autor). |
-| `message:deleted` | `{ chat_id, message_id }` | Mensaje eliminado por su autor. |
+| `message:new` | `{ chat_id, message }` | Nuevo mensaje en un chat del usuario (se envía a todos los participantes, incluido el autor). |
+| `message:deleted` | `{ chat_id, message_id }` | Mensaje eliminado por su autor (se envía a todos los participantes). |
 | `user:typing` | `{ chat_id, user_id, is_typing }` | Otro participante escribe. |
 
 ### Eventos cliente → servidor
@@ -213,7 +214,9 @@ Si el token falta o es inválido → cierre con código `1008`.
 - `Content-Type: multipart/form-data` para `IMAGE`:
   - campo `message_type: IMAGE`
   - campo `file` (JPG/PNG, máx 5MB)
-- Respuesta `201`: `{ message: { id, chat_id, sender_id, content, message_type, attachment_url, created_at } }`
+- Respuesta `201`: `{ message: { id, chat_id, sender_id, content, message_type, attachment_url, avatar_url, created_at } }`
+  - `avatar_url` se obtiene con `COALESCE(users.avatar_url, client_profiles.avatar_url, worker_profiles.avatar_url)`; la consulta usa `to_jsonb(u)->>'avatar_url'` para seguir funcionando en bases donde aún no se aplicó la migración que agrega `users.avatar_url`.
+  - `attachment_url` y `avatar_url` se resuelven con `PUBLIC_BASE_URL` (sin `/api/v1`) si está configurada; si no, se devuelve la ruta relativa `/uploads/...`.
 - Errores: `400 VALIDATION_ERROR`, `400 IMAGE_REQUIRED`, `400 INVALID_IMAGE`,
   `400 INVALID_IMAGE_TYPE`, `400 UPLOAD_ERROR`, `404 CHAT_NOT_FOUND`.
 

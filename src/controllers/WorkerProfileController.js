@@ -6,28 +6,22 @@ class WorkerProfileController {
   async getProfile(req, res, next) {
     try {
       const { id } = req.params;
-
-      if (req.user.user_id !== id) {
-        return res.status(403).json({
-          error: 'FORBIDDEN',
-          message: 'No tienes permiso para acceder a este perfil',
-          statusCode: 403,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const profile = await workerProfileService.getProfile(id);
+      const isOwner = req.user.user_id === id;
+      const profile = await workerProfileService.getProfile(id, { publicView: !isOwner });
 
       if (!profile) {
         return res.status(404).json({
           error: 'WORKER_PROFILE_NOT_FOUND',
-          message: 'Perfil de trabajador no encontrado. Crea uno con POST.',
+          message: 'Perfil de trabajador no encontrado.',
           statusCode: 404,
           timestamp: new Date().toISOString(),
         });
       }
 
-      return res.status(200).json(profile);
+      if (isOwner) {
+        return res.status(200).json(profile);
+      }
+      return res.status(200).json({ profile });
     } catch (err) {
       logger.error('Error al obtener perfil de trabajador:', err);
       next(err);

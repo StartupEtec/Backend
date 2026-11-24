@@ -201,7 +201,7 @@ eliminación (soft delete) y notificaciones por WebSocket.
 - `createMessage`: valida participación activa (`404 CHAT_NOT_FOUND`); para `IMAGE` comprime
   con `sharp` (máx 1600px, JPEG q80, `uploads/messages/`); inserta en transacción +
   `chats.last_message_at = now()`; si la transacción falla, elimina el archivo del disco;
-  emite `message:new` a los demás participantes; log `[AUDITORIA]`.
+  emite `message:new` a todos los participantes (incluido el autor); log `[AUDITORIA]`.
 - `listMessages`: solo mensajes con `deleted_at IS NULL`, orden `created_at DESC, id DESC` +
   `reverse()` (más recientes al final); actualiza `last_read_at`.
 - `deleteMessage`: verifica existencia (`404`), autoría (`403`), soft delete + emite

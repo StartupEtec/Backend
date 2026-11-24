@@ -33,51 +33,99 @@ const toDateOnly = (value) => {
 const toRate = (value) => (value == null ? null : Number(value));
 
 class WorkerProfileService {
-  async getProfile(userId) {
-    const profile = await db('worker_profiles')
-      .where({ user_id: userId })
-      .leftJoin('categories', 'worker_profiles.category_id', 'categories.id')
+  async getProfile(userId, { publicView = false } = {}) {
+    const profile = await db('worker_profiles as wp')
+      .where({ 'wp.user_id': userId })
+      .leftJoin('categories as c', 'wp.category_id', 'c.id')
+      .leftJoin('users as u', 'u.id', 'wp.user_id')
+      .leftJoin('locations as loc', function () {
+        this.on('loc.user_id', '=', 'wp.user_id').andOnVal('loc.is_primary', '=', db.raw('true'));
+      })
       .select(
-        'worker_profiles.id',
-        'worker_profiles.user_id',
-        'worker_profiles.full_name',
-        'worker_profiles.date_of_birth',
-        'worker_profiles.avatar_url',
-        'worker_profiles.dni_front_url',
-        'worker_profiles.dni_back_url',
-        'worker_profiles.bio',
-        'worker_profiles.category_id',
-        'categories.name as category_name',
-        'worker_profiles.hourly_rate',
-        'worker_profiles.availability_status',
-        'worker_profiles.certification_status',
-        'worker_profiles.created_at',
-        'worker_profiles.updated_at',
+        'wp.id',
+        'wp.user_id',
+        'wp.full_name',
+        'wp.date_of_birth',
+        'wp.avatar_url',
+        'wp.dni_front_url',
+        'wp.dni_back_url',
+        'wp.bio',
+        'wp.category_id',
+        'c.name as category_name',
+        'wp.hourly_rate',
+        'wp.availability_status',
+        'wp.certification_status',
+        'wp.average_rating',
+        'wp.created_at',
+        'wp.updated_at',
+        'u.active as user_active',
+        'loc.latitude',
+        'loc.longitude',
+        'loc.coverage_radius_km',
       )
       .first();
 
     if (!profile) return null;
+    if (publicView && !profile.user_active) return null;
 
-    const avgRating = await db('ratings')
+    const avgResult = await db('ratings')
       .where({ ratee_id: userId })
       .avg('rating_stars as average')
+      .count('id as total_reviews')
       .first();
+    const average = avgResult?.average ? Number(Number(avgResult.average).toFixed(1)) : (profile.average_rating != null ? Number(Number(profile.average_rating).toFixed(1)) : null);
+    const totalReviews = Number(avgResult?.total_reviews || 0);
 
-    return {
+    const availability = await db('worker_availability')
+      .where({ worker_id: profile.id })
+      .orderBy([{ column: 'day_of_week' }, { column: 'start_time' }])
+      .select('id', 'day_of_week', 'start_time', 'end_time');
+
+    let portfolio = [];
+    const hasPortfolio = await db.schema.hasTable('worker_portfolio_items');
+    if (hasPortfolio) {
+      portfolio = await db('worker_portfolio_items')
+        .where({ worker_id: profile.id })
+        .orderBy('created_at', 'desc')
+        .select('id', 'image_url', 'title', 'description', 'created_at');
+    }
+
+    const base = {
       id: profile.id,
       user_id: profile.user_id,
       full_name: profile.full_name,
-      date_of_birth: toDateOnly(profile.date_of_birth),
       avatar_url: profile.avatar_url,
-      dni_front_url: profile.dni_front_url,
-      dni_back_url: profile.dni_back_url,
       bio: profile.bio,
       category_id: profile.category_id,
       category_name: profile.category_name,
       hourly_rate: toRate(profile.hourly_rate),
       availability_status: profile.availability_status,
       certification_status: profile.certification_status,
-      average_rating: avgRating?.average ? Number(avgRating.average).toFixed(1) : null,
+      average_rating: average,
+      total_reviews: totalReviews,
+      availability: availability.map((a) => ({
+        id: a.id,
+        day_of_week: Number(a.day_of_week),
+        start_time: typeof a.start_time === 'string' && a.start_time.length > 5 ? a.start_time.slice(0, 5) : a.start_time,
+        end_time: typeof a.end_time === 'string' && a.end_time.length > 5 ? a.end_time.slice(0, 5) : a.end_time,
+      })),
+      portfolio,
+      location: profile.latitude != null ? {
+        latitude: Number(profile.latitude),
+        longitude: Number(profile.longitude),
+        coverage_radius_km: profile.coverage_radius_km != null ? Number(profile.coverage_radius_km) : null,
+      } : null,
+    };
+
+    if (publicView) {
+      return base;
+    }
+
+    return {
+      ...base,
+      date_of_birth: toDateOnly(profile.date_of_birth),
+      dni_front_url: profile.dni_front_url,
+      dni_back_url: profile.dni_back_url,
       created_at: profile.created_at,
       updated_at: profile.updated_at,
     };

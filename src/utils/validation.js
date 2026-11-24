@@ -739,6 +739,20 @@ export const createOrderSchema = Joi.object({
   description: Joi.string().max(2000).allow('', null).messages({
     'string.max': 'La descripción no debe exceder los 2000 caracteres',
   }),
+  suggested_budget: Joi.number().positive().precision(2).max(99999999.99).allow(null).messages({
+    'number.base': 'El presupuesto sugerido debe ser un número',
+    'number.positive': 'El presupuesto sugerido debe ser un valor positivo',
+    'number.max': 'El presupuesto sugerido no debe exceder los 99,999,999.99',
+  }),
+  scheduled_date: Joi.date()
+    .iso()
+    .min('now')
+    .allow(null)
+    .messages({
+      'date.base': 'La fecha deseada debe ser una fecha válida',
+      'date.format': 'La fecha deseada debe tener formato ISO (YYYY-MM-DD)',
+      'date.min': 'La fecha deseada debe ser hoy o una fecha futura',
+    }),
 }).custom((value, helpers) => {
   if (value.client_id === value.worker_id) {
     return helpers.message('El cliente y el trabajador no pueden ser el mismo usuario');
@@ -772,6 +786,9 @@ export const listUserOrdersQuerySchema = Joi.object({
   date_to: Joi.date().iso().messages({
     'date.base': 'date_to debe ser una fecha válida',
     'date.iso': 'date_to debe tener formato ISO (YYYY-MM-DD)',
+  }),
+  search: Joi.string().trim().max(100).allow('', null).messages({
+    'string.max': 'search no debe exceder los 100 caracteres',
   }),
 });
 
@@ -811,6 +828,9 @@ export const listRatingsQuerySchema = Joi.object({
   offset: Joi.number().integer().min(0).default(0).messages({
     'number.base': 'offset debe ser un número entero',
     'number.min': 'offset no puede ser negativo',
+  }),
+  sort: Joi.string().valid('recent', 'best', 'worst').default('recent').messages({
+    'any.only': 'sort debe ser uno de: recent, best, worst',
   }),
 });
 
@@ -1025,6 +1045,35 @@ export const listNotificationsSchema = Joi.object({
     .messages({
       'any.only': `type debe ser uno de: ${NOTIFICATION_TYPES.join(', ')}`,
     }),
+});
+
+export const updateChatParticipantSchema = Joi.object({
+  is_favorite: Joi.boolean().optional().messages({
+    'boolean.base': 'is_favorite debe ser un valor booleano',
+  }),
+  is_archived: Joi.boolean().optional().messages({
+    'boolean.base': 'is_archived debe ser un valor booleano',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
+
+export const registerDeviceSchema = Joi.object({
+  token: Joi.string().trim().min(10).max(1024).required().messages({
+    'string.base': 'token debe ser un texto',
+    'string.empty': 'token es requerido',
+    'string.min': 'token no es válido',
+    'string.max': 'token es demasiado largo',
+    'any.required': 'token es requerido',
+  }),
+  platform: Joi.string().valid('ios', 'android', 'web', 'unknown').default('unknown').messages({
+    'any.only': 'platform debe ser uno de: ios, android, web, unknown',
+  }),
+  device_name: Joi.string().trim().max(255).allow('', null).messages({
+    'string.max': 'device_name no debe exceder los 255 caracteres',
+  }),
 });
 
 export const sendTestNotificationSchema = Joi.object({

@@ -14,6 +14,9 @@ class WebSocketHub {
   attach(server) {
     this.wss = new WebSocketServer({ server, path: WS_PATH });
     this.wss.on('connection', (socket, req) => this.handleConnection(socket, req));
+    this.wss.on('error', (err) => {
+      logger.error('[WS] Error del servidor WebSocket', { error: err.message });
+    });
     logger.info(`WebSocket listo en ${WS_PATH}`);
   }
 
@@ -22,6 +25,10 @@ class WebSocketHub {
     const payload = token ? authService.verifyAccessToken(token) : null;
 
     if (!payload || !payload.user_id) {
+      logger.warn('[WS] Handshake rechazado', {
+        path: WS_PATH,
+        reason: token ? 'invalid' : 'missing',
+      });
       socket.close(1008, 'Token inválido');
       return;
     }
@@ -39,6 +46,9 @@ class WebSocketHub {
     });
     socket.on('close', () => {
       this.removeClient(userId, socket);
+    });
+    socket.on('error', (err) => {
+      logger.warn('[WS] Error de conexión del cliente', { user_id: userId, error: err.message });
     });
 
     socket.send(JSON.stringify({ event: 'connected', payload: { user_id: userId } }));

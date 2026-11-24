@@ -36,6 +36,7 @@ services:
       # origen de Metro (http://localhost:8081) para probar con Expo Web: React
       # Native no manda header Origin, pero el navegador sí.
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres

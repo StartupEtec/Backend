@@ -47,6 +47,7 @@ const setupMockKnex = () => {
       return builders[table];
     });
     trx.fn = { now: () => new Date() };
+    trx.raw = jest.fn((val) => val);
     return cb(trx);
   });
   mockKnex.raw = jest.fn((val) => val);
@@ -293,6 +294,7 @@ describe('ChatService', () => {
         last_message_at: new Date('2026-08-07T13:00:00Z'),
         created_at: new Date('2026-08-07T12:00:00Z'),
       });
+      builders['messages as m'] = makeBuilder();
       builders.messages = makeBuilder();
       const msgNew = {
         id: 'msg-2',
@@ -308,9 +310,10 @@ describe('ChatService', () => {
         content: 'Primero',
         message_type: 'TEXT',
         attachment_url: null,
+        avatar_url: '/uploads/profiles/avatar.jpg',
         created_at: new Date('2026-08-07T12:00:00Z'),
       };
-      builders.messages.select.mockResolvedValue([msgNew, msgOld]);
+      builders['messages as m'].select.mockResolvedValue([msgNew, msgOld]);
       builders.chat_participants = makeBuilder();
       builders.chat_participants.first.mockResolvedValue({ last_read_at: null });
       builders.messages.count.mockResolvedValue([{ total: '1' }]);
@@ -321,6 +324,7 @@ describe('ChatService', () => {
       expect(result.chat.chat_id).toBe(CHAT_ID);
       expect(result.messages).toHaveLength(2);
       expect(result.messages[0].content).toBe('Primero');
+      expect(result.messages[0].avatar_url).toBe('/uploads/profiles/avatar.jpg');
       expect(result.messages[1].content).toBe('Segundo');
       expect(result.unread_count).toBe(1);
       expect(builders.chat_participants.update).toHaveBeenCalledWith({
@@ -571,8 +575,9 @@ describe('ChatController', () => {
         last_message_at: new Date(),
         created_at: new Date(),
       });
+      builders['messages as m'] = makeBuilder();
       builders.messages = makeBuilder();
-      builders.messages.select.mockResolvedValue([
+      builders['messages as m'].select.mockResolvedValue([
         {
           id: 'msg-1',
           sender_id: UUID2,

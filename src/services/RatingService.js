@@ -79,12 +79,12 @@ class RatingService {
   }
 
   async listRatingsByUser(userId, query) {
-    const { limit, offset } = query;
+    const { limit, offset, sort = 'recent' } = query;
 
     const [{ count }] = await db('ratings').where({ ratee_id: userId }).count('* as count');
     const total = Number(count);
 
-    const rows = await db('ratings as r')
+    let q = db('ratings as r')
       .join('users as u', 'u.id', 'r.rater_id')
       .where('r.ratee_id', userId)
       .select(
@@ -97,10 +97,17 @@ class RatingService {
         'r.created_at',
         'u.full_name as rater_full_name',
         'u.avatar_url as rater_avatar_url',
-      )
-      .orderBy('r.created_at', 'desc')
-      .limit(limit)
-      .offset(offset);
+      );
+
+    if (sort === 'best') {
+      q = q.orderBy('r.rating_stars', 'desc').orderBy('r.created_at', 'desc');
+    } else if (sort === 'worst') {
+      q = q.orderBy('r.rating_stars', 'asc').orderBy('r.created_at', 'desc');
+    } else {
+      q = q.orderBy('r.created_at', 'desc');
+    }
+
+    const rows = await q.limit(limit).offset(offset);
 
     const ratings = rows.map((row) => ({
       id: row.id,
@@ -117,7 +124,7 @@ class RatingService {
       },
     }));
 
-    return { ratings, count: total, limit, offset };
+    return { ratings, count: total, limit, offset, sort };
   }
 
   async getRatingAverage(userId) {
@@ -130,7 +137,17 @@ class RatingService {
     const average = result?.average ? Number(Number(result.average).toFixed(1)) : null;
     const totalRatings = Number(result?.total_ratings || 0);
 
-    return { average_rating: average, total_ratings: totalRatings };
+    const distRows = await db('ratings')
+      .where({ ratee_id: userId })
+      .select('rating_stars')
+      .count('* as count')
+      .groupBy('rating_stars');
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of distRows) {
+      distribution[Number(r.rating_stars)] = Number(r.count);
+    }
+
+    return { average_rating: average, total_ratings: totalRatings, distribution };
   }
 
   async recalculateAverageRating(userId) {

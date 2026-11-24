@@ -37,6 +37,8 @@ class OrderService {
       category_id: row.category_id,
       location_id: row.location_id,
       description: row.description || null,
+      suggested_budget: row.suggested_budget != null ? Number(row.suggested_budget) : null,
+      scheduled_date: row.scheduled_date || null,
       status: row.status,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -79,6 +81,8 @@ class OrderService {
         'o.category_id',
         'o.location_id',
         'o.description',
+        'o.suggested_budget',
+        'o.scheduled_date',
         'o.status',
         'o.created_at',
         'o.updated_at',
@@ -162,6 +166,8 @@ class OrderService {
         category_id: data.category_id,
         location_id: data.location_id,
         description: data.description || null,
+        suggested_budget: data.suggested_budget ?? null,
+        scheduled_date: data.scheduled_date ?? null,
         status: ORDER_STATUS.PENDING,
       })
       .returning([
@@ -171,6 +177,8 @@ class OrderService {
         'category_id',
         'location_id',
         'description',
+        'suggested_budget',
+        'scheduled_date',
         'status',
         'created_at',
         'updated_at',
@@ -207,6 +215,8 @@ class OrderService {
         'o.category_id',
         'o.location_id',
         'o.description',
+        'o.suggested_budget',
+        'o.scheduled_date',
         'o.status',
         'o.created_at',
         'o.updated_at',
@@ -252,6 +262,14 @@ class OrderService {
     if (date_to) {
       baseQuery = baseQuery.where('o.created_at', '<=', date_to);
     }
+    if (search) {
+      const s = `%${search}%`;
+      baseQuery = baseQuery.where(function () {
+        this.where('cu.full_name', 'ilike', s)
+          .orWhere('wu.full_name', 'ilike', s)
+          .orWhere('o.description', 'ilike', s);
+      });
+    }
 
     // Obtener total count (sin límite/offset)
     const countQuery = db('orders as o')
@@ -280,6 +298,14 @@ class OrderService {
     if (status) countQuery.where('o.status', status);
     if (date_from) countQuery.where('o.created_at', '>=', date_from);
     if (date_to) countQuery.where('o.created_at', '<=', date_to);
+    if (search) {
+      const s = `%${search}%`;
+      countQuery.where(function () {
+        this.where('cu.full_name', 'ilike', s)
+          .orWhere('wu.full_name', 'ilike', s)
+          .orWhere('o.description', 'ilike', s);
+      });
+    }
 
     const [{ count }] = await countQuery.count('* as count');
     const total = Number(count);

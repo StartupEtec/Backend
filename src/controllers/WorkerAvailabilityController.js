@@ -49,8 +49,14 @@ class WorkerAvailabilityController {
   async list(req, res, next) {
     try {
       const { id } = req.params;
-
-      const result = await workerAvailabilityService.listAvailability(id, req.user.user_id);
+      const isOwner = req.user && req.user.user_id && (await (async () => {
+        const db = (await import('../database/db.js')).default;
+        const w = await db('worker_profiles').where({ id, user_id: req.user.user_id }).first();
+        return !!w;
+      })());
+      const result = await workerAvailabilityService.listAvailability(id, req.user.user_id, {
+        publicView: !isOwner,
+      });
 
       if (result.error === 'WORKER_PROFILE_NOT_FOUND') {
         return errorResponse(res, 404, 'WORKER_PROFILE_NOT_FOUND', result.message);

@@ -123,6 +123,37 @@ class ChatController {
       next(err);
     }
   }
+
+  async updateParticipant(req, res, next) {
+    try {
+      const { chat_id } = req.params;
+      const { error, value } = (await import('../utils/validation.js')).updateChatParticipantSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      const result = await chatService.updateParticipantState(chat_id, req.user.user_id, value);
+      if (result.error === 'CHAT_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'CHAT_NOT_FOUND',
+          message: 'Chat no encontrado o no tienes acceso a él',
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      return res.status(200).json({
+        message: 'Chat actualizado correctamente',
+        chat: result,
+      });
+    } catch (err) {
+      logger.error('Error al actualizar estado del chat:', err);
+      next(err);
+    }
+  }
 }
 
 export default new ChatController();

@@ -769,6 +769,10 @@ Evento que el cliente envía al servidor:
 Adjuntos: las imágenes de mensajes se guardan en `<UPLOAD_DIR>/messages/` (default `uploads/`,
 ver `.env.example`) y se sirven desde `GET /uploads/...`. Las imágenes de perfil usan
 `<UPLOAD_DIR>/profiles/` vía `POST /api/v1/uploads/profile-image`.
+`PUBLIC_BASE_URL` (ej. `https://api.tudominio.com`, sin `/api/v1`) resuelve las rutas
+`/uploads/...` a URLs absolutas en `attachment_url` y `avatar_url` de los mensajes;
+si no se configura, la API devuelve la ruta relativa. `message:new` y `message:deleted`
+se emiten a todos los participantes del chat.
 
 ### Salud y Documentación
 

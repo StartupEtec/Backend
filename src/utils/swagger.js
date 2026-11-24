@@ -1178,6 +1178,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
+            chat_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             sender_id: { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
             content: { type: 'string', example: 'Hola, ¿estás disponible?' },
             message_type: {
@@ -1185,7 +1186,16 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
               example: 'TEXT',
               enum: ['TEXT', 'IMAGE', 'QUOTE'],
             },
-            attachment_url: { type: 'string', nullable: true },
+            attachment_url: {
+              type: 'string',
+              nullable: true,
+              description: 'URL pública resuelta con PUBLIC_BASE_URL cuando está configurada',
+            },
+            avatar_url: {
+              type: 'string',
+              nullable: true,
+              description: 'Avatar del remitente (users → client_profiles → worker_profiles)',
+            },
             created_at: { type: 'string', format: 'date-time' },
           },
         },
@@ -1213,7 +1223,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             message: { $ref: '#/components/schemas/MessageResponse' },
           },
           description:
-            'Al crear un mensaje se emite por WebSocket el evento message:new a los demás participantes del chat',
+            'Al crear un mensaje se emite por WebSocket el evento message:new a todos los participantes del chat, incluido el autor',
         },
         ListMessagesResponse: {
           type: 'object',
