@@ -132,7 +132,7 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
       await authController.resendOtp({ body: { email: 'a@b.com' } }, res, () => {});
 
       expect(mockOtpService.generateAndSaveOtp).toHaveBeenCalledWith('u1');
-      expect(mockOtpService.sendOtp).toHaveBeenCalledWith('a@b.com', '+573001234567', '123456');
+      expect(mockOtpService.sendOtp).toHaveBeenCalledWith('a@b.com', '123456');
       expect(res.statusCode).toBe(200);
       expect(res.body.message).toContain('nuevo código OTP');
     });
@@ -145,7 +145,7 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
 
       expect(res.statusCode).toBe(200);
       expect(mockOtpService.generateAndSaveOtp).not.toHaveBeenCalled();
-      expect(res.body.message).toContain('Si el correo o teléfono está registrado');
+      expect(res.body.message).toContain('Si el correo está registrado');
     });
 
     it('responde 400 VALIDATION_ERROR cuando falta email/phone', async () => {

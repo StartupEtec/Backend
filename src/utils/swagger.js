@@ -782,7 +782,7 @@ El código de país por defecto se configura con \`DEFAULT_PHONE_COUNTRY_CODE\`.
             status: { type: 'string', example: 'PENDING_VERIFICATION' },
             message: {
               type: 'string',
-              example: 'Código OTP enviado al correo/teléfono registrado.',
+              example: 'Código OTP enviado al correo registrado.',
             },
             user: {
               type: 'object',
@@ -2312,7 +2312,7 @@ export { swaggerSpec };
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Se ha enviado un nuevo código OTP a tu correo/teléfono registrado.
+ *                   example: Se ha enviado un nuevo código OTP a tu correo registrado.
  *       400:
  *         description: Error de validación (email/phone inválidos o ninguno proporcionado).
  *         content:

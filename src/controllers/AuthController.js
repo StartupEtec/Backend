@@ -62,7 +62,7 @@ class AuthController {
 
       // Generate and send OTP
       const otpCode = await otpService.generateAndSaveOtp(newUser.id);
-      await otpService.sendOtp(newUser.email, newUser.phone, otpCode);
+      await otpService.sendOtp(newUser.email, otpCode);
 
       return res.status(201).json({
         message:
@@ -131,11 +131,11 @@ class AuthController {
 
       // Generate OTP
       const otpCode = await otpService.generateAndSaveOtp(user.id);
-      await otpService.sendOtp(user.email, user.phone, otpCode);
+      await otpService.sendOtp(user.email, otpCode);
 
       return res.status(200).json({
         status: 'PENDING_VERIFICATION',
-        message: 'Código OTP enviado al correo/teléfono registrado.',
+        message: 'Código OTP enviado al correo registrado.',
         user: {
           id: user.id,
           email: user.email,
@@ -241,17 +241,16 @@ class AuthController {
       if (!user) {
         logger.warn('Intento de reenvío de OTP para usuario no registrado', { email, phone });
         return res.status(200).json({
-          message:
-            'Si el correo o teléfono está registrado, recibirás un nuevo código OTP en 5 minutos.',
+          message: 'Si el correo está registrado, recibirás un nuevo código OTP en 5 minutos.',
         });
       }
 
       // Regenera el código (invalida el anterior y resetea el contador de intentos)
       const otpCode = await otpService.generateAndSaveOtp(user.id);
-      await otpService.sendOtp(user.email, user.phone, otpCode);
+      await otpService.sendOtp(user.email, otpCode);
 
       return res.status(200).json({
-        message: 'Se ha enviado un nuevo código OTP a tu correo/teléfono registrado.',
+        message: 'Se ha enviado un nuevo código OTP a tu correo registrado.',
       });
     } catch (err) {
       logger.error('Error al reenviar el OTP:', err);

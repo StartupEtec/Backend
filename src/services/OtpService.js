@@ -1,48 +1,6 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
-
-/**
- * NotificationProvider interface — swap this implementation for a real SMS/Email
- * provider (e.g. Twilio, SendGrid, Nodemailer) by replacing the body of `send()`.
- *
- * Integration checklist:
- *  - Twilio SMS: require 'twilio', init client with TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN
- *  - SendGrid Email: require '@sendgrid/mail', set SENDGRID_API_KEY
- *  - Nodemailer: require 'nodemailer', configure SMTP transport via env vars
- *
- * All required env vars should be added to .env.example when a real provider is wired up.
- */
-class NotificationProvider {
-  /**
-   * Sends an OTP notification via Email and/or SMS.
-   * @param {{ email?: string, phone?: string }} recipient
-   * @param {string} otpCode
-   */
-  async send({ email, phone }, otpCode) {
-    const message = `Tu código de verificación de 2 pasos es: ${otpCode}. Expira en 5 minutos.`;
-
-    // -----------------------------------------------------------------
-    // SIMULATION — replace the blocks below with real provider calls.
-    // -----------------------------------------------------------------
-
-    if (email) {
-      // TODO: replace with real Email provider
-      // Example (SendGrid):
-      //   await sgMail.send({ to: email, from: 'noreply@app.com',
-      //                       subject: 'Código de verificación', text: message });
-      logger.info('[OTP] Email OTP enviado (simulación)', { email, message });
-    }
-
-    if (phone) {
-      // TODO: replace with real SMS provider
-      // Example (Twilio):
-      //   await twilioClient.messages.create({ body: message, from: TWILIO_FROM, to: phone });
-      logger.info('[OTP] SMS OTP enviado (simulación)', { phone, message });
-    }
-  }
-}
-
-const notificationProvider = new NotificationProvider();
+import smtpOtpEmailProvider from './providers/SmtpOtpEmailProvider.js';
 
 class OtpService {
   constructor() {
@@ -69,13 +27,19 @@ class OtpService {
   }
 
   /**
-   * Sends OTP to the user via Email and/or SMS using the NotificationProvider.
+   * Sends the OTP by email through the configured SMTP provider.
    * @param {string} email - User email.
-   * @param {string} phone - User phone.
    * @param {string} otpCode - Generated OTP code.
    */
-  async sendOtp(email, phone, otpCode) {
-    await notificationProvider.send({ email, phone }, otpCode);
+  async sendOtp(email, otpCode) {
+    const text = `Tu código de verificación de 2 pasos es: ${otpCode}. Expira en 5 minutos.`;
+    const html = `<p>Tu código de verificación de 2 pasos es: <strong>${otpCode}</strong>.</p><p>Expira en 5 minutos.</p>`;
+
+    await smtpOtpEmailProvider.send(email, {
+      subject: 'Tu código de verificación de Laborin',
+      text,
+      html,
+    });
   }
 
   /**
