@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.js",
     "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\" \"tests/**/*.js\"",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests --coverage",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests --coverage --runInBand",
     "migrate:latest": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
@@ -17,7 +17,9 @@
     "seed:dev": "knex seed:run",
     "seed:run": "knex seed:run",
     "seed:clear": "node src/database/clear.js",
-    "swagger:export": "node scripts/export-openapi.js"
+    "swagger:export": "node scripts/export-openapi.js",
+    "reencrypt:cards": "node scripts/reencrypt-cards.js",
+    "smoke:e2e": "node scripts/smoke-e2e.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

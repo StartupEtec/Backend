@@ -195,7 +195,7 @@ class OrderService {
   }
 
   async listUserOrders(userId, query) {
-    const { limit, offset, status, role, date_from, date_to } = query;
+    const { limit, offset, status, role, date_from, date_to, search } = query;
 
     const [clientProfile, workerProfile] = await Promise.all([
       db('client_profiles').where({ user_id: userId }).first(),

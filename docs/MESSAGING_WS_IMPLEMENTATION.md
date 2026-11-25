@@ -280,13 +280,13 @@ Si el token falta o es inválido → cierre con código `1008`.
   ```bash
   docker start ondemand_db
   DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres \
-  DB_PASSWORD=postgres_secure_password DB_NAME=ondemand_db \
-  JWT_SECRET=dev_secret_123 REFRESH_TOKEN_SECRET=dev_secret_123 npm run dev
+  DB_PASSWORD=<valor_de_.env> DB_NAME=ondemand_db \
+  JWT_SECRET=<valor_de_.env> REFRESH_TOKEN_SECRET=<valor_de_.env> npm run dev
   ```
 - Aplicar migraciones:
   ```bash
   DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres \
-  DB_PASSWORD=postgres_secure_password DB_NAME=ondemand_db npx knex migrate:latest
+  DB_PASSWORD=<valor_de_.env> DB_NAME=ondemand_db npx knex migrate:latest
   ```
 - Swagger: `GET /api/v1/api-docs`.
 - WebSocket: `ws://localhost:3000/ws?token=<accessToken>`.

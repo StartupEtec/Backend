@@ -1,38 +1,46 @@
 import authService from '../services/AuthService.js';
+import db from '../database/db.js';
 import logger, { asyncLocalStorage } from '../utils/logger.js';
 
-export const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+const unauthorized = (res, message) =>
+  res.status(401).json({
+    error: 'UNAUTHORIZED',
+    message,
+    statusCode: 401,
+    timestamp: new Date().toISOString(),
+  });
 
-  if (!token) {
-    return res.status(401).json({
-      error: 'UNAUTHORIZED',
-      message: 'Token de acceso no proporcionado',
-      statusCode: 401,
-      timestamp: new Date().toISOString(),
-    });
+export const authenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return unauthorized(res, 'Token de acceso no proporcionado');
+    }
+
+    const decoded = authService.verifyAccessToken(token);
+    if (!decoded || !decoded.user_id) {
+      return unauthorized(res, 'Token de acceso inválido o expirado');
+    }
+
+    const user = await db('users').where({ id: decoded.user_id }).first('active', 'is_verified');
+    if (!user || !user.active || !user.is_verified) {
+      return unauthorized(res, 'Usuario inactivo o no verificado');
+    }
+
+    req.user = decoded;
+
+    // Inyectar el user_id en el almacenamiento asíncrono para Winston
+    const store = asyncLocalStorage.getStore();
+    if (store) {
+      store.userId = decoded.user_id;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
   }
-
-  const decoded = authService.verifyAccessToken(token);
-  if (!decoded) {
-    return res.status(403).json({
-      error: 'FORBIDDEN',
-      message: 'Token de acceso inválido o expirado',
-      statusCode: 403,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  req.user = decoded;
-
-  // Inyectar el user_id en el almacenamiento asíncrono para Winston
-  const store = asyncLocalStorage.getStore();
-  if (store) {
-    store.userId = decoded.user_id;
-  }
-
-  next();
 };
 
 export const requireRole = (allowedRoles) => {

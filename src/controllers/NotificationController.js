@@ -179,7 +179,9 @@ class NotificationController {
   async clearNotifications(req, res, next) {
     try {
       const count = await notificationService.clearNotifications(req.user.user_id);
-      return res.status(200).json({ message: 'Historial de notificaciones limpiado', deleted_count: count });
+      return res
+        .status(200)
+        .json({ message: 'Historial de notificaciones limpiado', deleted_count: count });
     } catch (err) {
       logger.error('[NOTIFICATION] Error limpiando historial', { error: err.message });
       next(err);

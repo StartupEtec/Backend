@@ -28,3 +28,30 @@ jobs:
 
       - name: Run Tests
         run: npm test
+
+      - name: Publish coverage summary
+        run: |
+          node --input-type=module -e '
+          import fs from "node:fs";
+          const total = JSON.parse(fs.readFileSync("coverage/coverage-summary.json", "utf8")).total;
+          const row = (label, key) => `| ${label} | ${total[key].pct}% |`;
+          const table = [
+            "## Cobertura",
+            "",
+            "| Métrica | Cobertura |",
+            "|---|---:|",
+            row("Statements", "statements"),
+            row("Branches", "branches"),
+            row("Functions", "functions"),
+            row("Lines", "lines"),
+            "",
+          ].join("\n");
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, table);
+          '
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error

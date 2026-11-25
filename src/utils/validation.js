@@ -744,15 +744,11 @@ export const createOrderSchema = Joi.object({
     'number.positive': 'El presupuesto sugerido debe ser un valor positivo',
     'number.max': 'El presupuesto sugerido no debe exceder los 99,999,999.99',
   }),
-  scheduled_date: Joi.date()
-    .iso()
-    .min('now')
-    .allow(null)
-    .messages({
-      'date.base': 'La fecha deseada debe ser una fecha válida',
-      'date.format': 'La fecha deseada debe tener formato ISO (YYYY-MM-DD)',
-      'date.min': 'La fecha deseada debe ser hoy o una fecha futura',
-    }),
+  scheduled_date: Joi.date().iso().min('now').allow(null).messages({
+    'date.base': 'La fecha deseada debe ser una fecha válida',
+    'date.format': 'La fecha deseada debe tener formato ISO (YYYY-MM-DD)',
+    'date.min': 'La fecha deseada debe ser hoy o una fecha futura',
+  }),
 }).custom((value, helpers) => {
   if (value.client_id === value.worker_id) {
     return helpers.message('El cliente y el trabajador no pueden ser el mismo usuario');

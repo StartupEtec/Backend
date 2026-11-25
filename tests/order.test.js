@@ -291,6 +291,29 @@ describe('OrderService', () => {
       expect(res.orders).toHaveLength(1);
     });
 
+    it('should apply the search filter when provided', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders['orders as o'].where.mockImplementation(function (arg) {
+        if (typeof arg === 'function') arg.call(this);
+        return this;
+      });
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, {
+        ...baseQuery,
+        search: 'fuga',
+      });
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+    });
+
     it('should return empty list when MINE_AS_CLIENT is requested but user is only a worker', async () => {
       builders.client_profiles = makeBuilder();
       builders.client_profiles.first.mockResolvedValue(null);

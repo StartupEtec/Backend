@@ -229,7 +229,12 @@ class NotificationService {
         last_used_at: db.fn.now(),
       })
       .onConflict(['user_id', 'token'])
-      .merge({ platform, device_name: device_name || null, last_used_at: db.fn.now(), updated_at: db.fn.now() });
+      .merge({
+        platform,
+        device_name: device_name || null,
+        last_used_at: db.fn.now(),
+        updated_at: db.fn.now(),
+      });
     const row = await db('user_devices').where({ user_id: userId, token }).first();
     return row;
   }

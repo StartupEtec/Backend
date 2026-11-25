@@ -175,15 +175,29 @@ router.get('/orders', authenticateToken, requireRole(['client']), orderControlle
 | **Secreto separado** | `accessToken` y `refreshToken` usan secretos distintos (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`). |
 | **Rotación + revocación** | Los refresh tokens se rotan y revocan para mitigar replay. |
 | **Single-use reset** | Token de reset firmado con el hash actual de la contraseña. |
-| **OPC** | OTP de 6 dígitos con expiración de 10 min; se borra tras éxito. |
+| **Logout** | `POST /api/v1/auth/logout` revoca el refresh token en la BD. |
+| **Token atado a la app** | `JWT_ISSUER`/`JWT_AUDIENCE` y algoritmo HS256 fijo en firma y verificación. |
+| **Usuario activo** | El middleware consulta la BD en cada request; usuarios inactivos/no verificados reciben `401`. |
+| **OPC** | OTP de 6 dígitos con expiración de 5 min; se borra tras éxito. |
 | **Sin datos sensibles** | El logger no registra tokens, contraseñas ni hash. |
+| **Cifrado en reposo** | Números de tarjeta cifrados con AES-256-CBC (`encrypted_card_number`) usando `ENCRYPTION_KEY` obligatoria. |
+| **Cifrado en tránsito** | Producción usa TLS hacia PostgreSQL verificando el certificado; Helmet/HSTS en HTTP. |
+| **Webhook verificado** | Firma HMAC-SHA256 de Stripe validada con `STRIPE_WEBHOOK_SECRET` y tolerancia de 5 min. |
+
+Los teléfonos se guardan en claro porque son la clave de búsqueda del login y de OTP; cifrarlos rompería esa consulta. Las imágenes de DNI se guardan como URLs en `uploads/profiles` y se sirven por `/uploads`; su control de acceso por usuario requiere cambios en el frontend y queda fuera de este alcance.
 
 ### Variables de entorno requeridas
 
 ```
-JWT_SECRET=tu_secreto_seguro_para_jwt
-REFRESH_TOKEN_SECRET=tu_secreto_seguro_para_refresh_tokens
-JWT_RESET_SECRET=tu_secreto_para_tokens_de_reset
+JWT_SECRET=<openssl rand -hex 32>
+REFRESH_TOKEN_SECRET=<openssl rand -hex 32>
+JWT_RESET_SECRET=<openssl rand -hex 32>
+JWT_ISSUER=ondemand-api
+JWT_AUDIENCE=ondemand-client
+ENCRYPTION_KEY=<openssl rand -hex 32>
+STRIPE_WEBHOOK_SECRET=<whsec_...>
+DB_SSL_CA=/ruta/al/ca.pem        # solo si el proveedor usa CA propia
+DB_SSL_REJECT_UNAUTHORIZED=false # solo emergencias; desactiva la verificación
 ```
 
 ---

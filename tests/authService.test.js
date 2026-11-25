@@ -1,9 +1,12 @@
 import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_key_12345';
-const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || 'default_refresh_token_secret_key_12345';
+import {
+  JWT_SECRET,
+  REFRESH_TOKEN_SECRET,
+  JWT_ALGORITHM,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+} from '../src/config/auth.js';
 
 const mockQueryBuilder = {
   where: jest.fn().mockReturnThis(),
@@ -25,7 +28,12 @@ jest.unstable_mockModule('../src/database/db.js', () => ({ default: mockKnex }))
 const { default: authService } = await import('../src/services/AuthService.js');
 
 const signRefreshToken = (userId, jti) =>
-  jwt.sign({ user_id: userId, jti }, REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
+  jwt.sign({ user_id: userId, jti }, REFRESH_TOKEN_SECRET, {
+    algorithm: JWT_ALGORITHM,
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+    expiresIn: '7d',
+  });
 
 describe('AuthService — refresh, revoke, reset password y decode', () => {
   beforeEach(() => {
@@ -71,6 +79,14 @@ describe('AuthService — refresh, revoke, reset password y decode', () => {
 
     it('should return null when the token is invalid or tampered', async () => {
       const result = await authService.refreshAccessToken('not.a.real.token');
+      expect(result).toBeNull();
+    });
+
+    it('should reject a refresh token without issuer and audience', async () => {
+      const token = jwt.sign({ user_id: 'user-uuid', jti: 'jti-old' }, REFRESH_TOKEN_SECRET, {
+        expiresIn: '7d',
+      });
+      const result = await authService.refreshAccessToken(token);
       expect(result).toBeNull();
     });
 

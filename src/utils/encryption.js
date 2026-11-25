@@ -1,9 +1,7 @@
 import crypto from 'node:crypto';
+import { ENCRYPTION_KEY } from '../config/encryption.js';
 
-const getEncryptionKey = () => {
-  const secret = process.env.ENCRYPTION_KEY || 'default_encryption_secret_key_change_me';
-  return crypto.createHash('sha256').update(secret).digest();
-};
+const getEncryptionKey = () => crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
 
 /**
  * Encrypts a string using AES-256-CBC.

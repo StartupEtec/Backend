@@ -127,7 +127,9 @@ class ChatController {
   async updateParticipant(req, res, next) {
     try {
       const { chat_id } = req.params;
-      const { error, value } = (await import('../utils/validation.js')).updateChatParticipantSchema.validate(req.body);
+      const { error, value } = (
+        await import('../utils/validation.js')
+      ).updateChatParticipantSchema.validate(req.body);
       if (error) {
         return res.status(400).json({
           error: 'VALIDATION_ERROR',

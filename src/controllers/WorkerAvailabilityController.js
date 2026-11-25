@@ -49,11 +49,14 @@ class WorkerAvailabilityController {
   async list(req, res, next) {
     try {
       const { id } = req.params;
-      const isOwner = req.user && req.user.user_id && (await (async () => {
-        const db = (await import('../database/db.js')).default;
-        const w = await db('worker_profiles').where({ id, user_id: req.user.user_id }).first();
-        return !!w;
-      })());
+      const isOwner =
+        req.user &&
+        req.user.user_id &&
+        (await (async () => {
+          const db = (await import('../database/db.js')).default;
+          const w = await db('worker_profiles').where({ id, user_id: req.user.user_id }).first();
+          return !!w;
+        })());
       const result = await workerAvailabilityService.listAvailability(id, req.user.user_id, {
         publicView: !isOwner,
       });

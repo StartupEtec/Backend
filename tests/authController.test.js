@@ -25,6 +25,7 @@ const mockOtpService = {
 const mockAuthService = {
   generateAccessToken: jest.fn().mockReturnValue('access-token'),
   generateRefreshToken: jest.fn().mockResolvedValue('refresh-token'),
+  revokeRefreshToken: jest.fn().mockResolvedValue(true),
 };
 
 jest.unstable_mockModule('../src/database/db.js', () => ({ default: mockKnex }));
@@ -68,6 +69,7 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
     mockOtpService.sendOtp.mockResolvedValue(undefined);
     mockAuthService.generateAccessToken.mockReturnValue('access-token');
     mockAuthService.generateRefreshToken.mockResolvedValue('refresh-token');
+    mockAuthService.revokeRefreshToken.mockResolvedValue(true);
   });
 
   describe('verifyOtp -> mapeo de razones a status HTTP', () => {
@@ -151,6 +153,36 @@ describe('AuthController — contrato de errores OTP y resend-otp', () => {
       await authController.resendOtp({ body: {} }, res, () => {});
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('logout', () => {
+    it('revoca el refresh token y responde 200', async () => {
+      const res = makeRes();
+      await authController.logout({ body: { refreshToken: 'refresh-token' } }, res, () => {});
+
+      expect(mockAuthService.revokeRefreshToken).toHaveBeenCalledWith('refresh-token');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toBe('Sesión cerrada');
+    });
+
+    it('responde 401 si el refresh token ya fue revocado', async () => {
+      mockAuthService.revokeRefreshToken.mockResolvedValue(false);
+
+      const res = makeRes();
+      await authController.logout({ body: { refreshToken: 'refresh-token' } }, res, () => {});
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.error).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('responde 400 si falta el refresh token', async () => {
+      const res = makeRes();
+      await authController.logout({ body: {} }, res, () => {});
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(mockAuthService.revokeRefreshToken).not.toHaveBeenCalled();
     });
   });
 

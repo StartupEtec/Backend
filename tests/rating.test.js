@@ -19,6 +19,7 @@ const makeBuilder = () => {
     leftJoin: jest.fn().mockReturnThis(),
     count: jest.fn().mockReturnThis(),
     avg: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockResolvedValue([]),
     limit: jest.fn().mockReturnThis(),
     offset: jest.fn().mockResolvedValue([]),
   };

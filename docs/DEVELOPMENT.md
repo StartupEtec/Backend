@@ -75,12 +75,15 @@ Las más relevantes (ver `.env.example` completo):
 |---|---|
 | `PORT` / `NODE_ENV` | Puerto y entorno. |
 | `ALLOWED_ORIGINS` | Orígenes CORS permitidos (coma-separados). |
-| `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` | Conexión PostgreSQL. |
+| `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` | Conexión PostgreSQL; `DB_PASSWORD` es obligatoria y se toma solo de `.env`. |
+| `DB_SSL` / `DB_SSL_CA` / `DB_SSL_REJECT_UNAUTHORIZED` | TLS hacia PostgreSQL; producción siempre verifica el certificado. |
 | `REDIS_URL` | Caché Redis (si falta → caché en memoria). |
-| `JWT_SECRET` / `REFRESH_TOKEN_SECRET` | Secretos JWT (access y refresh). |
-| `ENCRYPTION_KEY` | Clave AES-256-CBC para cifrar métodos de pago (32 bytes). |
+| `JWT_SECRET` / `REFRESH_TOKEN_SECRET` / `JWT_RESET_SECRET` | Secretos JWT (access, refresh y reset); obligatorios. |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | Etiquetas del token; por defecto `ondemand-api` / `ondemand-client`. |
+| `ENCRYPTION_KEY` | Clave AES-256-CBC para cifrar métodos de pago; obligatoria, generar con `openssl rand -hex 32`. |
 | `SIMULATE_CHARGE_FAILURE` | `true` fuerza fallo del cargo en escrow (pruebas). |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Integración Stripe (opcional). |
+| `STRIPE_SECRET_KEY` | Integración Stripe (opcional en desarrollo). |
+| `STRIPE_WEBHOOK_SECRET` | Firma de webhooks; obligatoria en producción. |
 | `FIREBASE_*` / `SENDGRID_*` / `TWILIO_*` | Proveedores de notificaciones (lazy-init). |
 | `APM_LATENCY_THRESHOLD_MS` | Umbral de latencia para alertas. |
 

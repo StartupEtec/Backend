@@ -293,6 +293,37 @@ class AuthController {
     }
   }
 
+  async logout(req, res, next) {
+    try {
+      const { error, value } = refreshTokenSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const revoked = await authService.revokeRefreshToken(value.refreshToken);
+      if (!revoked) {
+        return res.status(401).json({
+          error: 'INVALID_REFRESH_TOKEN',
+          message: 'Token de refresco inválido o ya revocado',
+          statusCode: 401,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Sesión cerrada',
+      });
+    } catch (err) {
+      logger.error('Error al cerrar sesión:', err);
+      next(err);
+    }
+  }
+
   async forgotPassword(req, res, next) {
     try {
       const { error, value } = forgotPasswordSchema.validate(req.body);

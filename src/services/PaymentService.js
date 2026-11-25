@@ -1,7 +1,48 @@
+import crypto from 'node:crypto';
 import Stripe from 'stripe';
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
 import { encrypt } from '../utils/encryption.js';
+
+const WEBHOOK_TOLERANCE_SECONDS = 300;
+
+const verifyStripeSignature = (rawBody, signature, secret) => {
+  if (!signature) {
+    throw new Error('Falta la firma del webhook');
+  }
+
+  const parts = signature.split(',').map((part) => part.split('='));
+  const timestamp = parts.find(([key]) => key === 't')?.[1];
+  const signatures = parts.filter(([key]) => key === 'v1').map(([, value]) => value);
+
+  if (!timestamp || signatures.length === 0) {
+    throw new Error('Firma del webhook malformada');
+  }
+
+  const age = Math.floor(Date.now() / 1000) - Number(timestamp);
+  if (!Number.isFinite(age) || Math.abs(age) > WEBHOOK_TOLERANCE_SECONDS) {
+    throw new Error('Timestamp del webhook fuera de tolerancia');
+  }
+
+  const payload = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.`)
+    .update(payload)
+    .digest('hex');
+
+  const valid = signatures.some((candidate) => {
+    const received = Buffer.from(candidate, 'hex');
+    const calculated = Buffer.from(expected, 'hex');
+    return received.length === calculated.length && crypto.timingSafeEqual(received, calculated);
+  });
+
+  if (!valid) {
+    throw new Error('Firma del webhook inválida');
+  }
+
+  return JSON.parse(payload.toString('utf8'));
+};
 
 let stripeInstance;
 if (process.env.STRIPE_SECRET_KEY) {
@@ -28,11 +69,6 @@ if (process.env.STRIPE_SECRET_KEY) {
           amount: params.amount,
           metadata: params.metadata,
         };
-      },
-    },
-    webhooks: {
-      constructEvent: (rawBody, signature, secret) => {
-        return JSON.parse(rawBody.toString());
       },
     },
   };
@@ -530,8 +566,11 @@ class PaymentService {
   }
 
   constructStripeWebhookEvent(rawBody, signature) {
-    const secret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_mock_secret';
-    return stripeInstance.webhooks.constructEvent(rawBody, signature, secret);
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!secret) {
+      throw new Error('STRIPE_WEBHOOK_SECRET no configurado');
+    }
+    return verifyStripeSignature(rawBody, signature, secret);
   }
 }
 

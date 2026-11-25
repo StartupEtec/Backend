@@ -73,7 +73,11 @@ class WorkerProfileService {
       .avg('rating_stars as average')
       .count('id as total_reviews')
       .first();
-    const average = avgResult?.average ? Number(Number(avgResult.average).toFixed(1)) : (profile.average_rating != null ? Number(Number(profile.average_rating).toFixed(1)) : null);
+    const average = avgResult?.average
+      ? Number(Number(avgResult.average).toFixed(1))
+      : profile.average_rating != null
+        ? Number(Number(profile.average_rating).toFixed(1))
+        : null;
     const totalReviews = Number(avgResult?.total_reviews || 0);
 
     const availability = await db('worker_availability')
@@ -106,15 +110,25 @@ class WorkerProfileService {
       availability: availability.map((a) => ({
         id: a.id,
         day_of_week: Number(a.day_of_week),
-        start_time: typeof a.start_time === 'string' && a.start_time.length > 5 ? a.start_time.slice(0, 5) : a.start_time,
-        end_time: typeof a.end_time === 'string' && a.end_time.length > 5 ? a.end_time.slice(0, 5) : a.end_time,
+        start_time:
+          typeof a.start_time === 'string' && a.start_time.length > 5
+            ? a.start_time.slice(0, 5)
+            : a.start_time,
+        end_time:
+          typeof a.end_time === 'string' && a.end_time.length > 5
+            ? a.end_time.slice(0, 5)
+            : a.end_time,
       })),
       portfolio,
-      location: profile.latitude != null ? {
-        latitude: Number(profile.latitude),
-        longitude: Number(profile.longitude),
-        coverage_radius_km: profile.coverage_radius_km != null ? Number(profile.coverage_radius_km) : null,
-      } : null,
+      location:
+        profile.latitude != null
+          ? {
+              latitude: Number(profile.latitude),
+              longitude: Number(profile.longitude),
+              coverage_radius_km:
+                profile.coverage_radius_km != null ? Number(profile.coverage_radius_km) : null,
+            }
+          : null,
     };
 
     if (publicView) {
