@@ -14,7 +14,5 @@ CMD ["npm", "run" ,"dev"]
 FROM base AS production
 RUN npm ci --only=production
 COPY src/ ./src/
-COPY knexfile.js ./
-RUN mkdir -p uploads
 EXPOSE 3000
 CMD ["npm", "start"]

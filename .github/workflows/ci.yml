@@ -1,18 +1,15 @@
-name: CI + CD
+name: Continuous Integration
 
 on:
-  push:
-    branches: [Arreglar_Cosas_2, develop, main]
   pull_request:
-    branches: [main, develop, Arreglar_Cosas_2]
-
-concurrency:
-  group: backend-${{ github.ref }}
-  cancel-in-progress: true
+    branches:
+      - main
+      - '*'
 
 jobs:
   test-and-lint:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -20,8 +17,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 18
+          cache: 'npm'
 
       - name: Install Dependencies
         run: npm ci
@@ -30,9 +27,7 @@ jobs:
         run: npm run format:check
 
       - name: Run Tests
-        run: |
-          export JWT_RESET_SECRET="${JWT_RESET_SECRET:-$(openssl rand -hex 32)}"
-          npm test
+        run: npm test
 
       - name: Publish coverage summary
         run: |
@@ -60,26 +55,3 @@ jobs:
           name: coverage-report
           path: coverage/
           if-no-files-found: error
-
-  deploy:
-    needs: test-and-lint
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/Arreglar_Cosas_2' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
-    runs-on: [self-hosted, laborin-deploy]
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Sync and rebuild API
-        run: |
-          set -euo pipefail
-          cp -a src/. /home/Startup/deploy/backend/src/
-          cp knexfile.js package.json package-lock.json Dockerfile .env.example /home/Startup/deploy/backend/
-          docker compose --env-file /home/Startup/deploy/backend.env -p laborin-backend -f /home/Startup/deploy/backend/docker-compose.local.yml up -d --build api
-          docker exec laborin_api ./node_modules/.bin/knex migrate:latest --knexfile knexfile.js
-          for i in $(seq 1 30); do
-            if docker exec laborin_api wget -q --spider http://127.0.0.1:3000/api/v1/health; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec laborin_api wget -q --spider http://127.0.0.1:3000/api/v1/health
