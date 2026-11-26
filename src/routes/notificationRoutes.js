@@ -224,4 +224,18 @@ router.post('/test', (req, res, next) =>
   notificationController.sendTestNotification(req, res, next),
 );
 
+// Device tokens (push notifications)
+router.post('/devices', (req, res, next) => notificationController.registerDevice(req, res, next));
+router.delete('/devices', (req, res, next) =>
+  notificationController.unregisterDevice(req, res, next),
+);
+
+// Gestión de historial
+router.delete('/history', (req, res, next) =>
+  notificationController.clearNotifications(req, res, next),
+);
+router.delete('/:id', (req, res, next) =>
+  notificationController.deleteNotification(req, res, next),
+);
+
 export default router;

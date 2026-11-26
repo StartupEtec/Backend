@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import crypto from 'node:crypto';
 
 const makeBuilder = () => {
   const builder = {
@@ -157,6 +158,25 @@ describe('Payment Gateway Integration Tests', () => {
   });
 
   describe('PaymentController endpoints', () => {
+    const webhookSecret = 'whsec_placeholder_not_real';
+    const signWebhook = (raw) => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(`${timestamp}.`)
+        .update(raw)
+        .digest('hex');
+      return `t=${timestamp},v1=${signature}`;
+    };
+
+    beforeEach(() => {
+      process.env.STRIPE_WEBHOOK_SECRET = webhookSecret;
+    });
+
+    afterEach(() => {
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+    });
+
     const makeRes = () => {
       const res = {
         status: jest.fn().mockReturnThis(),
@@ -176,24 +196,25 @@ describe('Payment Gateway Integration Tests', () => {
     });
 
     test('stripeWebhook processes payment_intent.succeeded event successfully', async () => {
-      const req = {
-        headers: { 'stripe-signature': 'mock_signature' },
-        rawBody: Buffer.from(
-          JSON.stringify({
-            type: 'payment_intent.succeeded',
-            data: {
-              object: {
-                amount: 10000,
-                metadata: {
-                  order_id: 'order-uuid',
-                  payer_id: 'payer-uuid',
-                  receiver_id: 'receiver-uuid',
-                  payment_method_id: 'pm-uuid',
-                },
+      const rawBody = Buffer.from(
+        JSON.stringify({
+          type: 'payment_intent.succeeded',
+          data: {
+            object: {
+              amount: 10000,
+              metadata: {
+                order_id: 'order-uuid',
+                payer_id: 'payer-uuid',
+                receiver_id: 'receiver-uuid',
+                payment_method_id: 'pm-uuid',
               },
             },
-          }),
-        ),
+          },
+        }),
+      );
+      const req = {
+        headers: { 'stripe-signature': signWebhook(rawBody) },
+        rawBody,
       };
       const res = makeRes();
 
@@ -204,6 +225,20 @@ describe('Payment Gateway Integration Tests', () => {
       await paymentController.stripeWebhook(req, res, jest.fn());
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ received: true });
+    });
+
+    test('stripeWebhook rejects an invalid signature', async () => {
+      const rawBody = Buffer.from(JSON.stringify({ type: 'payment_intent.succeeded', data: {} }));
+      const tampered = signWebhook(rawBody).replace(/v1=.*/, 'v1=deadbeef');
+      const req = {
+        headers: { 'stripe-signature': tampered },
+        rawBody,
+      };
+      const res = makeRes();
+
+      await paymentController.stripeWebhook(req, res, jest.fn());
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].error).toBe('BAD_REQUEST');
     });
   });
 });

@@ -27,7 +27,13 @@ describe('MessageController.create', () => {
 
   test('responde 201 con el mensaje creado', async () => {
     messageService.createMessage.mockResolvedValue({
-      message: { id: MESSAGE_ID, content: 'Hola', message_type: 'TEXT' },
+      message: {
+        id: MESSAGE_ID,
+        content: 'Hola',
+        message_type: 'TEXT',
+        attachment_url: null,
+        avatar_url: 'https://api.example.com/uploads/profiles/a.jpg',
+      },
     });
     const req = {
       params: { chat_id: CHAT_ID },
@@ -40,6 +46,13 @@ describe('MessageController.create', () => {
     await messageController.create(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          avatar_url: 'https://api.example.com/uploads/profiles/a.jpg',
+        }),
+      }),
+    );
     expect(messageService.createMessage).toHaveBeenCalledWith(
       CHAT_ID,
       USER_A,

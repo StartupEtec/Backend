@@ -161,12 +161,12 @@ POST /chats  { user_id_2: uuid, order_id?: uuid }  (JWT)
 ## 7. Notas operativas
 
 - Para levantar la BD local: `docker start ondemand_db` (PostGIS en
-  `127.0.0.1:5432`, db `ondemand_db`, user/pass `postgres`/`postgres_secure_password`).
+  `127.0.0.1:5432`, db `ondemand_db`, user `postgres`; la password sale de `.env`).
 - Para probar la API en local (sin `.env`):
   ```bash
   DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres \
-  DB_PASSWORD=postgres_secure_password DB_NAME=ondemand_db \
-  JWT_SECRET=dev_secret_123 REFRESH_TOKEN_SECRET=dev_secret_123 npm run dev
+  DB_PASSWORD=<valor_de_.env> DB_NAME=ondemand_db \
+  JWT_SECRET=<valor_de_.env> REFRESH_TOKEN_SECRET=<valor_de_.env> npm run dev
   ```
 - Swagger: `GET /api/v1/api-docs` (los paths de chats están documentados).
 - Archivos temporales de pruebas (`e2e-chat.tmp.mjs`) fueron eliminados al finalizar.
@@ -201,7 +201,7 @@ eliminación (soft delete) y notificaciones por WebSocket.
 - `createMessage`: valida participación activa (`404 CHAT_NOT_FOUND`); para `IMAGE` comprime
   con `sharp` (máx 1600px, JPEG q80, `uploads/messages/`); inserta en transacción +
   `chats.last_message_at = now()`; si la transacción falla, elimina el archivo del disco;
-  emite `message:new` a los demás participantes; log `[AUDITORIA]`.
+  emite `message:new` a todos los participantes (incluido el autor); log `[AUDITORIA]`.
 - `listMessages`: solo mensajes con `deleted_at IS NULL`, orden `created_at DESC, id DESC` +
   `reverse()` (más recientes al final); actualiza `last_read_at`.
 - `deleteMessage`: verifica existencia (`404`), autoría (`403`), soft delete + emite

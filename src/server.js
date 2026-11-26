@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import app from './app.js';
 import cache from './utils/cache.js';
 import websocketHub from './utils/websocket.js';

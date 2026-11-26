@@ -10,7 +10,10 @@ const mockQueryBuilder = {
   returning: jest.fn().mockResolvedValue([1]),
   select: jest.fn().mockReturnThis(),
   avg: jest.fn().mockReturnThis(),
+  count: jest.fn().mockReturnThis(),
+  orderBy: jest.fn().mockReturnThis(),
   leftJoin: jest.fn().mockReturnThis(),
+  then: jest.fn((resolve) => resolve([])),
 };
 
 const mockKnex = Object.assign(() => mockQueryBuilder, {
@@ -18,6 +21,7 @@ const mockKnex = Object.assign(() => mockQueryBuilder, {
     alterTable: jest.fn(),
     createTable: jest.fn(),
     dropTableIfExists: jest.fn(),
+    hasTable: jest.fn().mockResolvedValue(false),
   },
   fn: { now: () => new Date() },
   raw: (val) => val,
@@ -43,6 +47,10 @@ describe('Worker Profile Service', () => {
     mockQueryBuilder.select.mockReset().mockReturnThis();
     mockQueryBuilder.avg.mockReset().mockReturnThis();
     mockQueryBuilder.leftJoin.mockReset().mockReturnThis();
+    mockQueryBuilder.count.mockReset().mockReturnThis();
+    mockQueryBuilder.orderBy.mockReset().mockReturnThis();
+    mockQueryBuilder.then.mockReset().mockImplementation((resolve) => resolve([]));
+    mockKnex.schema.hasTable.mockReset().mockResolvedValue(false);
   });
 
   describe('getProfile', () => {
@@ -137,7 +145,7 @@ describe('Worker Profile Service', () => {
       expect(result.hourly_rate).toBe(35.5);
       expect(result.category_name).toBe('Plumbing');
       expect(result.availability_status).toBe('AVAILABLE');
-      expect(result.average_rating).toBe('4.5');
+      expect(result.average_rating).toBe(4.5);
     });
 
     it('should return null average_rating when no ratings exist', async () => {
@@ -478,10 +486,14 @@ describe('Worker Profile Controller', () => {
     mockQueryBuilder.select.mockReset().mockReturnThis();
     mockQueryBuilder.avg.mockReset().mockReturnThis();
     mockQueryBuilder.leftJoin.mockReset().mockReturnThis();
+    mockQueryBuilder.count.mockReset().mockReturnThis();
+    mockQueryBuilder.orderBy.mockReset().mockReturnThis();
+    mockQueryBuilder.then.mockReset().mockImplementation((resolve) => resolve([]));
+    mockKnex.schema.hasTable.mockReset().mockResolvedValue(false);
   });
 
   describe('getProfile', () => {
-    it('should return 403 when user tries to access another profile', async () => {
+    it('should return 200 with the public view when accessing another profile', async () => {
       const req = {
         params: { id: 'other-user' },
         user: { user_id: 'current-user' },
@@ -491,10 +503,29 @@ describe('Worker Profile Controller', () => {
         json: jest.fn(),
       };
       const next = jest.fn();
+      mockQueryBuilder.first
+        .mockResolvedValueOnce({
+          id: 'profile-uuid',
+          user_id: 'other-user',
+          user_active: true,
+          full_name: 'Otro Usuario',
+          date_of_birth: '1990-01-01',
+          avatar_url: null,
+          bio: null,
+          category_id: null,
+          category_name: null,
+          hourly_rate: null,
+          availability_status: 'AVAILABLE',
+          certification_status: 'PENDING',
+        })
+        .mockResolvedValueOnce({ average: null, total_reviews: 0 });
 
       await workerProfileController.getProfile(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        profile: expect.objectContaining({ id: 'profile-uuid', full_name: 'Otro Usuario' }),
+      });
     });
 
     it('should return 404 when profile does not exist', async () => {

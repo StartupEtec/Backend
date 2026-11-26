@@ -200,6 +200,185 @@ curl -X POST http://localhost:3000/api/v1/auth/verify-otp \
 # Lo mismo con un trabajador sembrado: worker1@test.com / test123!
 ```
 
+---
+
+## Demo en vivo (B4)
+
+Recorrido crítico para mostrar la API de punta a punta sin ayuda. Usa datos sembrados y no
+necesita claves de Stripe: el escrow se simula con la tarjeta sembrada del cliente.
+
+### Preparación
+
+```bash
+cd Backend
+npm run migrate:latest
+npm run seed:dev
+npm run dev
+```
+
+Usuarios sembrados:
+
+- Cliente: `cliente1@test.com` / `test123!`
+- Trabajador: `worker1@test.com` / `test123!`
+
+El OTP se imprime en el log del servidor, por ejemplo:
+`[OTP] Email OTP enviado (simulación) ... Tu código de verificación de 2 pasos es: 123456`.
+El token se obtiene en `POST /auth/verify-otp` y se llama `accessToken`.
+
+### Paso a paso
+
+1. Salud:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/v1/health
+```
+
+Debe devolver `200`.
+
+2. Login del cliente (devuelve `PENDING_VERIFICATION`):
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cliente1@test.com","password":"test123!"}'
+```
+
+3. Canjear el OTP leído del log:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cliente1@test.com","otp_code":"CODIGO_DEL_LOG"}'
+```
+
+Copiar `accessToken` como `CLIENT_TOKEN`.
+
+4. Perfil del cliente, categorías y ubicación:
+
+```bash
+curl -s http://localhost:3000/api/v1/users/me \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+curl -s http://localhost:3000/api/v1/categories
+```
+
+Del primer response copiar `id` como `CLIENT_USER_ID` y `profile.client.id` como `CLIENT_ID`.
+Del segundo, ver el catálogo de categorías activas.
+
+```bash
+curl -s http://localhost:3000/api/v1/users/CLIENT_USER_ID/locations \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+Copiar el primer `id` como `LOCATION_ID`.
+
+5. Buscar trabajadores (demostración de búsqueda):
+
+```bash
+curl -s "http://localhost:3000/api/v1/workers/nearby?latitude=-34.6&longitude=-58.4&radius_km=20" \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+Debe devolver `count > 0`.
+
+6. Login del trabajador, OTP y perfil:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"worker1@test.com","password":"test123!"}'
+curl -s -X POST http://localhost:3000/api/v1/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"worker1@test.com","otp_code":"CODIGO_DEL_LOG"}'
+curl -s http://localhost:3000/api/v1/users/me \
+  -H "Authorization: Bearer WORKER_TOKEN"
+```
+
+Copiar `accessToken` como `WORKER_TOKEN`, `profile.worker.id` como `WORKER_ID` y
+`profile.worker.category_id` como `CATEGORY_ID`.
+
+7. Cliente crea la orden:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/orders \
+  -H "Authorization: Bearer CLIENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "CLIENT_ID",
+    "worker_id": "WORKER_ID",
+    "category_id": "CATEGORY_ID",
+    "location_id": "LOCATION_ID",
+    "description": "Reparar la canilla de la cocina",
+    "suggested_budget": 9000,
+    "scheduled_date": "FECHA_FUTURA_YYYY-MM-DD"
+  }'
+```
+
+Debe devolver `201` y `order.status = PENDING`. Copiar `order.id` como `ORDER_ID`.
+
+8. Trabajador crea la cotización:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/orders/ORDER_ID/quotes \
+  -H "Authorization: Bearer WORKER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "proposed_price": 8500,
+    "proposed_date": "FECHA_FUTURA_YYYY-MM-DD",
+    "proposed_time": "10:30"
+  }'
+```
+
+Debe devolver `201`. Copiar `quote.id` como `QUOTE_ID`.
+
+9. Cliente acepta la cotización:
+
+```bash
+curl -s -X PATCH http://localhost:3000/api/v1/quotes/QUOTE_ID \
+  -H "Authorization: Bearer CLIENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"ACCEPTED"}'
+```
+
+Debe devolver `200`, iniciar el escrow simulado y dejar la orden en `ACCEPTED`.
+
+10. Trabajador inicia la orden:
+
+```bash
+curl -s -X PATCH http://localhost:3000/api/v1/orders/ORDER_ID/status \
+  -H "Authorization: Bearer WORKER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"IN_PROGRESS"}'
+```
+
+Debe devolver `200`.
+
+11. Verificación final:
+
+```bash
+curl -s http://localhost:3000/api/v1/orders/ORDER_ID \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+curl -s http://localhost:3000/api/v1/orders/ORDER_ID/history \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+El estado final debe ser `IN_PROGRESS` y el historial debe mostrar `PENDING -> ACCEPTED -> IN_PROGRESS`.
+
+### Versión automatizada
+
+Con los OTP leídos del log:
+
+```bash
+CLIENT_OTP=123456 WORKER_OTP=654321 npm run smoke:e2e
+```
+
+O, si el servidor se inició redirigiendo el log a un archivo:
+
+```bash
+npm start > /tmp/backend.log 2>&1 &
+OTP_LOG_FILE=/tmp/backend.log npm run smoke:e2e
+```
+
+El script imprime `OK` o `FAIL` por cada paso y usa `BASE_URL` si se quiere apuntar a otro host.
 
 
 ## 🧪 Testing y Cobertura
@@ -208,14 +387,16 @@ curl -X POST http://localhost:3000/api/v1/auth/verify-otp \
 - La suite cubre **servicios críticos** (auth, pagos, órdenes, chat, escrow), máquina de estados de órdenes, validaciones de entrada (Joi), utilidades (cifrado, caché) y casos de error/edge.
 - `npm test` ejecuta `--coverage` y **falla si no se alcanza el umbral mínimo** definido en `jest.config.js`:
 
-| Métrica | Mínimo |
+| Métrica | Mínimo global |
 |---|---|
-| Statements / Lines (capa crítica) | 70% |
-| Branches (capa crítica) | 55% |
-| Functions (capa crítica) | 60% |
+| Statements | 70% |
+| Branches | 55% |
+| Functions | 60% |
+| Lines | 70% |
 
-- Archivos críticos con umbral propio del 70% (statements, functions, lines): `AuthService`, `PaymentService`, `OrderService`, `ChatService`, `EscrowService` y `src/utils/validation.js`.
-- **Alcance del reporte**: `src/services/*.js` y `src/utils/**/*.js`. Los adaptadores de proveedores externos (`src/services/providers/**`), los controllers/routes (vía HTTP) y la plomería de middleware quedan fuera del reporte por considerarse lógica de baja criticidad / dependencias de terceros.
+- Cobertura actual: **70.73% statements, 62.36% branches, 74.5% functions y 71.09% lines**.
+- Servicios críticos dentro del global (statements): `AuthService` 100%, `PaymentService` 98.47%, `OrderService` 84.86%, `ChatService` 81.57%, `EscrowService` 92.72% y `src/utils/validation.js` 99.15%.
+- **Alcance del reporte**: `src/**/*.js`, incluyendo controllers. Quedan fuera `src/server.js`, `src/database/**`, `src/routes/**`, `src/middlewares/**` y los adaptadores de proveedores externos (`src/services/providers/**`), por ser plomería/dependencias de terceros.
 - El reporte HTML se genera en `coverage/lcov-report/index.html` (el directorio `coverage/` está en `.gitignore`).
 - El CI ejecuta `format:check` + `npm test` en cada Pull Request, por lo que la cobertura mínima se valida automáticamente.
 
@@ -769,6 +950,10 @@ Evento que el cliente envía al servidor:
 Adjuntos: las imágenes de mensajes se guardan en `<UPLOAD_DIR>/messages/` (default `uploads/`,
 ver `.env.example`) y se sirven desde `GET /uploads/...`. Las imágenes de perfil usan
 `<UPLOAD_DIR>/profiles/` vía `POST /api/v1/uploads/profile-image`.
+`PUBLIC_BASE_URL` (ej. `https://api.tudominio.com`, sin `/api/v1`) resuelve las rutas
+`/uploads/...` a URLs absolutas en `attachment_url` y `avatar_url` de los mensajes;
+si no se configura, la API devuelve la ruta relativa. `message:new` y `message:deleted`
+se emiten a todos los participantes del chat.
 
 ### Salud y Documentación
 

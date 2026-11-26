@@ -1,5 +1,7 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import { toPublicUrl } from '../utils/publicUrl.js';
+import { SENDER_AVATAR_SQL } from '../utils/avatar.js';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -21,7 +23,8 @@ class ChatService {
       sender_id: row.sender_id,
       content: row.content,
       message_type: row.message_type,
-      attachment_url: row.attachment_url,
+      attachment_url: toPublicUrl(row.attachment_url),
+      avatar_url: toPublicUrl(row.avatar_url),
       created_at: row.created_at,
     };
   }
@@ -226,13 +229,24 @@ class ChatService {
         return { error: 'CHAT_NOT_FOUND' };
       }
 
-      const messageRows = await trx('messages')
-        .where({ chat_id: chatId })
-        .whereNull('deleted_at')
-        .orderBy('created_at', 'desc')
-        .orderBy('id', 'desc')
+      const messageRows = await trx('messages as m')
+        .where({ 'm.chat_id': chatId })
+        .whereNull('m.deleted_at')
+        .leftJoin('users as u', 'u.id', 'm.sender_id')
+        .leftJoin('client_profiles as cp', 'cp.user_id', 'm.sender_id')
+        .leftJoin('worker_profiles as wp', 'wp.user_id', 'm.sender_id')
+        .orderBy('m.created_at', 'desc')
+        .orderBy('m.id', 'desc')
         .limit(MESSAGES_LIMIT)
-        .select('id', 'sender_id', 'content', 'message_type', 'attachment_url', 'created_at');
+        .select(
+          'm.id',
+          'm.sender_id',
+          'm.content',
+          'm.message_type',
+          'm.attachment_url',
+          'm.created_at',
+          trx.raw(SENDER_AVATAR_SQL),
+        );
 
       const me = await trx('chat_participants').where({ chat_id: chatId, user_id: userId }).first();
 
@@ -272,6 +286,30 @@ class ChatService {
     }
 
     return deleted > 0;
+  }
+
+  async updateParticipantState(chatId, userId, data) {
+    const participant = await db('chat_participants')
+      .where({ chat_id: chatId, user_id: userId })
+      .whereNull('deleted_at')
+      .first();
+    if (!participant) {
+      return { error: 'CHAT_NOT_FOUND' };
+    }
+    const updates = {};
+    if (data.is_favorite !== undefined) updates.is_favorite = data.is_favorite;
+    if (data.is_archived !== undefined) updates.is_archived = data.is_archived;
+    await db('chat_participants').where({ chat_id: chatId, user_id: userId }).update(updates);
+
+    const row = await db('chat_participants')
+      .where({ chat_id: chatId, user_id: userId })
+      .select('chat_id', 'is_favorite', 'is_archived')
+      .first();
+    return {
+      chat_id: row.chat_id,
+      is_favorite: Boolean(row.is_favorite),
+      is_archived: Boolean(row.is_archived),
+    };
   }
 }
 

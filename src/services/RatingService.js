@@ -79,13 +79,15 @@ class RatingService {
   }
 
   async listRatingsByUser(userId, query) {
-    const { limit, offset } = query;
+    const { limit, offset, sort = 'recent' } = query;
 
     const [{ count }] = await db('ratings').where({ ratee_id: userId }).count('* as count');
     const total = Number(count);
 
-    const rows = await db('ratings as r')
+    let q = db('ratings as r')
       .join('users as u', 'u.id', 'r.rater_id')
+      .leftJoin('client_profiles as cp', 'cp.user_id', 'r.rater_id')
+      .leftJoin('worker_profiles as wp', 'wp.user_id', 'r.rater_id')
       .where('r.ratee_id', userId)
       .select(
         'r.id',
@@ -95,12 +97,20 @@ class RatingService {
         'r.rating_stars',
         'r.review_text',
         'r.created_at',
-        'u.full_name as rater_full_name',
-        'u.avatar_url as rater_avatar_url',
-      )
-      .orderBy('r.created_at', 'desc')
-      .limit(limit)
-      .offset(offset);
+        'u.email as rater_email',
+        db.raw('COALESCE(u.full_name, cp.full_name, wp.full_name) as rater_full_name'),
+        db.raw('COALESCE(u.avatar_url, cp.avatar_url, wp.avatar_url) as rater_avatar_url'),
+      );
+
+    if (sort === 'best') {
+      q = q.orderBy('r.rating_stars', 'desc').orderBy('r.created_at', 'desc');
+    } else if (sort === 'worst') {
+      q = q.orderBy('r.rating_stars', 'asc').orderBy('r.created_at', 'desc');
+    } else {
+      q = q.orderBy('r.created_at', 'desc');
+    }
+
+    const rows = await q.limit(limit).offset(offset);
 
     const ratings = rows.map((row) => ({
       id: row.id,
@@ -110,14 +120,16 @@ class RatingService {
       rating_stars: row.rating_stars,
       review_text: row.review_text,
       created_at: row.created_at,
+      rater_email: row.rater_email || null,
       rater: {
         user_id: row.rater_id,
         full_name: row.rater_full_name,
+        email: row.rater_email || null,
         avatar_url: row.rater_avatar_url,
       },
     }));
 
-    return { ratings, count: total, limit, offset };
+    return { ratings, count: total, limit, offset, sort };
   }
 
   async getRatingAverage(userId) {
@@ -130,7 +142,17 @@ class RatingService {
     const average = result?.average ? Number(Number(result.average).toFixed(1)) : null;
     const totalRatings = Number(result?.total_ratings || 0);
 
-    return { average_rating: average, total_ratings: totalRatings };
+    const distRows = await db('ratings')
+      .where({ ratee_id: userId })
+      .select('rating_stars')
+      .count('* as count')
+      .groupBy('rating_stars');
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of distRows) {
+      distribution[Number(r.rating_stars)] = Number(r.count);
+    }
+
+    return { average_rating: average, total_ratings: totalRatings, distribution };
   }
 
   async recalculateAverageRating(userId) {
@@ -169,6 +191,7 @@ class RatingService {
       ratee_id: row.ratee_id,
       rating_stars: row.rating_stars,
       review_text: row.review_text,
+      rater_email: row.rater_email || null,
       created_at: row.created_at,
     };
   }

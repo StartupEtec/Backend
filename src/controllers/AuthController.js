@@ -62,7 +62,7 @@ class AuthController {
 
       // Generate and send OTP
       const otpCode = await otpService.generateAndSaveOtp(newUser.id);
-      await otpService.sendOtp(newUser.email, newUser.phone, otpCode);
+      await otpService.sendOtp(newUser.email, otpCode);
 
       return res.status(201).json({
         message:
@@ -131,11 +131,11 @@ class AuthController {
 
       // Generate OTP
       const otpCode = await otpService.generateAndSaveOtp(user.id);
-      await otpService.sendOtp(user.email, user.phone, otpCode);
+      await otpService.sendOtp(user.email, otpCode);
 
       return res.status(200).json({
         status: 'PENDING_VERIFICATION',
-        message: 'Código OTP enviado al correo/teléfono registrado.',
+        message: 'Código OTP enviado al correo registrado.',
         user: {
           id: user.id,
           email: user.email,
@@ -241,17 +241,16 @@ class AuthController {
       if (!user) {
         logger.warn('Intento de reenvío de OTP para usuario no registrado', { email, phone });
         return res.status(200).json({
-          message:
-            'Si el correo o teléfono está registrado, recibirás un nuevo código OTP en 5 minutos.',
+          message: 'Si el correo está registrado, recibirás un nuevo código OTP en 5 minutos.',
         });
       }
 
       // Regenera el código (invalida el anterior y resetea el contador de intentos)
       const otpCode = await otpService.generateAndSaveOtp(user.id);
-      await otpService.sendOtp(user.email, user.phone, otpCode);
+      await otpService.sendOtp(user.email, otpCode);
 
       return res.status(200).json({
-        message: 'Se ha enviado un nuevo código OTP a tu correo/teléfono registrado.',
+        message: 'Se ha enviado un nuevo código OTP a tu correo registrado.',
       });
     } catch (err) {
       logger.error('Error al reenviar el OTP:', err);
@@ -289,6 +288,37 @@ class AuthController {
       });
     } catch (err) {
       logger.error('Error al refrescar el token:', err);
+      next(err);
+    }
+  }
+
+  async logout(req, res, next) {
+    try {
+      const { error, value } = refreshTokenSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: error.details[0].message,
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const revoked = await authService.revokeRefreshToken(value.refreshToken);
+      if (!revoked) {
+        return res.status(401).json({
+          error: 'INVALID_REFRESH_TOKEN',
+          message: 'Token de refresco inválido o ya revocado',
+          statusCode: 401,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Sesión cerrada',
+      });
+    } catch (err) {
+      logger.error('Error al cerrar sesión:', err);
       next(err);
     }
   }

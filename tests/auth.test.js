@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../src/config/auth.js';
 
 // ---------------------------------------------------------------------------
 // Shared query builder mock — all chainable methods are jest.fn() so we can
@@ -84,6 +86,19 @@ describe('Auth Services & Middlewares Tests', () => {
     it('should return null for an invalid or tampered token', () => {
       const result = authService.verifyAccessToken('invalid.token.here');
       expect(result).toBeNull();
+    });
+
+    it('should reject a token without issuer and audience', () => {
+      const token = jwt.sign({ user_id: 'user-uuid' }, JWT_SECRET, { expiresIn: '1h' });
+      expect(authService.verifyAccessToken(token)).toBeNull();
+    });
+
+    it('should reject a token signed with another algorithm', () => {
+      const token = jwt.sign({ user_id: 'user-uuid' }, JWT_SECRET, {
+        algorithm: 'HS384',
+        expiresIn: '1h',
+      });
+      expect(authService.verifyAccessToken(token)).toBeNull();
     });
 
     it('should generate a refresh token and store it in the DB', async () => {
@@ -228,45 +243,76 @@ describe('Auth Services & Middlewares Tests', () => {
   });
 
   describe('Auth Middlewares', () => {
-    it('should pass authenticateToken with a valid JWT', () => {
+    const makeRes = () => ({
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    });
+
+    it('should pass authenticateToken with a valid JWT and active user', async () => {
       const req = {
         headers: {
           authorization: `Bearer ${authService.generateAccessToken({ id: '123', email: 'a@b.com', current_role: 'client' })}`,
         },
       };
-      const res = {};
+      const res = makeRes();
       const next = jest.fn();
+      mockQueryBuilder.first.mockResolvedValueOnce({ active: true, is_verified: true });
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
       expect(next).toHaveBeenCalled();
       expect(req.user).toBeDefined();
       expect(req.user.current_role).toBe('client');
       expect(req.user.user_id).toBe('123');
     });
 
-    it('should reject authenticateToken when no token is provided', () => {
+    it('should reject authenticateToken when no token is provided', async () => {
       const req = { headers: {} };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+      const res = makeRes();
       const next = jest.fn();
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should reject authenticateToken with an invalid token', () => {
+    it('should reject authenticateToken with an invalid token as 401', async () => {
       const req = { headers: { authorization: 'Bearer invalid.token' } };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+      const res = makeRes();
       const next = jest.fn();
 
-      authenticateToken(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(403);
+      await authenticateToken(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject authenticateToken when the user is inactive', async () => {
+      const req = {
+        headers: {
+          authorization: `Bearer ${authService.generateAccessToken({ id: '123', email: 'a@b.com' })}`,
+        },
+      };
+      const res = makeRes();
+      const next = jest.fn();
+      mockQueryBuilder.first.mockResolvedValueOnce({ active: false, is_verified: true });
+
+      await authenticateToken(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json.mock.calls[0][0].message).toBe('Usuario inactivo o no verificado');
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject authenticateToken when the user no longer exists', async () => {
+      const req = {
+        headers: {
+          authorization: `Bearer ${authService.generateAccessToken({ id: '123', email: 'a@b.com' })}`,
+        },
+      };
+      const res = makeRes();
+      const next = jest.fn();
+      mockQueryBuilder.first.mockResolvedValueOnce(null);
+
+      await authenticateToken(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
       expect(next).not.toHaveBeenCalled();
     });
 

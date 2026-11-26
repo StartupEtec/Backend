@@ -3,6 +3,8 @@ import logger from '../utils/logger.js';
 import imageService from './ImageService.js';
 import websocketHub from '../utils/websocket.js';
 import notificationService from './NotificationService.js';
+import { toPublicUrl } from '../utils/publicUrl.js';
+import { SENDER_AVATAR_SQL } from '../utils/avatar.js';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -15,7 +17,8 @@ class MessageService {
       sender_id: row.sender_id,
       content: row.content,
       message_type: row.message_type,
-      attachment_url: row.attachment_url,
+      attachment_url: toPublicUrl(row.attachment_url),
+      avatar_url: toPublicUrl(row.avatar_url),
       created_at: row.created_at,
     };
   }
@@ -25,6 +28,15 @@ class MessageService {
       .where({ chat_id: chatId, user_id: userId })
       .whereNull('deleted_at')
       .first();
+  }
+
+  async getSenderAvatarUrl(userId) {
+    const row = await db('users as u')
+      .leftJoin('client_profiles as cp', 'cp.user_id', 'u.id')
+      .leftJoin('worker_profiles as wp', 'wp.user_id', 'u.id')
+      .where({ 'u.id': userId })
+      .first(db.raw(SENDER_AVATAR_SQL));
+    return row?.avatar_url || null;
   }
 
   async getChatParticipantIds(chatId) {
@@ -87,10 +99,12 @@ class MessageService {
       throw err;
     }
 
-    const message = this.formatMessage(row);
+    const avatarUrl = await this.getSenderAvatarUrl(userId).catch(() => null);
+    const message = this.formatMessage({ ...row, avatar_url: avatarUrl });
 
-    const otherIds = (await this.getChatParticipantIds(chatId)).filter((id) => id !== userId);
-    websocketHub.sendToUsers(otherIds, 'message:new', { chat_id: chatId, message });
+    const allIds = await this.getChatParticipantIds(chatId);
+    websocketHub.sendToUsers(allIds, 'message:new', { chat_id: chatId, message });
+    const otherIds = allIds.filter((id) => id !== userId);
 
     // Notificar push/email/SMS a los demás participantes
     const senderProfile = await db('client_profiles').where({ user_id: userId }).first();
@@ -129,20 +143,24 @@ class MessageService {
 
     const safeLimit = Math.min(Math.max(limit, 1), MAX_LIMIT);
 
-    const rows = await db('messages')
-      .where({ chat_id: chatId })
-      .whereNull('deleted_at')
+    const rows = await db('messages as m')
+      .where({ 'm.chat_id': chatId })
+      .whereNull('m.deleted_at')
+      .leftJoin('users as u', 'u.id', 'm.sender_id')
+      .leftJoin('client_profiles as cp', 'cp.user_id', 'm.sender_id')
+      .leftJoin('worker_profiles as wp', 'wp.user_id', 'm.sender_id')
       .select(
-        'id',
-        'chat_id',
-        'sender_id',
-        'content',
-        'message_type',
-        'attachment_url',
-        'created_at',
+        'm.id',
+        'm.chat_id',
+        'm.sender_id',
+        'm.content',
+        'm.message_type',
+        'm.attachment_url',
+        'm.created_at',
+        db.raw(SENDER_AVATAR_SQL),
       )
-      .orderBy('created_at', 'desc')
-      .orderBy('id', 'desc')
+      .orderBy('m.created_at', 'desc')
+      .orderBy('m.id', 'desc')
       .limit(safeLimit)
       .offset(offset);
 
@@ -168,10 +186,8 @@ class MessageService {
 
     await db('messages').where({ id: messageId }).update({ deleted_at: db.fn.now() });
 
-    const otherIds = (await this.getChatParticipantIds(message.chat_id)).filter(
-      (id) => id !== userId,
-    );
-    websocketHub.sendToUsers(otherIds, 'message:deleted', {
+    const participantIds = await this.getChatParticipantIds(message.chat_id);
+    websocketHub.sendToUsers(participantIds, 'message:deleted', {
       chat_id: message.chat_id,
       message_id: messageId,
     });

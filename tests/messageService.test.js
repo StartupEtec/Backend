@@ -6,6 +6,7 @@ const makeBuilder = () => {
   const builder = {
     where: jest.fn().mockReturnThis(),
     whereNull: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     first: jest.fn().mockResolvedValue(null),
     insert: jest.fn().mockReturnThis(),
@@ -37,6 +38,7 @@ const setupMockKnex = () => {
     trx.fn = { now: () => new Date() };
     return cb(trx);
   });
+  mockKnex.raw = jest.fn((val) => val);
   mockKnex.fn = { now: () => new Date() };
 };
 
@@ -64,6 +66,7 @@ const { default: messageService } = await import('../src/services/MessageService
 const imageService = (await import('../src/services/ImageService.js')).default;
 const websocketHub = (await import('../src/utils/websocket.js')).default;
 const { createMessageSchema, listMessagesQuerySchema } = await import('../src/utils/validation.js');
+const { SENDER_AVATAR_SQL } = await import('../src/utils/avatar.js');
 
 const CHAT_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER_A = '11111111-1111-1111-1111-111111111111';
@@ -95,9 +98,13 @@ describe('MessageService.createMessage', () => {
     mockKnex('chat_participants');
     mockKnex('messages');
     mockKnex('chats');
+    mockKnex('users as u');
     imageService.deleteStoredFile.mockResolvedValue(true);
     builders['chat_participants'].first.mockResolvedValue({ chat_id: CHAT_ID, user_id: USER_A });
-    builders['chat_participants'].select.mockResolvedValue([{ user_id: USER_B }]);
+    builders['chat_participants'].select.mockResolvedValue([
+      { user_id: USER_A },
+      { user_id: USER_B },
+    ]);
     builders['messages'].returning.mockResolvedValue([makeMessageRow()]);
   });
 
@@ -112,9 +119,35 @@ describe('MessageService.createMessage', () => {
     expect(result.message.message_type).toBe('TEXT');
     expect(builders['chats'].update).toHaveBeenCalled();
     expect(websocketHub.sendToUsers).toHaveBeenCalledWith(
-      [USER_B],
+      [USER_A, USER_B],
       'message:new',
       expect.objectContaining({ chat_id: CHAT_ID }),
+    );
+    expect(notificationServiceMock.send).toHaveBeenCalledTimes(1);
+    expect(notificationServiceMock.send).toHaveBeenCalledWith(
+      USER_B,
+      'NEW_MESSAGE',
+      expect.objectContaining({ chat_id: CHAT_ID }),
+    );
+  });
+
+  test('incluye avatar_url del remitente en el mensaje creado y en el WebSocket', async () => {
+    builders['users as u'].first.mockResolvedValue({
+      avatar_url: '/uploads/profiles/avatar.jpg',
+    });
+
+    const result = await messageService.createMessage(CHAT_ID, USER_A, {
+      message_type: 'TEXT',
+      content: 'Hola',
+    });
+
+    expect(result.message.avatar_url).toBe('/uploads/profiles/avatar.jpg');
+    expect(websocketHub.sendToUsers).toHaveBeenCalledWith(
+      [USER_A, USER_B],
+      'message:new',
+      expect.objectContaining({
+        message: expect.objectContaining({ avatar_url: '/uploads/profiles/avatar.jpg' }),
+      }),
     );
   });
 
@@ -198,19 +231,31 @@ describe('MessageService.listMessages', () => {
     resetBuilders();
     jest.clearAllMocks();
     mockKnex('chat_participants');
-    mockKnex('messages');
+    mockKnex('messages as m');
     builders['chat_participants'].first.mockResolvedValue({ chat_id: CHAT_ID, user_id: USER_A });
   });
 
   test('devuelve mensajes paginados en orden cronológico y marca como leído', async () => {
-    const older = makeMessageRow({ id: 'msg-1', content: 'Primero' });
-    const newer = makeMessageRow({ id: 'msg-2', content: 'Segundo' });
-    builders['messages'].offset.mockResolvedValue([newer, older]);
+    const older = makeMessageRow({
+      id: 'msg-1',
+      content: 'Primero',
+      avatar_url: '/uploads/profiles/older.jpg',
+    });
+    const newer = makeMessageRow({
+      id: 'msg-2',
+      content: 'Segundo',
+      avatar_url: '/uploads/profiles/newer.jpg',
+    });
+    builders['messages as m'].offset.mockResolvedValue([newer, older]);
 
     const result = await messageService.listMessages(CHAT_ID, USER_A, { limit: 50, offset: 0 });
 
     expect(result.messages[0].content).toBe('Primero');
+    expect(result.messages[0].avatar_url).toBe('/uploads/profiles/older.jpg');
     expect(result.messages[1].content).toBe('Segundo');
+    expect(result.messages[1].avatar_url).toBe('/uploads/profiles/newer.jpg');
+    expect(builders['messages as m'].leftJoin).toHaveBeenCalledTimes(3);
+    expect(mockKnex.raw).toHaveBeenCalledWith(SENDER_AVATAR_SQL);
     expect(result.count).toBe(2);
     expect(builders['chat_participants'].update).toHaveBeenCalledWith(
       expect.objectContaining({ last_read_at: expect.any(Date) }),
@@ -239,7 +284,10 @@ describe('MessageService.deleteMessage', () => {
     mockKnex('messages');
     mockKnex('chat_participants');
     builders['messages'].first.mockResolvedValue(makeMessageRow({ sender_id: USER_A }));
-    builders['chat_participants'].select.mockResolvedValue([{ user_id: USER_B }]);
+    builders['chat_participants'].select.mockResolvedValue([
+      { user_id: USER_A },
+      { user_id: USER_B },
+    ]);
   });
 
   test('elimina (soft delete) el mensaje y notifica al otro participante', async () => {
@@ -248,7 +296,7 @@ describe('MessageService.deleteMessage', () => {
     expect(result.deleted).toBe(true);
     expect(builders['messages'].update).toHaveBeenCalled();
     expect(websocketHub.sendToUsers).toHaveBeenCalledWith(
-      [USER_B],
+      [USER_A, USER_B],
       'message:deleted',
       expect.objectContaining({ message_id: MESSAGE_ID }),
     );

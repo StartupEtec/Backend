@@ -660,7 +660,7 @@ con subida y compresión de imágenes y notificaciones en tiempo real por WebSoc
 
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
-| `POST` | `/chats/:chat_id/messages` | JWT | Enviar mensaje. `message_type`: `TEXT`, `IMAGE`, `QUOTE` (default `TEXT`). `content` (≤5000) obligatorio para `TEXT`/`QUOTE`; para `IMAGE`, adjuntar `file` (multipart, JPG/PNG, ≤5MB). Emite `message:new` por WS a los demás participantes. `404` si no participas; `400` si falta el archivo o el tipo es inválido. |
+| `POST` | `/chats/:chat_id/messages` | JWT | Enviar mensaje. `message_type`: `TEXT`, `IMAGE`, `QUOTE` (default `TEXT`). `content` (≤5000) obligatorio para `TEXT`/`QUOTE`; para `IMAGE`, adjuntar `file` (multipart, JPG/PNG, ≤5MB). Emite `message:new` por WS a todos los participantes. `404` si no participas; `400` si falta el archivo o el tipo es inválido. |
 | `GET` | `/chats/:chat_id/messages` | JWT | Listar mensajes no borrados (`?limit=&offset=`; default 50, máx 100; orden más recientes al final). Marca la conversación como leída (`last_read_at`). `404` si no participas. |
 | `DELETE` | `/messages/:message_id` | JWT | Eliminar mensaje (soft delete). `403 FORBIDDEN` si no eres el autor; `404 MESSAGE_NOT_FOUND` si no existe o ya fue borrado. Emite `message:deleted` por WS. |
 

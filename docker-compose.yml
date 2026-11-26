@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_secure_password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       POSTGRES_DB: ondemand_db
     ports:
       - "5432:5432"
@@ -30,17 +30,29 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
       # Se interpola desde el `.env` del proyecto (Compose lo lee automáticamente),
       # con fallback equivalente a la variable de ejemplo. Hace falta incluir el
       # origen de Metro (http://localhost:8081) para probar con Expo Web: React
       # Native no manda header Origin, pero el navegador sí.
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081}
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres_secure_password
-      - DB_NAME=ondemand_db
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      # El servidor no arranca sin estas claves; Compose falla antes si faltan en .env
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET requerido en .env}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET requerido en .env}
+      - JWT_RESET_SECRET=${JWT_RESET_SECRET:?JWT_RESET_SECRET requerido en .env}
+      - JWT_ISSUER=${JWT_ISSUER:-ondemand-api}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-ondemand-client}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY requerido en .env}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD requerido en .env}
+      - DB_NAME=${DB_NAME:-ondemand_db}
+      - DB_SSL=${DB_SSL:-false}
+      - DB_SSL_REJECT_UNAUTHORIZED=${DB_SSL_REJECT_UNAUTHORIZED:-true}
       - REDIS_URL=redis://redis:6379
     volumes:
       - .:/app

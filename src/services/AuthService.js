@@ -2,10 +2,21 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import {
+  JWT_SECRET,
+  REFRESH_TOKEN_SECRET,
+  JWT_RESET_SECRET,
+  JWT_ALGORITHM,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+} from '../config/auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_key_12345';
-const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || 'default_refresh_token_secret_key_12345';
+const SIGN_OPTIONS = { algorithm: JWT_ALGORITHM, issuer: JWT_ISSUER, audience: JWT_AUDIENCE };
+const VERIFY_OPTIONS = {
+  algorithms: [JWT_ALGORITHM],
+  issuer: JWT_ISSUER,
+  audience: JWT_AUDIENCE,
+};
 
 class AuthService {
   /**
@@ -18,7 +29,7 @@ class AuthService {
       email: user.email,
       current_role: user.current_role || 'client',
     };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+    return jwt.sign(payload, JWT_SECRET, { ...SIGN_OPTIONS, expiresIn: '1h' });
   }
 
   /**
@@ -30,7 +41,10 @@ class AuthService {
     const expiresIn = '7d';
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
-    const token = jwt.sign({ user_id: userId, jti }, REFRESH_TOKEN_SECRET, { expiresIn });
+    const token = jwt.sign({ user_id: userId, jti }, REFRESH_TOKEN_SECRET, {
+      ...SIGN_OPTIONS,
+      expiresIn,
+    });
 
     // Store in DB
     await db('refresh_tokens').insert({
@@ -49,7 +63,7 @@ class AuthService {
    */
   async refreshAccessToken(token) {
     try {
-      const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET);
+      const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET, VERIFY_OPTIONS);
       const { user_id, jti } = decoded;
 
       // Find token in DB
@@ -96,7 +110,7 @@ class AuthService {
    */
   async revokeRefreshToken(token) {
     try {
-      const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET);
+      const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET, VERIFY_OPTIONS);
       await db('refresh_tokens').where({ jti: decoded.jti }).del();
       return true;
     } catch {
@@ -109,11 +123,10 @@ class AuthService {
    * Uses JWT_RESET_SECRET concatenated with user.password_hash to make the token single-use.
    */
   generateResetPasswordToken(user) {
-    const JWT_RESET_SECRET = process.env.JWT_RESET_SECRET || JWT_SECRET;
     return jwt.sign(
       { user_id: user.id, email: user.email, purpose: 'password_reset' },
       JWT_RESET_SECRET + user.password_hash,
-      { expiresIn: '10m' },
+      { ...SIGN_OPTIONS, expiresIn: '10m' },
     );
   }
 
@@ -121,9 +134,8 @@ class AuthService {
    * Verifies the reset password token signature using user's password_hash.
    */
   verifyResetPasswordToken(token, user) {
-    const JWT_RESET_SECRET = process.env.JWT_RESET_SECRET || JWT_SECRET;
     try {
-      const decoded = jwt.verify(token, JWT_RESET_SECRET + user.password_hash);
+      const decoded = jwt.verify(token, JWT_RESET_SECRET + user.password_hash, VERIFY_OPTIONS);
       return decoded.purpose === 'password_reset' ? decoded : null;
     } catch {
       return null;
@@ -146,7 +158,7 @@ class AuthService {
    */
   verifyAccessToken(token) {
     try {
-      return jwt.verify(token, JWT_SECRET);
+      return jwt.verify(token, JWT_SECRET, VERIFY_OPTIONS);
     } catch (error) {
       return null;
     }

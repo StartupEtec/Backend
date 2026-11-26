@@ -18,6 +18,15 @@ afterAll(() => {
 
 const UUID = '12345678-1234-1234-1234-123456789012';
 
+const localIsoDate = () => {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
 const expectValid = (schema, value) => {
   const { error, value: result } = schema.validate(value, { abortEarly: false });
   expect(error).toBeUndefined();
@@ -286,7 +295,7 @@ describe('Validaciones de entrada (src/utils/validation.js)', () => {
     it('date_of_birth acepta el día de hoy y un 29/02 válido', () => {
       expectValid(validation.createClientProfileSchema, {
         ...identityPayload,
-        date_of_birth: new Date().toISOString().slice(0, 10),
+        date_of_birth: localIsoDate(),
       });
       expectValid(validation.createClientProfileSchema, {
         ...identityPayload,

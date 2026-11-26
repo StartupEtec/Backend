@@ -164,12 +164,17 @@ class NotificationService {
    * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
    */
   async sendPush(userId, payload) {
-    // Por ahora usa un token ficticio; en producción se consultaría una tabla de dispositivos
-    const token = await this.getDeviceToken(userId);
-    if (!token) {
+    const tokens = await this.getDeviceTokens(userId);
+    if (!tokens || tokens.length === 0) {
       return { success: false, error: 'NO_DEVICE_TOKEN' };
     }
-    return firebasePushProvider.send(token, payload);
+    let lastError = null;
+    for (const token of tokens) {
+      const res = await firebasePushProvider.send(token, payload);
+      if (res.success) return res;
+      lastError = res.error || 'PUSH_FAILED';
+    }
+    return { success: false, error: lastError || 'PUSH_FAILED' };
   }
 
   /**
@@ -201,14 +206,43 @@ class NotificationService {
   }
 
   /**
-   * Obtiene el token de dispositivo del usuario (placeholder).
-   * En producción, se consultaría una tabla `user_devices` con tokens FCM.
+   * Obtiene tokens de dispositivo registrados del usuario.
    * @param {string} userId
-   * @returns {Promise<string|null>}
+   * @returns {Promise<string[]>}
    */
-  async getDeviceToken(userId) {
-    // TODO: Implementar tabla user_devices para almacenar tokens FCM
-    return null;
+  async getDeviceTokens(userId) {
+    const hasTable = await db.schema.hasTable('user_devices');
+    if (!hasTable) return [];
+    const rows = await db('user_devices').where({ user_id: userId }).select('token');
+    return rows.map((r) => r.token);
+  }
+
+  async registerDevice(userId, { token, platform = 'unknown', device_name = null }) {
+    const hasTable = await db.schema.hasTable('user_devices');
+    if (!hasTable) throw new Error('user_devices table missing; run migrations');
+    await db('user_devices')
+      .insert({
+        user_id: userId,
+        token,
+        platform,
+        device_name: device_name || null,
+        last_used_at: db.fn.now(),
+      })
+      .onConflict(['user_id', 'token'])
+      .merge({
+        platform,
+        device_name: device_name || null,
+        last_used_at: db.fn.now(),
+        updated_at: db.fn.now(),
+      });
+    const row = await db('user_devices').where({ user_id: userId, token }).first();
+    return row;
+  }
+
+  async unregisterDevice(userId, token) {
+    const hasTable = await db.schema.hasTable('user_devices');
+    if (!hasTable) return 0;
+    return db('user_devices').where({ user_id: userId, token }).del();
   }
 
   /**
@@ -530,6 +564,21 @@ class NotificationService {
     });
 
     return count;
+  }
+
+  async deleteNotification(notificationId, userId) {
+    const deleted = await db('notifications').where({ id: notificationId, user_id: userId }).del();
+    return deleted > 0;
+  }
+
+  async clearNotifications(userId) {
+    const deleted = await db('notifications').where({ user_id: userId }).del();
+    logger.info('[AUDITORIA] Historial de notificaciones limpiado', {
+      user_id: userId,
+      count: deleted,
+      timestamp: new Date().toISOString(),
+    });
+    return deleted;
   }
 }
 

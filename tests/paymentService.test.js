@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import crypto from 'node:crypto';
 import { encrypt } from '../src/utils/encryption.js';
 
 // ---------------------------------------------------------------------------
@@ -7,21 +8,19 @@ import { encrypt } from '../src/utils/encryption.js';
 // paymentIntents.create en cada escenario (éxito, 3DS, declined, errores).
 // ---------------------------------------------------------------------------
 const stripeCreate = jest.fn();
-const stripeConstructEvent = jest.fn((rawBody) => JSON.parse(rawBody.toString()));
 const stripeInstances = [];
 
 class StripeMock {
   constructor(secret) {
     this._secret = secret;
     this.paymentIntents = { create: stripeCreate };
-    this.webhooks = { constructEvent: stripeConstructEvent };
     stripeInstances.push(this);
   }
 }
 
 jest.unstable_mockModule('stripe', () => ({ default: StripeMock }));
 
-process.env.STRIPE_SECRET_KEY = 'sk_test_mock_key';
+process.env.STRIPE_SECRET_KEY = 'sk_test_placeholder_not_real';
 
 const makeBuilder = () => {
   const builder = {
@@ -71,6 +70,15 @@ const { default: paymentService } = await import('../src/services/PaymentService
 // Restaurar para no contaminar otros archivos que corran en el mismo worker.
 delete process.env.STRIPE_SECRET_KEY;
 
+const signWebhook = (secret, raw, timestamp = Math.floor(Date.now() / 1000)) => {
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.`)
+    .update(raw)
+    .digest('hex');
+  return `t=${timestamp},v1=${signature}`;
+};
+
 const ORDER = {
   id: 'order-uuid',
   client_id: 'client-uuid',
@@ -106,9 +114,6 @@ describe('PaymentService — cobertura de gaps', () => {
       delete builders[key];
     });
     stripeCreate.mockReset();
-    stripeConstructEvent
-      .mockReset()
-      .mockImplementation((rawBody) => JSON.parse(rawBody.toString()));
   });
 
   describe('listUserPaymentMethods', () => {
@@ -639,18 +644,48 @@ describe('PaymentService — cobertura de gaps', () => {
   });
 
   describe('constructStripeWebhookEvent', () => {
-    it('should parse the raw body into an event', () => {
-      const raw = Buffer.from(JSON.stringify({ type: 'payment_intent.succeeded', data: {} }));
-      const event = paymentService.constructStripeWebhookEvent(raw, 'sig');
+    const secret = 'whsec_placeholder_not_real';
+    const raw = Buffer.from(JSON.stringify({ type: 'payment_intent.succeeded', data: {} }));
+
+    beforeEach(() => {
+      process.env.STRIPE_WEBHOOK_SECRET = secret;
+    });
+
+    afterEach(() => {
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+    });
+
+    it('should parse the raw body when the signature is valid', () => {
+      const event = paymentService.constructStripeWebhookEvent(raw, signWebhook(secret, raw));
       expect(event.type).toBe('payment_intent.succeeded');
-      expect(stripeConstructEvent).toHaveBeenCalled();
+    });
+
+    it('should reject an invalid signature', () => {
+      const tampered = signWebhook(secret, raw).replace(/v1=.*/, 'v1=deadbeef');
+      expect(() => paymentService.constructStripeWebhookEvent(raw, tampered)).toThrow(
+        'Firma del webhook inválida',
+      );
+    });
+
+    it('should reject a timestamp outside the tolerance', () => {
+      const oldTimestamp = Math.floor(Date.now() / 1000) - 1000;
+      expect(() =>
+        paymentService.constructStripeWebhookEvent(raw, signWebhook(secret, raw, oldTimestamp)),
+      ).toThrow('Timestamp del webhook fuera de tolerancia');
+    });
+
+    it('should reject when the secret is not configured', () => {
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+      expect(() =>
+        paymentService.constructStripeWebhookEvent(raw, signWebhook(secret, raw)),
+      ).toThrow('STRIPE_WEBHOOK_SECRET no configurado');
     });
   });
 
   describe('instancia de Stripe', () => {
     it('should build a real Stripe instance when STRIPE_SECRET_KEY is set', () => {
       expect(stripeInstances.length).toBeGreaterThan(0);
-      expect(stripeInstances[0]._secret).toBe('sk_test_mock_key');
+      expect(stripeInstances[0]._secret).toBe('sk_test_placeholder_not_real');
     });
   });
 });

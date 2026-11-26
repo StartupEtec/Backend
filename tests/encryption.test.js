@@ -29,11 +29,9 @@ describe('Encryption utility (AES-256-CBC)', () => {
     expect(decrypt('deadbeef')).toBeNull();
   });
 
-  it('debería fallar al descifrar con una clave distinta', () => {
-    process.env.ENCRYPTION_KEY = 'clave-a';
-    const encrypted = encrypt('info sensible');
-    process.env.ENCRYPTION_KEY = 'clave-b';
-    expect(decrypt(encrypted)).toBeNull();
-    delete process.env.ENCRYPTION_KEY;
+  it('debería fallar al descifrar un valor cifrado con otra clave', () => {
+    const encryptedWithAnotherKey =
+      'b80e6c7cf73d7ff5c0219aadde4e5b78:e9da1c2b7c2eb2bd069d9c0b17470b28';
+    expect(decrypt(encryptedWithAnotherKey)).toBeNull();
   });
 });

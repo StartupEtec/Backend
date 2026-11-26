@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { JWT_RESET_SECRET } from '../src/config/auth.js';
 
 const mockQueryBuilder = {
   where: jest.fn().mockReturnThis(),
@@ -84,8 +85,6 @@ describe('Password Reset Flow Tests', () => {
       };
 
       // Sign an expired token
-      const JWT_RESET_SECRET =
-        process.env.JWT_RESET_SECRET || process.env.JWT_SECRET || 'default_reset_secret_key_12345';
       const expiredToken = jwt.sign(
         { user_id: user.id, email: user.email, purpose: 'password_reset' },
         JWT_RESET_SECRET + user.password_hash,

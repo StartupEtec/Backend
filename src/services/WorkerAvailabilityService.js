@@ -76,8 +76,13 @@ class WorkerAvailabilityService {
     return this.formatRow(row);
   }
 
-  async listAvailability(workerId, userId) {
-    const worker = await this.getOwnedWorker(workerId, userId);
+  async listAvailability(workerId, userId, { publicView = false } = {}) {
+    let worker;
+    if (publicView) {
+      worker = await db('worker_profiles').where({ id: workerId }).first();
+    } else {
+      worker = await this.getOwnedWorker(workerId, userId);
+    }
     if (!worker) {
       return {
         error: 'WORKER_PROFILE_NOT_FOUND',

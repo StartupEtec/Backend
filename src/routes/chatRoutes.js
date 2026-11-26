@@ -9,6 +9,7 @@ const router = Router();
 router.post('/', authenticateToken, chatController.create);
 router.get('/:chat_id', authenticateToken, chatController.getById);
 router.delete('/:chat_id', authenticateToken, chatController.remove);
+router.patch('/:chat_id', authenticateToken, chatController.updateParticipant);
 
 // Mensajes del chat
 router.post(

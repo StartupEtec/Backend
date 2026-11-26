@@ -162,6 +162,60 @@ class NotificationController {
       next(err);
     }
   }
+
+  async deleteNotification(req, res, next) {
+    try {
+      const deleted = await notificationService.deleteNotification(req.params.id, req.user.user_id);
+      if (!deleted) {
+        return errorResponse(res, 404, 'NOTIFICATION_NOT_FOUND', 'Notificación no encontrada');
+      }
+      return res.status(200).json({ message: 'Notificación eliminada correctamente' });
+    } catch (err) {
+      logger.error('[NOTIFICATION] Error eliminando notificación', { error: err.message });
+      next(err);
+    }
+  }
+
+  async clearNotifications(req, res, next) {
+    try {
+      const count = await notificationService.clearNotifications(req.user.user_id);
+      return res
+        .status(200)
+        .json({ message: 'Historial de notificaciones limpiado', deleted_count: count });
+    } catch (err) {
+      logger.error('[NOTIFICATION] Error limpiando historial', { error: err.message });
+      next(err);
+    }
+  }
+
+  async registerDevice(req, res, next) {
+    try {
+      const { registerDeviceSchema } = await import('../utils/validation.js');
+      const { error, value } = registerDeviceSchema.validate(req.body);
+      if (error) {
+        return errorResponse(res, 400, 'VALIDATION_ERROR', error.details[0].message);
+      }
+      const device = await notificationService.registerDevice(req.user.user_id, value);
+      return res.status(201).json({ message: 'Dispositivo registrado correctamente', device });
+    } catch (err) {
+      logger.error('[NOTIFICATION] Error registrando dispositivo', { error: err.message });
+      next(err);
+    }
+  }
+
+  async unregisterDevice(req, res, next) {
+    try {
+      const { token } = req.body || {};
+      if (!token) {
+        return errorResponse(res, 400, 'VALIDATION_ERROR', 'token es requerido');
+      }
+      await notificationService.unregisterDevice(req.user.user_id, token);
+      return res.status(200).json({ message: 'Dispositivo desregistrado correctamente' });
+    } catch (err) {
+      logger.error('[NOTIFICATION] Error desregistrando dispositivo', { error: err.message });
+      next(err);
+    }
+  }
 }
 
 export default new NotificationController();
