@@ -1,5 +1,6 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import { initialCertificationStatus } from '../utils/autoApprove.js';
 
 /**
  * Joi convierte 'YYYY-MM-DD' a un Date en medianoche UTC y pg serializa un Date
@@ -161,6 +162,7 @@ class WorkerProfileService {
         category_id: data.category_id || null,
         hourly_rate: data.hourly_rate ?? null,
         availability_status: data.availability_status || 'AVAILABLE',
+        certification_status: initialCertificationStatus(),
       })
       .returning([
         'id',

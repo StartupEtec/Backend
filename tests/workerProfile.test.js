@@ -36,6 +36,10 @@ const { createWorkerProfileSchema, updateWorkerProfileSchema } =
   await import('../src/utils/validation.js');
 
 describe('Worker Profile Service', () => {
+  afterEach(() => {
+    delete process.env.AUTO_APPROVE_WORKERS;
+  });
+
   beforeEach(() => {
     mockQueryBuilder.where.mockReset().mockReturnThis();
     mockQueryBuilder.orWhere.mockReset().mockReturnThis();
@@ -218,6 +222,25 @@ describe('Worker Profile Service', () => {
       expect(mockQueryBuilder.insert).toHaveBeenCalled();
       expect(result.full_name).toBe('New Worker');
       expect(result.hourly_rate).toBe(25.0);
+    });
+
+    it('should create an APPROVED profile when auto approval is enabled', async () => {
+      process.env.AUTO_APPROVE_WORKERS = 'true';
+      const newProfile = {
+        id: 'new-profile-uuid',
+        user_id: 'user-uuid',
+        full_name: 'Auto Worker',
+        availability_status: 'AVAILABLE',
+        certification_status: 'APPROVED',
+      };
+
+      mockQueryBuilder.first.mockResolvedValueOnce(null);
+      mockQueryBuilder.returning.mockResolvedValueOnce([newProfile]);
+
+      await workerProfileService.createProfile('user-uuid', { full_name: 'Auto Worker' });
+
+      const inserted = mockQueryBuilder.insert.mock.calls[0][0];
+      expect(inserted.certification_status).toBe('APPROVED');
     });
 
     it('should persist the 4 identity fields and leave worker specifics null', async () => {

@@ -63,9 +63,14 @@ const { default: certificationController } =
 
 describe('Worker Certifications Tests', () => {
   beforeEach(() => {
+    delete process.env.AUTO_APPROVE_WORKERS;
     Object.keys(builders).forEach((key) => {
       delete builders[key];
     });
+  });
+
+  afterEach(() => {
+    delete process.env.AUTO_APPROVE_WORKERS;
   });
 
   describe('CertificationService', () => {
@@ -93,6 +98,35 @@ describe('Worker Certifications Tests', () => {
 
       expect(res.certification).toBeDefined();
       expect(res.certification.verification_status).toBe('PENDING');
+    });
+
+    test('createCertification auto aprueba cuando el flag está activo', async () => {
+      process.env.AUTO_APPROVE_WORKERS = 'true';
+      getBuilder('worker_profiles').first.mockResolvedValue({
+        id: 'worker-uuid',
+        user_id: 'user-uuid',
+        certification_status: 'PENDING',
+      });
+      getBuilder('certifications')._resolvedValue = [
+        {
+          id: 'cert-uuid',
+          worker_id: 'worker-uuid',
+          document_type: 'ID_VERIFICATION',
+          verification_status: 'APPROVED',
+        },
+      ];
+
+      const file = { originalname: 'doc.pdf', buffer: Buffer.from('hello') };
+      const res = await certificationService.createCertification(
+        'worker-uuid',
+        'ID_VERIFICATION',
+        file,
+      );
+
+      expect(res.certification.verification_status).toBe('APPROVED');
+      expect(getBuilder('worker_profiles').update).toHaveBeenCalledWith(
+        expect.objectContaining({ certification_status: 'APPROVED' }),
+      );
     });
 
     test('updateCertificationDocument updates document and returns to PENDING', async () => {
