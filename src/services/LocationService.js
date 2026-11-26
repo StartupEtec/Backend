@@ -1,5 +1,7 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import cache from '../utils/cache.js';
+import { autoApproveWorkerByUserId } from '../utils/autoApprove.js';
 
 const MAX_LOCATIONS_PER_USER = 10;
 
@@ -78,6 +80,11 @@ class LocationService {
       timestamp: new Date().toISOString(),
     });
 
+    if (isPrimary) {
+      await autoApproveWorkerByUserId(userId);
+    }
+    await cache.invalidateNearby();
+
     return this.formatRow(row);
   }
 
@@ -145,6 +152,8 @@ class LocationService {
       timestamp: new Date().toISOString(),
     });
 
+    await cache.invalidateNearby();
+
     return this.formatRow(row);
   }
 
@@ -157,6 +166,7 @@ class LocationService {
         location_id: locationId,
         timestamp: new Date().toISOString(),
       });
+      await cache.invalidateNearby();
     }
 
     return deleted > 0;

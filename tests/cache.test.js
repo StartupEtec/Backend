@@ -38,6 +38,16 @@ describe('CacheService — modo memoria', () => {
     expect(await cacheService.get('ttl')).toBeNull();
   });
 
+  it('invalidateNearby elimina solo las claves nearby:*', async () => {
+    await cacheService.set('nearby:1,2,10', { count: 1 }, 60);
+    await cacheService.set('otra-clave', { count: 2 }, 60);
+
+    await cacheService.invalidateNearby();
+
+    expect(await cacheService.get('nearby:1,2,10')).toBeNull();
+    expect(await cacheService.get('otra-clave')).toEqual({ count: 2 });
+  });
+
   it('disconnect sin cliente Redis es no-op', async () => {
     await cacheService.disconnect();
     expect(cacheService.client).toBeNull();

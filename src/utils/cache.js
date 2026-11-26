@@ -70,6 +70,27 @@ class CacheService {
 
     this.memory.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   }
+
+  async invalidateNearby() {
+    if (this.useRedis && this.client) {
+      try {
+        for await (const keys of this.client.scanIterator({ MATCH: 'nearby:*', COUNT: 100 })) {
+          if (keys.length > 0) {
+            await this.client.del(keys);
+          }
+        }
+        logger.info('[CACHE] Invalidadas claves nearby:* en Redis.');
+      } catch (err) {
+        logger.error('No se pudieron invalidar claves nearby:* en Redis:', err.message);
+      }
+    }
+
+    for (const key of this.memory.keys()) {
+      if (key.startsWith('nearby:')) {
+        this.memory.delete(key);
+      }
+    }
+  }
 }
 
 export default new CacheService();

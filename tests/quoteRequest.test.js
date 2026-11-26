@@ -7,6 +7,8 @@ const makeBuilder = () => ({
   join: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
+  whereRaw: jest.fn().mockReturnThis(),
+  orWhereRaw: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
   limit: jest.fn().mockReturnThis(),
   offset: jest.fn().mockReturnThis(),
@@ -353,7 +355,31 @@ describe('QuoteRequestController', () => {
 
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ request: expect.objectContaining({ status: 'PENDING' }) }),
+      expect.objectContaining({
+        request: expect.objectContaining({ status: 'PENDING' }),
+        quote_request: expect.objectContaining({ status: 'PENDING' }),
+      }),
+    );
+  });
+
+  it('acepta el cuerpo legacy del APK con category y location', async () => {
+    setupCreateBuilders();
+    builders.categories.first.mockResolvedValue({ id: CATEGORY_ID, active: true });
+    builders.locations = makeBuilder();
+    builders.locations.first.mockResolvedValue({ id: '77777777-7777-7777-7777-777777777777' });
+    const res = buildRes();
+
+    await quoteRequestController.create(
+      req({ worker_id: WORKER_ID, category: 'Plomería', location: 'Mi casa' }),
+      res,
+      jest.fn(),
+    );
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quote_request: expect.objectContaining({ status: 'PENDING' }),
+      }),
     );
   });
 
@@ -368,7 +394,11 @@ describe('QuoteRequestController', () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ count: 1, requests: expect.any(Array) }),
+      expect.objectContaining({
+        count: 1,
+        requests: expect.any(Array),
+        quote_requests: expect.any(Array),
+      }),
     );
   });
 

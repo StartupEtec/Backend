@@ -1,5 +1,6 @@
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import { initialCertificationStatus } from '../utils/autoApprove.js';
 
 class UserService {
   static toDateOnly(value) {
@@ -86,6 +87,9 @@ class UserService {
             avatar_url: identity.avatar_url,
             dni_front_url: identity.dni_front_url,
             dni_back_url: identity.dni_back_url,
+            ...(tableName === 'worker_profiles'
+              ? { certification_status: initialCertificationStatus() }
+              : {}),
           });
         }
       }
@@ -289,7 +293,11 @@ class UserService {
         clientProfile = await db('client_profiles').where({ user_id: userId }).first();
       }
       if (!workerProfile) {
-        await db('worker_profiles').insert({ user_id: userId, ...base });
+        await db('worker_profiles').insert({
+          user_id: userId,
+          ...base,
+          certification_status: initialCertificationStatus(),
+        });
         workerProfile = await db('worker_profiles').where({ user_id: userId }).first();
       }
       logger.info('[AUDITORIA] Perfil de rol faltante auto-creado desde identidad', {
