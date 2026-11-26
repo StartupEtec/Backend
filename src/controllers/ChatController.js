@@ -49,8 +49,9 @@ class ChatController {
   async list(req, res, next) {
     try {
       const { id } = req.params;
+      const targetUserId = id === 'me' ? req.user.user_id : id;
 
-      if (req.user.user_id !== id) {
+      if (req.user.user_id !== targetUserId) {
         return res.status(403).json({
           error: 'FORBIDDEN',
           message: 'No tienes permiso para ver los chats de otro usuario',
@@ -69,7 +70,7 @@ class ChatController {
         });
       }
 
-      const result = await chatService.listChats(id, value);
+      const result = await chatService.listChats(targetUserId, value);
 
       return res.status(200).json(result);
     } catch (err) {

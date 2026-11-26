@@ -44,6 +44,7 @@ router.get('/:id/payment-methods', authenticateToken, paymentController.list);
 
 // Ruta de chats del usuario (debe ir ANTES de /:id genérico)
 router.get('/:id/chats', authenticateToken, chatController.list);
+router.post('/:id/chats', authenticateToken, chatController.create);
 
 // Rutas de configuración de seguridad de usuario (deben ir ANTES de /:id genérico)
 router.post('/:id/change-password', authenticateToken, securityConfigController.changePassword);

@@ -548,9 +548,12 @@ describe('OrderService', () => {
       expect(res.error).toBe('FORBIDDEN');
     });
 
-    it('should return INVALID_TRANSITION if order is not IN_PROGRESS', async () => {
+    it('should return INVALID_TRANSITION if order status is not completable', async () => {
       builders.orders = makeBuilder();
-      builders.orders.first.mockResolvedValue(ORDER_ROW); // PENDING
+      builders.orders.first.mockResolvedValue({
+        ...ORDER_ROW,
+        status: ORDER_STATUS.CANCELLED,
+      });
       builders.client_profiles = makeBuilder();
       builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
       builders.worker_profiles = makeBuilder();
@@ -558,6 +561,25 @@ describe('OrderService', () => {
 
       const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
       expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should accept confirmations from PENDING orders', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValueOnce(ORDER_ROW).mockResolvedValueOnce({
+        ...ORDER_ROW,
+        client_confirmed: true,
+        worker_confirmed: false,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+
+      expect(res.error).toBeUndefined();
+      expect(res.bothConfirmed).toBe(false);
+      expect(res.clientConfirmed).toBe(true);
     });
 
     it('should return ALREADY_CONFIRMED if client already confirmed', async () => {

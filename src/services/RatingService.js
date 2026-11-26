@@ -86,6 +86,8 @@ class RatingService {
 
     let q = db('ratings as r')
       .join('users as u', 'u.id', 'r.rater_id')
+      .leftJoin('client_profiles as cp', 'cp.user_id', 'r.rater_id')
+      .leftJoin('worker_profiles as wp', 'wp.user_id', 'r.rater_id')
       .where('r.ratee_id', userId)
       .select(
         'r.id',
@@ -95,8 +97,9 @@ class RatingService {
         'r.rating_stars',
         'r.review_text',
         'r.created_at',
-        'u.full_name as rater_full_name',
-        'u.avatar_url as rater_avatar_url',
+        'u.email as rater_email',
+        db.raw('COALESCE(u.full_name, cp.full_name, wp.full_name) as rater_full_name'),
+        db.raw('COALESCE(u.avatar_url, cp.avatar_url, wp.avatar_url) as rater_avatar_url'),
       );
 
     if (sort === 'best') {
@@ -117,9 +120,11 @@ class RatingService {
       rating_stars: row.rating_stars,
       review_text: row.review_text,
       created_at: row.created_at,
+      rater_email: row.rater_email || null,
       rater: {
         user_id: row.rater_id,
         full_name: row.rater_full_name,
+        email: row.rater_email || null,
         avatar_url: row.rater_avatar_url,
       },
     }));
@@ -186,6 +191,7 @@ class RatingService {
       ratee_id: row.ratee_id,
       rating_stars: row.rating_stars,
       review_text: row.review_text,
+      rater_email: row.rater_email || null,
       created_at: row.created_at,
     };
   }

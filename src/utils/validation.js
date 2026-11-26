@@ -571,6 +571,64 @@ export const updateOrderStatusSchema = Joi.object({
     }),
 });
 
+export const createQuoteRequestSchema = Joi.object({
+  worker_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'worker_id debe ser un UUID válido',
+    'any.required': 'worker_id es requerido',
+  }),
+  category_id: Joi.string().pattern(uuidPattern).required().messages({
+    'string.pattern.base': 'category_id debe ser un UUID válido',
+    'any.required': 'category_id es requerido',
+  }),
+  location_id: Joi.string().pattern(uuidPattern).allow(null).messages({
+    'string.pattern.base': 'location_id debe ser un UUID válido',
+  }),
+  description: Joi.string().trim().max(2000).allow('', null).messages({
+    'string.max': 'La descripción no debe exceder los 2000 caracteres',
+  }),
+  budget: Joi.number().positive().precision(2).max(99999999.99).allow(null).messages({
+    'number.base': 'El presupuesto debe ser un número',
+    'number.positive': 'El presupuesto debe ser un valor positivo',
+  }),
+  scheduled_date: Joi.date().iso().min('now').allow(null).messages({
+    'date.base': 'La fecha deseada debe ser una fecha válida',
+    'date.iso': 'La fecha deseada debe tener formato ISO (YYYY-MM-DD)',
+    'date.min': 'La fecha deseada debe ser hoy o una fecha futura',
+  }),
+});
+
+export const listQuoteRequestsQuerySchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20).messages({
+    'number.base': 'limit debe ser un número entero',
+    'number.min': 'limit debe ser al menos 1',
+    'number.max': 'limit no debe exceder 100',
+  }),
+  offset: Joi.number().integer().min(0).default(0).messages({
+    'number.base': 'offset debe ser un número entero',
+    'number.min': 'offset no puede ser negativo',
+  }),
+  status: Joi.string().valid('PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED').messages({
+    'any.only': 'El estado debe ser PENDING, ACCEPTED, REJECTED o CANCELLED',
+  }),
+  role: Joi.string().valid('MINE_AS_CLIENT', 'MINE_AS_WORKER').messages({
+    'any.only': 'El rol debe ser MINE_AS_CLIENT o MINE_AS_WORKER',
+  }),
+});
+
+export const updateQuoteRequestStatusSchema = Joi.object({
+  status: Joi.string().valid('ACCEPTED', 'REJECTED', 'CANCELLED').required().messages({
+    'any.only': 'El estado debe ser ACCEPTED, REJECTED o CANCELLED',
+    'any.required': 'El estado es requerido',
+  }),
+  rejection_reason: Joi.string().trim().max(1000).allow('', null).messages({
+    'string.max': 'El motivo no debe exceder los 1000 caracteres',
+  }),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Debe proporcionar al menos un campo para actualizar',
+  });
+
 const luhnCheck = (val) => {
   let sum = 0;
   let shouldDouble = false;

@@ -39,6 +39,10 @@ class OrderService {
       description: row.description || null,
       suggested_budget: row.suggested_budget != null ? Number(row.suggested_budget) : null,
       scheduled_date: row.scheduled_date || null,
+      category_name: row.category_name || null,
+      client_confirmed: Boolean(row.client_confirmed),
+      worker_confirmed: Boolean(row.worker_confirmed),
+      transaction_status: row.transaction_status || null,
       status: row.status,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -73,6 +77,8 @@ class OrderService {
       .join('users as cu', 'cu.id', 'cp.user_id')
       .join('worker_profiles as wp', 'wp.id', 'o.worker_id')
       .join('users as wu', 'wu.id', 'wp.user_id')
+      .leftJoin('categories as cat', 'cat.id', 'o.category_id')
+      .leftJoin('transactions as t', 't.order_id', 'o.id')
       .where('o.id', orderId)
       .first(
         'o.id',
@@ -83,6 +89,10 @@ class OrderService {
         'o.description',
         'o.suggested_budget',
         'o.scheduled_date',
+        'o.client_confirmed',
+        'o.worker_confirmed',
+        'cat.name as category_name',
+        't.status as transaction_status',
         'o.status',
         'o.created_at',
         'o.updated_at',
@@ -208,6 +218,8 @@ class OrderService {
       .join('users as cu', 'cu.id', 'cp.user_id')
       .join('worker_profiles as wp', 'wp.id', 'o.worker_id')
       .join('users as wu', 'wu.id', 'wp.user_id')
+      .leftJoin('categories as cat', 'cat.id', 'o.category_id')
+      .leftJoin('transactions as t', 't.order_id', 'o.id')
       .select(
         'o.id',
         'o.client_id',
@@ -217,6 +229,10 @@ class OrderService {
         'o.description',
         'o.suggested_budget',
         'o.scheduled_date',
+        'o.client_confirmed',
+        'o.worker_confirmed',
+        'cat.name as category_name',
+        't.status as transaction_status',
         'o.status',
         'o.created_at',
         'o.updated_at',
@@ -267,7 +283,8 @@ class OrderService {
       baseQuery = baseQuery.where(function () {
         this.where('cu.full_name', 'ilike', s)
           .orWhere('wu.full_name', 'ilike', s)
-          .orWhere('o.description', 'ilike', s);
+          .orWhere('o.description', 'ilike', s)
+          .orWhere('cat.name', 'ilike', s);
       });
     }
 
@@ -276,7 +293,8 @@ class OrderService {
       .join('client_profiles as cp', 'cp.id', 'o.client_id')
       .join('users as cu', 'cu.id', 'cp.user_id')
       .join('worker_profiles as wp', 'wp.id', 'o.worker_id')
-      .join('users as wu', 'wu.id', 'wp.user_id');
+      .join('users as wu', 'wu.id', 'wp.user_id')
+      .leftJoin('categories as cat', 'cat.id', 'o.category_id');
 
     // Aplicar los mismos filtros para el count
     if (role === 'MINE_AS_CLIENT') {
@@ -303,7 +321,8 @@ class OrderService {
       countQuery.where(function () {
         this.where('cu.full_name', 'ilike', s)
           .orWhere('wu.full_name', 'ilike', s)
-          .orWhere('o.description', 'ilike', s);
+          .orWhere('o.description', 'ilike', s)
+          .orWhere('cat.name', 'ilike', s);
       });
     }
 
@@ -501,8 +520,12 @@ class OrderService {
       return { error: 'FORBIDDEN' };
     }
 
-    // Validar que la orden está en progreso
-    if (order.status !== ORDER_STATUS.IN_PROGRESS) {
+    const completableStatuses = [
+      ORDER_STATUS.PENDING,
+      ORDER_STATUS.ACCEPTED,
+      ORDER_STATUS.IN_PROGRESS,
+    ];
+    if (!completableStatuses.includes(order.status)) {
       return {
         error: 'INVALID_TRANSITION',
         message: `No se puede confirmar la finalización de una orden en estado ${order.status}`,
@@ -542,7 +565,7 @@ class OrderService {
     // Si ambos confirmaron, transicionar a COMPLETED y liberar escrow
     const bothConfirmed = updatedOrder.client_confirmed && updatedOrder.worker_confirmed;
 
-    if (bothConfirmed && updatedOrder.status === ORDER_STATUS.IN_PROGRESS) {
+    if (bothConfirmed && completableStatuses.includes(updatedOrder.status)) {
       try {
         await db.transaction(async (trx) => {
           await trx('orders').where({ id: orderId }).update({
@@ -553,7 +576,7 @@ class OrderService {
           await trx('order_events').insert({
             order_id: orderId,
             user_id: userId,
-            from_state: ORDER_STATUS.IN_PROGRESS,
+            from_state: updatedOrder.status,
             to_state: ORDER_STATUS.COMPLETED,
           });
 
@@ -585,7 +608,7 @@ class OrderService {
 
     // Re-leer la orden solo si hubo transición para reflejar el estado final (COMPLETED)
     const finalOrder =
-      bothConfirmed && updatedOrder.status === ORDER_STATUS.IN_PROGRESS
+      bothConfirmed && completableStatuses.includes(updatedOrder.status)
         ? await db('orders').where({ id: orderId }).first()
         : updatedOrder;
 
