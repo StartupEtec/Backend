@@ -89,6 +89,12 @@ jobs:
           if 'RUN mkdir -p uploads' not in s:
               s = s.replace('COPY src/ ./src/', 'RUN mkdir -p uploads\nCOPY src/ ./src/')
           p.write_text(s)
+          k = Path('/home/Startup/deploy/backend/knexfile.js')
+          ks = k.read_text()
+          old = '        ssl: buildSslConfig(),'
+          new = "        ssl: process.env.DB_SSL === 'true' ? buildSslConfig() : false,"
+          if old in ks:
+              k.write_text(ks.replace(old, new, 1))
           PY
           docker compose --env-file /home/Startup/deploy/backend.env -p laborin-backend -f /home/Startup/deploy/backend/docker-compose.local.yml up -d --build api
           docker exec laborin_api ./node_modules/.bin/knex migrate:latest --knexfile knexfile.js
