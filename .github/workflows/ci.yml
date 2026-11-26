@@ -64,7 +64,7 @@ jobs:
   deploy:
     needs: test-and-lint
     if: github.event_name == 'push' && (github.ref == 'refs/heads/Arreglar_Cosas_2' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
-    runs-on: self-hosted
+    runs-on: [self-hosted, laborin-deploy]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
