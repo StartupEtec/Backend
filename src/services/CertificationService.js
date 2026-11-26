@@ -3,6 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import db from '../database/db.js';
 import logger from '../utils/logger.js';
+import cache from '../utils/cache.js';
+import { initialCertificationStatus, isAutoApproveEnabled } from '../utils/autoApprove.js';
 
 class CertificationService {
   async notifyWorker(workerId, status, details = {}) {
@@ -43,15 +45,18 @@ class CertificationService {
           worker_id: workerId,
           document_type: documentType,
           document_url: documentUrl,
-          verification_status: 'PENDING',
+          verification_status: initialCertificationStatus(),
+          approved_at: isAutoApproveEnabled() ? trx.fn.now() : null,
         })
         .returning('*');
 
-      // Also reset overall worker profile status to PENDING if not already APPROVED/PENDING
-      if (worker.certification_status !== 'APPROVED') {
+      if (isAutoApproveEnabled() || worker.certification_status !== 'APPROVED') {
         await trx('worker_profiles')
           .where({ id: workerId })
-          .update({ certification_status: 'PENDING', updated_at: trx.fn.now() });
+          .update({
+            certification_status: isAutoApproveEnabled() ? 'APPROVED' : 'PENDING',
+            updated_at: trx.fn.now(),
+          });
       }
 
       logger.info('[AUDITORIA] Certificación subida', {
@@ -62,6 +67,8 @@ class CertificationService {
 
       return newCert;
     });
+
+    await cache.invalidateNearby();
 
     return { certification: result };
   }
@@ -157,16 +164,18 @@ class CertificationService {
       };
     }
 
+    const resolvedStatus = isAutoApproveEnabled() ? 'APPROVED' : status;
+
     const result = await db.transaction(async (trx) => {
       const updateFields = {
-        verification_status: status,
+        verification_status: resolvedStatus,
         updated_at: trx.fn.now(),
       };
 
-      if (status === 'APPROVED') {
+      if (resolvedStatus === 'APPROVED') {
         updateFields.approved_at = trx.fn.now();
         updateFields.rejected_reason = null;
-      } else if (status === 'REJECTED') {
+      } else if (resolvedStatus === 'REJECTED') {
         updateFields.approved_at = null;
         updateFields.rejected_reason = rejectedReason;
       }
@@ -176,13 +185,15 @@ class CertificationService {
         .update(updateFields)
         .returning('*');
 
-      // Update worker_profile overall status
-      if (status === 'REJECTED') {
+      if (isAutoApproveEnabled()) {
+        await trx('worker_profiles')
+          .where({ id: cert.worker_id })
+          .update({ certification_status: 'APPROVED', updated_at: trx.fn.now() });
+      } else if (resolvedStatus === 'REJECTED') {
         await trx('worker_profiles')
           .where({ id: cert.worker_id })
           .update({ certification_status: 'REJECTED', updated_at: trx.fn.now() });
-      } else if (status === 'APPROVED') {
-        // Check if all certifications for this worker are approved
+      } else if (resolvedStatus === 'APPROVED') {
         const allCerts = await trx('certifications').where({ worker_id: cert.worker_id });
         const allApproved =
           allCerts.length > 0 && allCerts.every((c) => c.verification_status === 'APPROVED');
@@ -196,19 +207,20 @@ class CertificationService {
       logger.info('[AUDITORIA] Cambio de estado de certificación', {
         certification_id: id,
         from_status: cert.verification_status,
-        to_status: status,
+        to_status: resolvedStatus,
         changed_by_id: actorUserId,
-        rejected_reason: status === 'REJECTED' ? rejectedReason : undefined,
+        rejected_reason: resolvedStatus === 'REJECTED' ? rejectedReason : undefined,
       });
 
       return updated;
     });
 
-    // Notify worker asynchronously
-    this.notifyWorker(cert.worker_id, status, {
+    await cache.invalidateNearby();
+
+    this.notifyWorker(cert.worker_id, resolvedStatus, {
       certification_id: id,
       document_type: cert.document_type,
-      rejected_reason: status === 'REJECTED' ? rejectedReason : undefined,
+      rejected_reason: resolvedStatus === 'REJECTED' ? rejectedReason : undefined,
     });
 
     return { certification: result };

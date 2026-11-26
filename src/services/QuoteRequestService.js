@@ -50,6 +50,9 @@ class QuoteRequestService {
       created_at: row.created_at,
       updated_at: row.updated_at,
       category_name: row.category_name || null,
+      category: row.category_name || null,
+      location_address: row.location_address || null,
+      location: row.location_address || null,
       client: row.client_full_name
         ? {
             user_id: row.client_id,
@@ -73,11 +76,13 @@ class QuoteRequestService {
       .leftJoin('users as cu', 'cu.id', 'qr.client_id')
       .leftJoin('users as wu', 'wu.id', 'qr.worker_id')
       .leftJoin('categories as cat', 'cat.id', 'qr.category_id')
+      .leftJoin('locations as loc', 'loc.id', 'qr.location_id')
       .leftJoin('client_profiles as cp', 'cp.user_id', 'qr.client_id')
       .leftJoin('worker_profiles as wp', 'wp.user_id', 'qr.worker_id')
       .select(
         'qr.*',
         'cat.name as category_name',
+        'loc.address as location_address',
         db.raw('COALESCE(cp.full_name, cu.full_name) as client_full_name'),
         'cu.avatar_url as client_avatar_url',
         db.raw('COALESCE(wp.full_name, wu.full_name) as worker_full_name'),
