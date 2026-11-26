@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - '*'
+  push:
+    branches:
+      - develop
+      - main
 
 jobs:
   test-and-lint:
@@ -27,7 +31,11 @@ jobs:
         run: npm run format:check
 
       - name: Run Tests
-        run: npm test
+        env:
+          JWT_RESET_SECRET: ${{ secrets.JWT_RESET_SECRET }}
+        run: |
+          export JWT_RESET_SECRET="${JWT_RESET_SECRET:-$(openssl rand -hex 32)}"
+          npm test
 
       - name: Publish coverage summary
         run: |
@@ -55,3 +63,33 @@ jobs:
           name: coverage-report
           path: coverage/
           if-no-files-found: error
+
+  deploy-develop:
+    needs: test-and-lint
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Sync and restart backend
+        run: |
+          set -e
+          mkdir -p /home/Startup/deploy/backend/src
+          cp -a src/. /home/Startup/deploy/backend/src/
+          cp knexfile.js package.json package-lock.json .env.example /home/Startup/deploy/backend/
+          cp Dockerfile /home/Startup/deploy/backend/Dockerfile
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/home/Startup/deploy/backend/Dockerfile')
+          s = p.read_text()
+          if 'COPY knexfile.js ./' not in s:
+              s = s.replace('COPY src/ ./src/', 'COPY knexfile.js ./\nCOPY src/ ./src/')
+          if 'RUN mkdir -p uploads' not in s:
+              s = s.replace('COPY src/ ./src/', 'RUN mkdir -p uploads\nCOPY src/ ./src/')
+          p.write_text(s)
+          PY
+          docker compose --env-file /home/Startup/deploy/backend.env -p laborin-backend -f /home/Startup/deploy/backend/docker-compose.local.yml up -d --build api
+          docker exec laborin_api ./node_modules/.bin/knex migrate:latest --knexfile knexfile.js
+          curl -fsS https://app.laborin.app/api/v1/health >/dev/null
