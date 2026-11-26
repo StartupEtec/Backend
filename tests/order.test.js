@@ -1,0 +1,747 @@
+import { jest } from '@jest/globals';
+
+const builders = {};
+
+const makeBuilder = () => {
+  const builder = {
+    where: jest.fn().mockReturnThis(),
+    whereNot: jest.fn().mockReturnThis(),
+    orWhere: jest.fn().mockReturnThis(),
+    whereIn: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    first: jest.fn().mockResolvedValue(null),
+    insert: jest.fn().mockReturnThis(),
+    returning: jest.fn().mockResolvedValue([{ id: 'event-uuid' }]),
+    update: jest.fn().mockResolvedValue(1),
+    del: jest.fn().mockResolvedValue(1),
+    join: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    count: jest.fn().mockResolvedValue([{ count: 0 }]),
+    limit: jest.fn().mockReturnThis(),
+    offset: jest.fn().mockResolvedValue([]),
+  };
+  return builder;
+};
+
+const mockKnex = jest.fn();
+
+const setupMockKnex = () => {
+  mockKnex.mockImplementation((table) => {
+    if (!builders[table]) {
+      builders[table] = makeBuilder();
+    }
+    return builders[table];
+  });
+  mockKnex.transaction = jest.fn(async (cb) => {
+    const trx = jest.fn((table) => {
+      if (!builders[table]) {
+        builders[table] = makeBuilder();
+      }
+      return builders[table];
+    });
+    trx.fn = { now: () => new Date() };
+    return cb(trx);
+  });
+  mockKnex.raw = jest.fn((val) => val);
+  mockKnex.fn = { now: () => new Date() };
+};
+
+setupMockKnex();
+
+jest.unstable_mockModule('../src/database/db.js', () => ({ default: mockKnex }));
+jest.unstable_mockModule('../src/utils/websocket.js', () => ({
+  default: {
+    sendToUsers: jest.fn(),
+  },
+}));
+
+const escrowServiceMock = {
+  releaseFunds: jest.fn(),
+  refund: jest.fn(),
+};
+jest.unstable_mockModule('../src/services/EscrowService.js', () => ({
+  default: escrowServiceMock,
+}));
+
+const notificationServiceMock = {
+  send: jest.fn().mockResolvedValue({ id: 'notif-1', status: 'SENT' }),
+};
+jest.unstable_mockModule('../src/services/NotificationService.js', () => ({
+  default: notificationServiceMock,
+}));
+
+const { default: orderService } = await import('../src/services/OrderService.js');
+const { default: orderController } = await import('../src/controllers/OrderController.js');
+const { ORDER_STATUS } = await import('../src/services/OrderService.js');
+
+const CLIENT_USER_ID = '11111111-1111-1111-1111-111111111111';
+const WORKER_USER_ID = '22222222-2222-2222-2222-222222222222';
+const OTHER_USER_ID = '99999999-9999-9999-9999-999999999999';
+
+const ORDER_ID = '33333333-3333-3333-3333-333333333333';
+const CLIENT_PROFILE_ID = '55555555-5555-5555-5555-555555555555';
+const WORKER_PROFILE_ID = '66666666-6666-6666-6666-666666666666';
+
+const ORDER_ROW = {
+  id: ORDER_ID,
+  client_id: CLIENT_PROFILE_ID,
+  worker_id: WORKER_PROFILE_ID,
+  category_id: 'cat-id',
+  location_id: 'loc-id',
+  status: 'PENDING',
+  created_at: new Date(),
+  updated_at: new Date(),
+};
+
+const CLIENT_PROFILE_ROW = { id: CLIENT_PROFILE_ID, user_id: CLIENT_USER_ID };
+const WORKER_PROFILE_ROW = { id: WORKER_PROFILE_ID, user_id: WORKER_USER_ID };
+
+const resetBuilders = () => {
+  Object.keys(builders).forEach((key) => delete builders[key]);
+  escrowServiceMock.releaseFunds.mockReset();
+  escrowServiceMock.refund.mockReset();
+  // Re-apply notificationService mock
+  notificationServiceMock.send.mockResolvedValue({ id: 'notif-1', status: 'SENT' });
+  setupMockKnex();
+};
+
+describe('OrderService', () => {
+  beforeEach(resetBuilders);
+
+  describe('getOrderById', () => {
+    it('should return null if order does not exist', async () => {
+      builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
+      builders.orders.first.mockResolvedValue(null);
+
+      const order = await orderService.getOrderById(ORDER_ID, CLIENT_USER_ID);
+      expect(order).toBeNull();
+    });
+
+    it('should return null if user is not a participant', async () => {
+      builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const order = await orderService.getOrderById(ORDER_ID, OTHER_USER_ID);
+      expect(order).toBeNull();
+    });
+
+    it('should return order if user is client', async () => {
+      builders.orders = makeBuilder();
+      builders['orders as o'] = builders.orders;
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const order = await orderService.getOrderById(ORDER_ID, CLIENT_USER_ID);
+      expect(order).not.toBeNull();
+      expect(order.id).toBe(ORDER_ID);
+    });
+  });
+
+  describe('createOrder', () => {
+    const payload = {
+      client_id: CLIENT_PROFILE_ID,
+      worker_id: WORKER_PROFILE_ID,
+      category_id: 'cat-id',
+      location_id: 'loc-id',
+      description: 'Reparar fuga de agua',
+    };
+
+    it('should return CLIENT_PROFILE_REQUIRED if user has no client profile', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('CLIENT_PROFILE_REQUIRED');
+    });
+
+    it('should return WORKER_NOT_FOUND if worker profile does not exist', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('WORKER_NOT_FOUND');
+    });
+
+    it('should return CATEGORY_NOT_FOUND if category is inactive or missing', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('CATEGORY_NOT_FOUND');
+    });
+
+    it('should return LOCATION_NOT_FOUND if location does not belong to the client', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue(null);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('LOCATION_NOT_FOUND');
+    });
+
+    it('should return SAME_USER if client and worker are the same user', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      // worker profile belongs to the same user (CLIENT_USER_ID)
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue({
+        id: WORKER_PROFILE_ID,
+        user_id: CLIENT_USER_ID,
+      });
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue({ id: 'loc-id', user_id: CLIENT_USER_ID });
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBe('SAME_USER');
+    });
+
+    it('should create the order with PENDING status and return it', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.categories = makeBuilder();
+      builders.categories.first.mockResolvedValue({ id: 'cat-id' });
+      builders.locations = makeBuilder();
+      builders.locations.first.mockResolvedValue({ id: 'loc-id', user_id: CLIENT_USER_ID });
+      builders.orders = makeBuilder();
+      builders.orders.returning.mockResolvedValue([
+        { ...ORDER_ROW, description: 'Reparar fuga de agua' },
+      ]);
+
+      const res = await orderService.createOrder(CLIENT_USER_ID, payload);
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBe(ORDER_ID);
+      expect(res.status).toBe('PENDING');
+      expect(res.description).toBe('Reparar fuga de agua');
+    });
+  });
+
+  describe('listUserOrders', () => {
+    const baseQuery = { limit: 20, offset: 0 };
+
+    it('should return empty result if user has no client/worker profiles', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.listUserOrders(OTHER_USER_ID, baseQuery);
+      expect(res.orders).toEqual([]);
+      expect(res.count).toBe(0);
+    });
+
+    it('should return matching orders with count when user is a client', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, baseQuery);
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+      expect(res.orders[0].id).toBe(ORDER_ID);
+    });
+
+    it('should filter by MINE_AS_WORKER role', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, {
+        ...baseQuery,
+        role: 'MINE_AS_WORKER',
+      });
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+    });
+
+    it('should apply the search filter when provided', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+      builders['orders as o'] = makeBuilder();
+      builders['orders as o'].offset.mockResolvedValue([ORDER_ROW]);
+      builders['orders as o'].count.mockResolvedValue([{ count: 1 }]);
+      builders['orders as o'].where.mockImplementation(function (arg) {
+        if (typeof arg === 'function') arg.call(this);
+        return this;
+      });
+      builders.quotes = makeBuilder();
+      builders.quotes.orderBy.mockResolvedValue([]);
+
+      const res = await orderService.listUserOrders(CLIENT_USER_ID, {
+        ...baseQuery,
+        search: 'fuga',
+      });
+      expect(res.count).toBe(1);
+      expect(res.orders).toHaveLength(1);
+    });
+
+    it('should return empty list when MINE_AS_CLIENT is requested but user is only a worker', async () => {
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.listUserOrders(WORKER_USER_ID, {
+        ...baseQuery,
+        role: 'MINE_AS_CLIENT',
+      });
+      expect(res.orders).toEqual([]);
+      expect(res.count).toBe(0);
+    });
+  });
+
+  describe('updateOrderStatus', () => {
+    it('should return ORDER_NOT_FOUND if order does not exist', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(null);
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, CLIENT_USER_ID, 'ACCEPTED');
+      expect(res).toEqual({ error: 'ORDER_NOT_FOUND' });
+    });
+
+    it('should return FORBIDDEN if user is not order client/worker', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, OTHER_USER_ID, 'ACCEPTED');
+      expect(res).toEqual({ error: 'FORBIDDEN' });
+    });
+
+    it('should return INVALID_TRANSITION if transition is not allowed', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(ORDER_ROW); // PENDING
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, CLIENT_USER_ID, 'COMPLETED'); // PENDING -> COMPLETED
+      expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should successfully transition PENDING -> ACCEPTED for Client', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, CLIENT_USER_ID, 'ACCEPTED');
+      expect(res.error).toBeUndefined();
+      expect(res.order).toBeDefined();
+    });
+
+    it('should return FORBIDDEN if Worker tries to transition PENDING -> ACCEPTED', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'ACCEPTED');
+      expect(res.error).toBe('FORBIDDEN');
+    });
+
+    it('should successfully transition ACCEPTED -> IN_PROGRESS for Worker', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue({ ...ORDER_ROW, status: 'ACCEPTED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'IN_PROGRESS');
+      expect(res.error).toBeUndefined();
+      expect(res.order).toBeDefined();
+    });
+
+    it('should release escrow funds when transitioning IN_PROGRESS -> COMPLETED', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'IN_PROGRESS' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'COMPLETED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({ transaction: { id: 'tx-uuid' } });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'COMPLETED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('COMPLETED');
+      expect(escrowServiceMock.releaseFunds).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ transactionId: 'tx-uuid', actorUserId: WORKER_USER_ID }),
+      );
+    });
+
+    it('should abort COMPLETED transition if escrow release fails', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue({ ...ORDER_ROW, status: 'IN_PROGRESS' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'PENDING',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({
+        error: 'INVALID_TRANSITION',
+        message: 'No se pueden liberar fondos desde PENDING',
+      });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'COMPLETED');
+
+      expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should refund escrow funds when cancelling an ACCEPTED order', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'ACCEPTED' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'CANCELLED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.refund.mockResolvedValue({ transaction: { id: 'tx-uuid' } });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, CLIENT_USER_ID, 'CANCELLED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('CANCELLED');
+      expect(escrowServiceMock.refund).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ transactionId: 'tx-uuid', actorUserId: CLIENT_USER_ID }),
+      );
+    });
+
+    it('should cancel an ACCEPTED order without transaction as a safe no-op (no refund)', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'ACCEPTED' })
+        .mockResolvedValueOnce({ ...ORDER_ROW, status: 'CANCELLED' });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue(null);
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.updateOrderStatus(ORDER_ID, WORKER_USER_ID, 'CANCELLED');
+
+      expect(res.error).toBeUndefined();
+      expect(res.order.status).toBe('CANCELLED');
+      expect(escrowServiceMock.refund).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getOrderHistory', () => {
+    it('should retrieve events if user is participant', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(ORDER_ROW);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      builders.order_events = makeBuilder();
+      builders.order_events.orderBy.mockResolvedValue([
+        { id: '1', order_id: ORDER_ID, from_state: 'PENDING', to_state: 'ACCEPTED' },
+      ]);
+
+      const res = await orderService.getOrderHistory(ORDER_ID, CLIENT_USER_ID);
+      expect(res.error).toBeUndefined();
+      expect(res.events).toHaveLength(1);
+    });
+  });
+
+  describe('completeOrder', () => {
+    const IN_PROGRESS_ORDER = { ...ORDER_ROW, status: ORDER_STATUS.IN_PROGRESS };
+
+    beforeEach(resetBuilders);
+
+    it('should return ORDER_NOT_FOUND if order does not exist', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(null);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+      expect(res.error).toBe('ORDER_NOT_FOUND');
+    });
+
+    it('should return FORBIDDEN if user is not participant', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(IN_PROGRESS_ORDER);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(null);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(null);
+
+      const res = await orderService.completeOrder(ORDER_ID, OTHER_USER_ID);
+      expect(res.error).toBe('FORBIDDEN');
+    });
+
+    it('should return INVALID_TRANSITION if order status is not completable', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue({
+        ...ORDER_ROW,
+        status: ORDER_STATUS.CANCELLED,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+      expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should accept confirmations from PENDING orders', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValueOnce(ORDER_ROW).mockResolvedValueOnce({
+        ...ORDER_ROW,
+        client_confirmed: true,
+        worker_confirmed: false,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+
+      expect(res.error).toBeUndefined();
+      expect(res.bothConfirmed).toBe(false);
+      expect(res.clientConfirmed).toBe(true);
+    });
+
+    it('should return ALREADY_CONFIRMED if client already confirmed', async () => {
+      const orderWithClientConfirmed = { ...IN_PROGRESS_ORDER, client_confirmed: true };
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(orderWithClientConfirmed);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+      expect(res.error).toBe('ALREADY_CONFIRMED');
+    });
+
+    it('should return ALREADY_CONFIRMED if worker already confirmed', async () => {
+      const orderWithWorkerConfirmed = { ...IN_PROGRESS_ORDER, worker_confirmed: true };
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValue(orderWithWorkerConfirmed);
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+
+      const res = await orderService.completeOrder(ORDER_ID, WORKER_USER_ID);
+      expect(res.error).toBe('ALREADY_CONFIRMED');
+    });
+
+    it('should record client confirmation and return bothConfirmed=false', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValueOnce(IN_PROGRESS_ORDER).mockResolvedValueOnce({
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: true,
+        worker_confirmed: false,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.order_events = makeBuilder();
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue(null);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+
+      expect(res.error).toBeUndefined();
+      expect(res.bothConfirmed).toBe(false);
+      expect(res.clientConfirmed).toBe(true);
+      expect(res.workerConfirmed).toBe(false);
+      expect(builders.orders.update).toHaveBeenCalled();
+    });
+
+    it('should record worker confirmation and return bothConfirmed=false', async () => {
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValueOnce(IN_PROGRESS_ORDER).mockResolvedValueOnce({
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: false,
+        worker_confirmed: true,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.order_events = makeBuilder();
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue(null);
+
+      const res = await orderService.completeOrder(ORDER_ID, WORKER_USER_ID);
+
+      expect(res.error).toBeUndefined();
+      expect(res.bothConfirmed).toBe(false);
+      expect(res.clientConfirmed).toBe(false);
+      expect(res.workerConfirmed).toBe(true);
+    });
+
+    it('should transition to COMPLETED and release escrow when both confirm', async () => {
+      const orderWithBothConfirmed = {
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: true,
+        worker_confirmed: true,
+      };
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce(IN_PROGRESS_ORDER)
+        .mockResolvedValueOnce(orderWithBothConfirmed)
+        .mockResolvedValueOnce({ ...orderWithBothConfirmed, status: ORDER_STATUS.COMPLETED });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({ transaction: { id: 'tx-uuid' } });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+
+      expect(res.error).toBeUndefined();
+      expect(res.bothConfirmed).toBe(true);
+      expect(res.order.status).toBe(ORDER_STATUS.COMPLETED);
+      expect(escrowServiceMock.releaseFunds).toHaveBeenCalled();
+    });
+
+    it('should return error if escrow release fails', async () => {
+      const orderWithBothConfirmed = {
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: true,
+        worker_confirmed: true,
+      };
+      builders.orders = makeBuilder();
+      builders.orders.first
+        .mockResolvedValueOnce(IN_PROGRESS_ORDER)
+        .mockResolvedValueOnce(orderWithBothConfirmed)
+        .mockResolvedValueOnce({ ...orderWithBothConfirmed, status: ORDER_STATUS.COMPLETED });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue({
+        id: 'tx-uuid',
+        order_id: ORDER_ID,
+        status: 'ESCROWED',
+      });
+      escrowServiceMock.releaseFunds.mockResolvedValue({
+        error: 'INVALID_TRANSITION',
+        message: 'No se pueden liberar fondos',
+      });
+      builders.order_events = makeBuilder();
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID);
+
+      expect(res.error).toBe('INVALID_TRANSITION');
+    });
+
+    it('should allow revoking confirmation with confirm=false', async () => {
+      const orderWithClientConfirmed = {
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: true,
+        worker_confirmed: false,
+      };
+      builders.orders = makeBuilder();
+      builders.orders.first.mockResolvedValueOnce(orderWithClientConfirmed).mockResolvedValueOnce({
+        ...IN_PROGRESS_ORDER,
+        client_confirmed: false,
+        worker_confirmed: false,
+      });
+      builders.client_profiles = makeBuilder();
+      builders.client_profiles.first.mockResolvedValue(CLIENT_PROFILE_ROW);
+      builders.worker_profiles = makeBuilder();
+      builders.worker_profiles.first.mockResolvedValue(WORKER_PROFILE_ROW);
+      builders.transactions = makeBuilder();
+      builders.transactions.first.mockResolvedValue(null);
+
+      const res = await orderService.completeOrder(ORDER_ID, CLIENT_USER_ID, { confirm: false });
+
+      expect(res.error).toBeUndefined();
+      expect(res.clientConfirmed).toBe(false);
+    });
+  });
+});

@@ -1,0 +1,732 @@
+import * as validation from '../src/utils/validation.js';
+
+/**
+ * Este archivo importa `validation.js` directo, sin pasar por `src/app.js`, así que
+ * nunca corre `dotenv.config()`. Se fija el país explícitamente para que los casos de
+ * teléfono sean deterministas y no dependan del fallback ni del .env de cada máquina.
+ */
+const ORIGINAL_PHONE_COUNTRY = process.env.DEFAULT_PHONE_COUNTRY_CODE;
+process.env.DEFAULT_PHONE_COUNTRY_CODE = '+54';
+
+afterAll(() => {
+  if (ORIGINAL_PHONE_COUNTRY === undefined) {
+    delete process.env.DEFAULT_PHONE_COUNTRY_CODE;
+  } else {
+    process.env.DEFAULT_PHONE_COUNTRY_CODE = ORIGINAL_PHONE_COUNTRY;
+  }
+});
+
+const UUID = '12345678-1234-1234-1234-123456789012';
+
+const localIsoDate = () => {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const expectValid = (schema, value) => {
+  const { error, value: result } = schema.validate(value, { abortEarly: false });
+  expect(error).toBeUndefined();
+  return result;
+};
+
+const expectInvalid = (schema, value, fragment) => {
+  const { error } = schema.validate(value, { abortEarly: false });
+  const messages = error ? error.details.map((d) => d.message).join(' | ') : '';
+  expect(error).toBeDefined();
+  if (fragment) expect(messages).toContain(fragment);
+  return messages;
+};
+
+describe('Validaciones de entrada (src/utils/validation.js)', () => {
+  describe('Auth', () => {
+    it('registerSchema: acepta credenciales válidas', () => {
+      expectValid(validation.registerSchema, {
+        full_name: 'Juan Perez',
+        email: 'user@example.com',
+        phone: '011 15-1234-5678',
+        password: 'Strong1!',
+      });
+    });
+
+    it('registerSchema: rechaza email inválido y contraseña débil', () => {
+      const messages = expectInvalid(validation.registerSchema, {
+        full_name: 'Juan Perez',
+        email: 'not-an-email',
+        phone: '011 15-1234-5678',
+        password: 'weak',
+      });
+      expect(messages).toContain('formato del correo');
+      expect(messages).toContain('al menos 8 caracteres');
+    });
+
+    it('registerSchema: requiere todos los campos (incluyendo full_name)', () => {
+      expectInvalid(validation.registerSchema, {}, 'es requerido');
+      expectInvalid(
+        validation.registerSchema,
+        { email: 'user@example.com', phone: '011 15-1234-5678', password: 'Strong1!' },
+        'El nombre completo es requerido',
+      );
+    });
+
+    it('loginSchema: requiere email o teléfono', () => {
+      expectInvalid(validation.loginSchema, { password: 'Strong1!' }, 'correo electrónico');
+      expectValid(validation.loginSchema, { email: 'user@example.com', password: 'Strong1!' });
+    });
+
+    it('verifyOtpSchema: el OTP debe tener 6 dígitos', () => {
+      expectInvalid(
+        validation.verifyOtpSchema,
+        { phone: '011 15-1234-5678', otp_code: '12' },
+        '6 dígitos',
+      );
+      expectValid(validation.verifyOtpSchema, { email: 'user@example.com', otp_code: '123456' });
+    });
+
+    it('refreshTokenSchema: requiere refreshToken', () => {
+      expectInvalid(validation.refreshTokenSchema, {}, 'es requerido');
+      expectValid(validation.refreshTokenSchema, { refreshToken: 'token.value' });
+    });
+
+    it('forgotPasswordSchema: requiere email o teléfono', () => {
+      expectInvalid(validation.forgotPasswordSchema, {}, 'correo electrónico');
+    });
+
+    it('verifyResetCodeSchema: el código de recuperación debe tener 6 dígitos', () => {
+      expectInvalid(
+        validation.verifyResetCodeSchema,
+        { email: 'a@b.com', reset_code: 'abc' },
+        '6 dígitos',
+      );
+    });
+
+    it('resetPasswordSchema: requiere token y contraseña segura', () => {
+      expectInvalid(validation.resetPasswordSchema, { password: 'weak' }, 'token temporal');
+      expectInvalid(
+        validation.resetPasswordSchema,
+        { token: 't', password: 'weak' },
+        '8 caracteres',
+      );
+      expectValid(validation.resetPasswordSchema, { token: 't', password: 'NuevaPass1!' });
+    });
+
+    it('canonicaliza teléfonos a E.164 en todos los flujos', () => {
+      // Números argentinos: la plataforma opera con +54 (ver .env.example y los
+      // seeds). Antes este test usaba números colombianos y codificaba el default
+      // +57, que era justamente el bug.
+      const res = expectValid(validation.registerSchema, {
+        full_name: 'Juan Perez',
+        email: 'user@example.com',
+        phone: '011 15-1234-5678',
+        password: 'Strong1!',
+      });
+      expect(res.phone).toBe('+5491112345678');
+
+      const login = expectValid(validation.loginSchema, {
+        phone: '+54 9 11 1234-5678',
+        password: 'Strong1!',
+      });
+      expect(login.phone).toBe('+5491112345678');
+
+      const otp = expectValid(validation.verifyOtpSchema, {
+        phone: '0111512345678',
+        otp_code: '123456',
+      });
+      expect(otp.phone).toBe('+5491112345678');
+
+      const forgot = expectValid(validation.forgotPasswordSchema, { phone: '9112345678' });
+      expect(forgot.phone).toBe('+549112345678');
+    });
+
+    it('rechaza teléfonos inválidos', () => {
+      expectInvalid(validation.registerSchema, { phone: 'abc' }, 'formato del teléfono');
+      expectInvalid(validation.registerSchema, { phone: '123' }, '8 dígitos');
+    });
+
+    it('rechaza fragmentos que no se pueden atribuir a un país', () => {
+      // '12345678' con default +54 no es ni un móvil ni un fijo identifiable: antes
+      // la heurística lo aceptaba y lo convertía en '+5712345678' (pais equivocado).
+      expectInvalid(validation.registerSchema, { phone: '12345678' }, 'formato del teléfono');
+    });
+
+    it('resendOtpSchema: requiere email o teléfono y canonicaliza', () => {
+      expectInvalid(validation.resendOtpSchema, {}, 'correo electrónico');
+      const res = expectValid(validation.resendOtpSchema, { phone: '011 15-1234-5678' });
+      expect(res.phone).toBe('+5491112345678');
+    });
+  });
+
+  describe('Perfiles', () => {
+    // Payload mínimo válido del flujo "Completar Perfil": los mismos 4 campos de
+    // identidad para cliente y trabajador.
+    const identityPayload = {
+      full_name: 'Ana',
+      date_of_birth: '1990-05-14',
+      avatar_url: '/uploads/profiles/6f1c9a2e-0d1b-4c7a-9f3e-2b8d5a4c1e77.jpg',
+      dni_front_url: '/uploads/profiles/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.jpg',
+      dni_back_url: '/uploads/profiles/9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a.jpg',
+    };
+
+    it('createClientProfileSchema: exige los 4 datos de identidad', () => {
+      expectValid(validation.createClientProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
+      };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createClientProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createClientProfileSchema: rechaza URI locales de imagen', () => {
+      // El backend no puede servir un file:// del dispositivo: se aceptaba antes
+      // y se guardaba una ruta local inútil que ningún otro usuario podía ver.
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'file:///data/user/0/com.app/files/selfie.jpg' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, dni_front_url: 'content://media/external/images/1' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/a.txt' },
+        'no se aceptan URIs locales',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, avatar_url: 'https://x.com/../etc/passwd' },
+        'no se aceptan URIs locales',
+      );
+    });
+
+    it('createClientProfileSchema: valida la fecha de nacimiento', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '14/05/1990' },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it('createClientProfileSchema: bio y ubicación siguen siendo opcionales', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, default_location_id: 'not-a-uuid' },
+        'UUID válido',
+      );
+      expectInvalid(validation.createClientProfileSchema, {}, 'nombre es requerido');
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        bio: 'hola',
+        default_location_id: UUID,
+      });
+    });
+
+    it.each([
+      ['solo el año', '1990'],
+      ['año y mes', '1990-05'],
+      ['con hora y zona horaria', '1990-05-14T10:00:00Z'],
+      ['con milisegundos', '1990-05-14T00:00:00.000Z'],
+      ['sin ceros a la izquierda', '1990-5-4'],
+      ['formato local', '14/05/1990'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'YYYY-MM-DD',
+      );
+    });
+
+    it.each([
+      ['fecha inexistente', '1990-02-31'],
+      ['29/02 en año no bisiesto', '2023-02-29'],
+    ])('date_of_birth rechaza %s (%s)', (_label, value) => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: value },
+        'fecha válida',
+      );
+    });
+
+    it('date_of_birth rechaza fechas futuras y anteriores a 1900', () => {
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '2999-01-01' },
+        'no puede ser futura',
+      );
+      expectInvalid(
+        validation.createClientProfileSchema,
+        { ...identityPayload, date_of_birth: '1899-12-31' },
+        'posterior al 01/01/1900',
+      );
+    });
+
+    it('date_of_birth no acepta números', () => {
+      expect(
+        validation.createClientProfileSchema.validate({
+          ...identityPayload,
+          date_of_birth: 19900514,
+        }).error,
+      ).toBeDefined();
+    });
+
+    it('date_of_birth devuelve el string sin convertirlo a Date', () => {
+      const { value } = validation.createClientProfileSchema.validate(identityPayload);
+      expect(typeof value.date_of_birth).toBe('string');
+      expect(value.date_of_birth).toBe('1990-05-14');
+    });
+
+    it('date_of_birth acepta el día de hoy y un 29/02 válido', () => {
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: localIsoDate(),
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '2024-02-29',
+      });
+      expectValid(validation.createClientProfileSchema, {
+        ...identityPayload,
+        date_of_birth: '1900-01-01',
+      });
+    });
+
+    it('updateClientProfileSchema aplica el mismo formato estricto de fecha', () => {
+      expectInvalid(validation.updateClientProfileSchema, { date_of_birth: '1990' }, 'YYYY-MM-DD');
+      expectValid(validation.updateClientProfileSchema, { date_of_birth: '1990-05-14' });
+    });
+
+    it('updateClientProfileSchema: requiere al menos un campo', () => {
+      expectInvalid(validation.updateClientProfileSchema, {}, 'al menos un campo');
+      expectValid(validation.updateClientProfileSchema, { bio: 'hola' });
+    });
+
+    it('updateProfileSchema: valida nombre requerido', () => {
+      expectInvalid(validation.updateProfileSchema, { full_name: '' }, 'no puede estar vacío');
+      expectValid(validation.updateProfileSchema, { full_name: 'Ana', bio: 'x' });
+    });
+
+    it('createWorkerProfileSchema: exige los mismos 4 datos que el cliente', () => {
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
+
+      const obligatorios = {
+        date_of_birth: 'fecha de nacimiento es requerida',
+        avatar_url: 'URL de la imagen es requerida',
+        dni_front_url: 'URL de la imagen es requerida',
+        dni_back_url: 'URL de la imagen es requerida',
+      };
+      for (const [campo, fragmento] of Object.entries(obligatorios)) {
+        const payload = { ...identityPayload };
+        delete payload[campo];
+        expectInvalid(validation.createWorkerProfileSchema, payload, fragmento);
+      }
+    });
+
+    it('createWorkerProfileSchema: categoría, tarifa y disponibilidad son opcionales', () => {
+      const base = { ...identityPayload, category_id: UUID, hourly_rate: 25 };
+      expectValid(validation.createWorkerProfileSchema, base);
+      expectValid(validation.createWorkerProfileSchema, identityPayload);
+      expectInvalid(validation.createWorkerProfileSchema, { ...base, hourly_rate: -1 }, 'positivo');
+      expectInvalid(
+        validation.createWorkerProfileSchema,
+        { ...base, availability_status: 'NOPE' },
+        'AVAILABLE',
+      );
+      expectInvalid(validation.createWorkerProfileSchema, { ...base, category_id: 'x' }, 'UUID');
+    });
+
+    it('switchRoleSchema: solo acepta client o worker', () => {
+      expectInvalid(validation.switchRoleSchema, { role: 'admin' }, 'client o worker');
+      expectValid(validation.switchRoleSchema, { role: 'worker' });
+    });
+  });
+
+  describe('Ubicaciones y búsqueda', () => {
+    it('createLocationSchema: valida rangos de coordenadas y coverage_radius_km', () => {
+      expectValid(validation.createLocationSchema, {
+        address: 'Av. Siempre Viva',
+        latitude: -33.4,
+        longitude: -70.6,
+        coverage_radius_km: 5.5,
+      });
+      expectValid(validation.createLocationSchema, {
+        address: 'Av. Siempre Viva',
+        latitude: -33.4,
+        longitude: -70.6,
+        coverage_radius_km: null,
+      });
+      expectInvalid(
+        validation.createLocationSchema,
+        { address: 'Av. Siempre Viva', latitude: -33.4, longitude: -70.6, coverage_radius_km: -1 },
+        'no puede ser negativo',
+      );
+      expectInvalid(
+        validation.createLocationSchema,
+        { address: 'x', latitude: 91, longitude: 0 },
+        'entre -90 y 90',
+      );
+      expectInvalid(
+        validation.createLocationSchema,
+        { latitude: 0, longitude: 0 },
+        'dirección es requerida',
+      );
+    });
+
+    it('updateLocationSchema: requiere al menos un campo', () => {
+      expectInvalid(validation.updateLocationSchema, {}, 'al menos un campo');
+    });
+
+    it('listLocationsQuerySchema: lat y lng van juntos', () => {
+      expectInvalid(validation.listLocationsQuerySchema, { lat: 10 });
+      expectValid(validation.listLocationsQuerySchema, { lat: 10, lng: 20 });
+    });
+  });
+
+  describe('Chat y mensajes', () => {
+    it('createChatSchema: user_id_2 es un UUID requerido', () => {
+      expectInvalid(validation.createChatSchema, { user_id_2: 'no' }, 'UUID');
+      expectValid(validation.createChatSchema, { user_id_2: UUID });
+    });
+
+    it('listChatsQuerySchema: valida limit y status', () => {
+      expectInvalid(validation.listChatsQuerySchema, { status: 'weird' }, 'all, favorites');
+      expectInvalid(validation.listChatsQuerySchema, { limit: 500 }, '100');
+      expectValid(validation.listChatsQuerySchema, {});
+    });
+
+    it('createMessageSchema: contenido requerido salvo IMAGE', () => {
+      expectInvalid(
+        validation.createMessageSchema,
+        { message_type: 'TEXT' },
+        'content es requerido',
+      );
+      expectValid(validation.createMessageSchema, { message_type: 'IMAGE' });
+      expectValid(validation.createMessageSchema, { message_type: 'TEXT', content: 'hola' });
+      expectInvalid(
+        validation.createMessageSchema,
+        { message_type: 'AUDIO' },
+        'TEXT, IMAGE o QUOTE',
+      );
+    });
+
+    it('listMessagesQuerySchema: valida rangos', () => {
+      expectInvalid(validation.listMessagesQuerySchema, { offset: -1 }, 'no puede ser negativo');
+    });
+  });
+
+  describe('Cotizaciones y órdenes', () => {
+    const quote = { proposed_price: 100, proposed_time: '14:30' };
+
+    it('createQuoteSchema: rechaza fechas pasadas y horas inválidas', () => {
+      expectInvalid(
+        validation.createQuoteSchema,
+        { ...quote, proposed_date: '2020-01-01' },
+        'hoy o una fecha futura',
+      );
+      expectInvalid(
+        validation.createQuoteSchema,
+        { ...quote, proposed_date: '2030-01-01', proposed_time: '25:99' },
+        'HH:mm',
+      );
+      expectValid(validation.createQuoteSchema, { ...quote, proposed_date: '2030-01-01' });
+    });
+
+    it('updateQuoteStatusSchema: solo ACCEPTED, REJECTED o CANCELLED', () => {
+      expectInvalid(
+        validation.updateQuoteStatusSchema,
+        { status: 'PAID' },
+        'ACCEPTED, REJECTED o CANCELLED',
+      );
+      expectValid(validation.updateQuoteStatusSchema, {
+        status: 'REJECTED',
+        rejection_reason: 'Caro',
+      });
+    });
+
+    it('updateOrderStatusSchema: solo estados válidos', () => {
+      expectInvalid(validation.updateOrderStatusSchema, { status: 'DONE' }, 'IN_PROGRESS');
+      expectValid(validation.updateOrderStatusSchema, { status: 'COMPLETED' });
+    });
+
+    it('createOrderSchema: cliente y trabajador no pueden coincidir', () => {
+      const base = { client_id: UUID, category_id: UUID, location_id: UUID };
+      expectInvalid(
+        validation.createOrderSchema,
+        { ...base, worker_id: UUID },
+        'no pueden ser el mismo usuario',
+      );
+      expectValid(validation.createOrderSchema, {
+        ...base,
+        worker_id: '87654321-4321-4321-4321-210987654321',
+      });
+    });
+
+    it('listUserOrdersQuerySchema: valida status y fechas', () => {
+      expectInvalid(validation.listUserOrdersQuerySchema, { status: 'NOPE' }, 'PENDING');
+      expectInvalid(validation.listUserOrdersQuerySchema, { date_from: 'ayer' }, 'ISO');
+      expectValid(validation.listUserOrdersQuerySchema, {});
+    });
+
+    it('completeOrderSchema: confirm por defecto true', () => {
+      expect(expectValid(validation.completeOrderSchema, {}).confirm).toBe(true);
+      expectInvalid(validation.completeOrderSchema, { confirm: 'yes' }, 'booleano');
+    });
+  });
+
+  describe('Pagos', () => {
+    const currentYear = new Date().getFullYear();
+    const card = {
+      cvv: '123',
+      exp_month: 12,
+      exp_year: currentYear + 1,
+      cardholder_name: 'Juan Perez',
+    };
+
+    it('createPaymentMethodSchema: rechaza números que no pasan Luhn', () => {
+      expectInvalid(
+        validation.createPaymentMethodSchema,
+        { ...card, card_number: '4111111111111112' },
+        'verificación Luhn',
+      );
+    });
+
+    it('createPaymentMethodSchema: acepta una tarjeta válida', () => {
+      expectValid(validation.createPaymentMethodSchema, {
+        ...card,
+        card_number: '4111111111111111',
+      });
+    });
+
+    it('createPaymentMethodSchema: rechaza tarjetas expiradas y datos inválidos', () => {
+      const currentMonth = new Date().getMonth() + 1;
+      if (currentMonth > 1) {
+        expectInvalid(
+          validation.createPaymentMethodSchema,
+          { ...card, card_number: '4111111111111111', exp_year: currentYear, exp_month: 1 },
+          'ya ha expirado',
+        );
+      }
+      expectInvalid(
+        validation.createPaymentMethodSchema,
+        { ...card, card_number: '4111111111111111', cvv: '12' },
+        'CVV',
+      );
+      expectInvalid(
+        validation.createPaymentMethodSchema,
+        { ...card, card_number: '4111111111111111', exp_year: 1990 },
+        'pasado',
+      );
+    });
+
+    it('updatePaymentMethodSchema: requiere al menos un campo', () => {
+      expectInvalid(validation.updatePaymentMethodSchema, {}, 'al menos un campo');
+      expectValid(validation.updatePaymentMethodSchema, { cardholder_name: 'Ana Lopez' });
+    });
+
+    it('processPaymentSchema: valida UUIDs y monto positivo', () => {
+      expectInvalid(
+        validation.processPaymentSchema,
+        { order_id: 'x', payment_method_id: UUID, amount: -5 },
+        'UUID',
+      );
+      expectValid(validation.processPaymentSchema, {
+        order_id: UUID,
+        payment_method_id: UUID,
+        amount: 100,
+      });
+    });
+  });
+
+  describe('Certificaciones, ratings y disputas', () => {
+    it('createCertificationSchema: valida el tipo de documento', () => {
+      expectInvalid(
+        validation.createCertificationSchema,
+        { document_type: 'TITOLO' },
+        'BACKGROUND_CHECK',
+      );
+      expectValid(validation.createCertificationSchema, { document_type: 'ID_VERIFICATION' });
+    });
+
+    it('updateCertificationStatusSchema: requiere motivo al rechazar', () => {
+      expectInvalid(
+        validation.updateCertificationStatusSchema,
+        { verification_status: 'REJECTED' },
+        'motivo',
+      );
+      expectInvalid(
+        validation.updateCertificationStatusSchema,
+        { verification_status: 'REJECTED', rejected_reason: 'mal' },
+        '5 caracteres',
+      );
+      expectValid(validation.updateCertificationStatusSchema, { verification_status: 'APPROVED' });
+    });
+
+    it('createRatingSchema: estrellas entre 1 y 5 enteras', () => {
+      expectInvalid(validation.createRatingSchema, { order_id: UUID, rating_stars: 6 }, '5');
+      expectInvalid(validation.createRatingSchema, { order_id: UUID, rating_stars: 2.5 }, 'entero');
+      expectValid(validation.createRatingSchema, {
+        order_id: UUID,
+        rating_stars: 4,
+        review_text: 'Excelente',
+      });
+    });
+
+    it('listRatingsQuerySchema: valida offset', () => {
+      expectInvalid(validation.listRatingsQuerySchema, { offset: -1 }, 'negativo');
+    });
+
+    it('createDisputeSchema: razón mínima y URL de evidencia válida', () => {
+      expectInvalid(
+        validation.createDisputeSchema,
+        { order_id: UUID, reason: 'corto' },
+        '10 caracteres',
+      );
+      expectInvalid(
+        validation.createDisputeSchema,
+        { order_id: UUID, reason: 'razon muy larga', evidence_url: 'not-a-url' },
+        'enlace válido',
+      );
+      expectValid(validation.createDisputeSchema, {
+        order_id: UUID,
+        reason: 'No se hizo el trabajo',
+      });
+    });
+
+    it('resolveDisputeSchema: el ganador es requerido al resolver', () => {
+      expectInvalid(
+        validation.resolveDisputeSchema,
+        { status: 'RESOLVED', resolution_notes: 'notas largas' },
+        'ganador',
+      );
+      expectInvalid(
+        validation.resolveDisputeSchema,
+        { status: 'RESOLVED', resolution_notes: 'notas largas', winner: 'admin' },
+        'client o worker',
+      );
+      expectValid(validation.resolveDisputeSchema, {
+        status: 'RESOLVED',
+        resolution_notes: 'notas largas',
+        winner: 'client',
+      });
+      expectValid(validation.resolveDisputeSchema, {
+        status: 'CLOSED',
+        resolution_notes: 'notas largas',
+      });
+    });
+  });
+
+  describe('Disponibilidad', () => {
+    it('createAvailabilitySchema: start_time debe ser anterior a end_time', () => {
+      expectInvalid(
+        validation.createAvailabilitySchema,
+        { day_of_week: 1, start_time: '10:00', end_time: '10:00' },
+        'anterior a end_time',
+      );
+      expectValid(validation.createAvailabilitySchema, {
+        day_of_week: 1,
+        start_time: '09:00',
+        end_time: '17:00',
+      });
+      expectInvalid(
+        validation.createAvailabilitySchema,
+        { day_of_week: 8, start_time: '09:00', end_time: '17:00' },
+        '0 (Domingo) y 6',
+      );
+    });
+
+    it('updateAvailabilitySchema: requiere al menos un campo', () => {
+      expectInvalid(validation.updateAvailabilitySchema, {}, 'al menos un campo');
+    });
+  });
+
+  describe('Seguridad de cuenta', () => {
+    it('changePasswordSchema: requiere contraseña nueva segura', () => {
+      expectInvalid(
+        validation.changePasswordSchema,
+        { current_password: 'x', new_password: 'weak' },
+        '8 caracteres',
+      );
+      expectValid(validation.changePasswordSchema, {
+        current_password: 'OldPass1!',
+        new_password: 'NewPass1!',
+      });
+    });
+
+    it('changeEmailSchema: valida formato del correo', () => {
+      expectInvalid(validation.changeEmailSchema, { new_email: 'nope' }, 'correo electrónico');
+      expectValid(validation.changeEmailSchema, { new_email: 'new@example.com' });
+    });
+
+    it('changePhoneSchema: teléfono mínimo 8 dígitos', () => {
+      expectInvalid(validation.changePhoneSchema, { new_phone: '123' }, '8 dígitos');
+    });
+
+    it('changeEmail/Phone: los OTP deben tener 6 dígitos', () => {
+      expectInvalid(
+        validation.verifyEmailChangeSchema,
+        { current_otp_code: '123', new_otp_code: '123456' },
+        '6 dígitos',
+      );
+      expectInvalid(
+        validation.verifyPhoneChangeSchema,
+        { current_otp_code: '123456', new_otp_code: '1' },
+        '6 dígitos',
+      );
+      expectValid(validation.verifyEmailChangeSchema, {
+        current_otp_code: '123456',
+        new_otp_code: '654321',
+      });
+    });
+  });
+
+  describe('Notificaciones', () => {
+    it('updateNotificationPreferencesSchema: rechaza campos desconocidos y formatos inválidos', () => {
+      expectInvalid(
+        validation.updateNotificationPreferencesSchema,
+        { hacking: true },
+        'Campo no permitido',
+      );
+      expectInvalid(
+        validation.updateNotificationPreferencesSchema,
+        { dnd_start: '25:00' },
+        'HH:MM',
+      );
+      expectValid(validation.updateNotificationPreferencesSchema, {
+        push_enabled: false,
+        dnd_start: '22:00',
+      });
+    });
+
+    it('listNotificationsSchema: valida limit y status', () => {
+      expectInvalid(validation.listNotificationsSchema, { limit: 500 }, '50');
+      expectInvalid(validation.listNotificationsSchema, { status: 'SENT_FAKE' }, 'PENDING');
+      expectValid(validation.listNotificationsSchema, {});
+    });
+
+    it('sendTestNotificationSchema: valida tipos y canales', () => {
+      expectValid(validation.sendTestNotificationSchema, { channels: ['push', 'sms'] });
+      expectInvalid(validation.sendTestNotificationSchema, { channels: ['slack'] }, 'push');
+      expectInvalid(
+        validation.sendTestNotificationSchema,
+        { type: 'FAKE_TYPE' },
+        'SERVICE_REQUEST',
+      );
+    });
+  });
+});

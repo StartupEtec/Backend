@@ -1,1 +1,1101 @@
-# ProyectoIntegrador-Backend
+# Backend Service - Digital On-Demand Platform
+
+Servicio Backend RESTful construido en Node.js, Express y TypeScript.
+
+## 🚀 Requisitos Previos
+
+- **Node.js**: v18 o superior
+- **Docker** y **Docker Compose** (para PostgreSQL)
+- **npm** o **yarn**
+
+## 🔧 Configuración Local
+
+1. Instalar dependencias:
+   ```bash
+   npm install
+   ```
+
+2. Configurar variables de entorno:
+   ```bash
+   cp .env.example .env
+   ```
+   *Edita `.env` si es necesario.*
+
+
+3. Levantar el entorno de base de datos (PostgreSQL/PostGIS):
+   *(Configura y levanta tu contenedor de base de datos local)*
+
+4. Iniciar el proyecto:
+   ```bash
+   npm run dev
+   ```
+
+
+## 🛠️ Scripts Disponibles
+
+- `npm run dev`: Inicia el servidor de desarrollo utilizando `nodemon` en caliente sobre `src/server.js`.
+- `npm start`: Inicia el servidor en producción utilizando Node.js nativo sobre `src/server.js`.
+- `npm run format`: Formatea el código de manera automática utilizando `Prettier`.
+- `npm run format:check`: Verifica si hay desviaciones en las reglas del formateador de código.
+- `npm test`: Ejecuta la suite de pruebas unitarias con `Jest` y genera el reporte de cobertura en `coverage/`.
+- `npm run seed` / `npm run seed:dev`: Puebla la base de datos con datos iniciales (32 categorías, 10 usuarios de test, ubicaciones, órdenes en varios estados, cotizaciones, escrow y ratings).
+- `npm run seed:clear`: Limpia de forma atómica y ordenada todas las tablas de prueba de la base de datos.
+- `npm run swagger:export`: Genera el archivo `docs/openapi.yaml` con la especificación OpenAPI 3.0 del API a partir de los comentarios JSDoc de las rutas.
+
+## 🌱 Población de Datos Iniciales (Seeds)
+
+El proyecto incluye un set completo de seeds modulares con Knex.js y scripts de limpieza atómica para facilitar el desarrollo local, pruebas manuales, testing automatizado e integración con el Frontend.
+
+### 🚀 Comandos Rápidos
+
+| Comando | Descripción |
+|---|---|
+| `npm run seed` | Limpia la BD y siembra el dataset completo de desarrollo |
+| `npm run seed:dev` | Alias equivalente a `npm run seed` |
+| `npm run seed:clear` | Ejecuta `clear.js` para limpiar y vaciar atómicamente todas las tablas |
+
+```bash
+# Poblar la base de datos
+npm run seed
+
+# Limpiar toda la base de datos (Reset)
+npm run seed:clear
+
+# Regenerar la especificación OpenAPI (docs/openapi.yaml)
+npm run swagger:export
+```
+
+---
+
+### 👥 Usuarios de Prueba Sembrados
+
+> **Contraseña universal para todas las cuentas de prueba:** `test123!`  
+> Todos los usuarios cuentan con email y teléfono verificados (`is_verified: true`, `active: true`).
+
+#### 1. Clientes de Test
+| Email | Contraseña | Nombre Completo | Teléfono | Ubicación (CABA) | Tarjeta Guardada |
+|---|---|---|---|---|---|
+| `cliente1@test.com` | `test123!` | Juan Carlos Pérez | `+5491144441111` | Av. Santa Fe 3200, Palermo | Visa `**** 4242` |
+| `cliente2@test.com` | `test123!` | María Eugenia González | `+5491144442222` | Av. Cabildo 2100, Belgrano | Mastercard `**** 5555` |
+| `cliente3@test.com` | `test123!` | Lucas Rodríguez | `+5491144443333` | Av. Rivadavia 5400, Caballito | Visa `**** 1234` |
+| `cliente4@test.com` | `test123!` | Sofía Martínez | `+5491144444444` | Av. Callao 1400, Recoleta | Visa `**** 8888` |
+| `cliente5@test.com` | `test123!` | Carlos Alberto Gómez | `+5491144445555` | Av. Triunvirato 4500, Villa Urquiza | Mastercard `**** 7777` |
+
+#### 2. Trabajadores de Test (Rol Dual)
+| Email | Contraseña | Nombre Completo | Especialidad / Categoría | Tarifa/Hora | Certificaciones | Ubicación (CABA) |
+|---|---|---|---|---|---|---|
+| `worker1@test.com` | `test123!` | Roberto Fernández | Plomería | $8.500 | Matrícula + DNI (Aprobados) | Villa Crespo |
+| `worker2@test.com` | `test123!` | Diego Álvarez | Electricidad | $9.500 | Matrícula COPIME + DNI (Aprobados) | Belgrano |
+| `worker3@test.com` | `test123!` | Laura Benítez | Limpieza | $6.500 | Antecedentes + DNI (Aprobados) | Recoleta |
+| `worker4@test.com` | `test123!` | Martín Díaz | Pintura | $7.500 | Antecedentes + DNI (Aprobados) | Villa del Parque |
+| `worker5@test.com` | `test123!` | Esteban Rossi | Climatización | $11.000 | Matrícula Climatización + DNI (Aprobados) | Coghlan |
+
+> **Los perfiles sembrados arrancan con el flujo de identidad completo**
+> (`date_of_birth`, `avatar_url`, `dni_front_url` y `dni_back_url`), para poder
+> probar en desarrollo el estado "perfil completado". Las URLs de DNI y avatar
+> apuntan a `/uploads/profiles/...` con fines ilustrativos: son placeholders y no
+> corresponden a archivos reales en disco. Los avatares de los workers sí usan
+> URLs públicas de Unsplash.
+
+### 🆔 Identificadores de los seeds
+
+Las columnas `id` son `uuid` en Postgres, por lo que los seeds **no** pueden usar
+identificadores legibles literales: algo como `cp111111-1111-4111-8111-111111111111`
+tiene un primer grupo no hexadecimal y aborta el seed completo. En su lugar se
+usa el helper `seedId('cp-111111')` (`src/database/seedId.js`), que deriva un
+UUID v4 **determinista** a partir de un slug legible: el mismo slug siempre
+produce el mismo UUID, así las referencias cruzadas entre archivos de seed siguen
+resolviendo al mismo registro.
+
+```js
+import { seedId } from '../seedId.js';
+
+const id = seedId('cp-111111'); // → 'dbb3c996-5eef-479b-9f34-ae10aea90a26' (estable)
+```
+
+Los archivos de seed están fuera del directorio que Knex escanea para migraciones:
+`clear.js` vive en `src/database/clear.js` (no en `seeds/`), porque de lo
+contrario Knex lo intentaría ejecutar como un seed más y fallaría con
+`Invalid seed file: clear.js must have a seed function`.
+
+---
+
+### 📦 Órdenes de Ejemplo en Diferentes Estados
+
+| ID Orden | Estado | Cliente | Trabajador | Categoría | Cotización | Escrow / Pago |
+|---|---|---|---|---|---|---|
+| `c1111111-...` | `PENDING` | Juan Carlos Pérez | Roberto Fernández | Plomería | $15.000 (Pendiente) | Sin transacción |
+| `c2222222-...` | `ACCEPTED` | María E. González | Diego Álvarez | Electricidad | $25.000 (Aceptada) | `ESCROWED` ($25.000 retenidos) |
+| `c3333333-...` | `IN_PROGRESS` | Lucas Rodríguez | Laura Benítez | Limpieza | $32.000 (Aceptada) | `ESCROWED` ($32.000 retenidos) |
+| `c4444444-...` | `COMPLETED` | Sofía Martínez | Martín Díaz | Pintura | $65.000 (Aceptada) | `COMPLETED` (Fondos liberados al trabajador) |
+| `c5555555-...` | `COMPLETED` | Carlos A. Gómez | Esteban Rossi | Climatización | $85.000 (Aceptada) | `COMPLETED` (Fondos liberados al trabajador) |
+| `c6666666-...` | `CANCELLED` | Juan Carlos Pérez | Diego Álvarez | Electricidad | $18.000 (Cancelada) | Cancelada |
+| `c7777777-...` | `REJECTED` | María E. González | Martín Díaz | Pintura | $220.000 (Rechazada) | Rechazada por cliente |
+
+---
+
+### 🗂️ Categorías de Servicios Sembradas (32 en total)
+
+1. Limpieza
+2. Plomería
+3. Electricidad
+4. Jardinería y Paisajismo
+5. Pintura
+6. Carpintería
+7. Climatización y Refrigeración
+8. Cuidado de Mascotas
+9. Soporte Técnico e Informática
+10. Cerrajería
+11. Gasista Matriculado
+12. Mudanzas y Fletes
+13. Albañilería y Construcción
+14. Herrería y Soldadura
+15. Techista y Reparación de Techos
+16. Fumigación y Control de Plagas
+17. Seguridad y Cámaras (CCTV)
+18. Reparación de Electrodomésticos
+19. Durlock y Yesería
+20. Tapicería y Restauración
+21. Pulido y Plastificado de Pisos
+22. Impermeabilización
+23. Cuidado de Adultos Mayores
+24. Cuidado Infantil y Niñera
+25. Clases Particulares
+26. Diseño y Decoración de Interiores
+27. Organización de Espacios
+28. Peluquería y Barbería a Domicilio
+29. Masajes y Estética
+30. Catering y Chef a Domicilio
+31. Mantenimiento de Piletas / Piscinas
+32. Vidriería y Cerramientos
+
+---
+
+### 💡 Ejemplo de Uso con cURL
+
+> ⚠️ **El login es de dos pasos.** `POST /auth/login` solo valida credenciales y
+> **no devuelve token**: manda un OTP y responde `PENDING_VERIFICATION`. El token
+> se obtiene de `POST /auth/verify-otp`. En desarrollo el OTP se imprime en el log
+> del backend (`[OTP] … Tu código … es: 468716`), y el campo del token en la
+> respuesta es **`accessToken`** (camelCase).
+
+```bash
+# 1. Iniciar sesión con un cliente sembrado → dispara el OTP
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "cliente1@test.com",
+    "password": "test123!"
+  }'
+
+# 2. Canjear el OTP (leído del log del server) por el token
+curl -X POST http://localhost:3000/api/v1/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "cliente1@test.com",
+    "otp_code": "468716"
+  }'
+# → { "message": "Verificación exitosa", "accessToken": "…", "refreshToken": "…" }
+
+# Lo mismo con un trabajador sembrado: worker1@test.com / test123!
+```
+
+---
+
+## Demo en vivo (B4)
+
+Recorrido crítico para mostrar la API de punta a punta sin ayuda. Usa datos sembrados y no
+necesita claves de Stripe: el escrow se simula con la tarjeta sembrada del cliente.
+
+### Preparación
+
+```bash
+cd Backend
+npm run migrate:latest
+npm run seed:dev
+npm run dev
+```
+
+Usuarios sembrados:
+
+- Cliente: `cliente1@test.com` / `test123!`
+- Trabajador: `worker1@test.com` / `test123!`
+
+El OTP se imprime en el log del servidor, por ejemplo:
+`[OTP] Email OTP enviado (simulación) ... Tu código de verificación de 2 pasos es: 123456`.
+El token se obtiene en `POST /auth/verify-otp` y se llama `accessToken`.
+
+### Paso a paso
+
+1. Salud:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/v1/health
+```
+
+Debe devolver `200`.
+
+2. Login del cliente (devuelve `PENDING_VERIFICATION`):
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cliente1@test.com","password":"test123!"}'
+```
+
+3. Canjear el OTP leído del log:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cliente1@test.com","otp_code":"CODIGO_DEL_LOG"}'
+```
+
+Copiar `accessToken` como `CLIENT_TOKEN`.
+
+4. Perfil del cliente, categorías y ubicación:
+
+```bash
+curl -s http://localhost:3000/api/v1/users/me \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+curl -s http://localhost:3000/api/v1/categories
+```
+
+Del primer response copiar `id` como `CLIENT_USER_ID` y `profile.client.id` como `CLIENT_ID`.
+Del segundo, ver el catálogo de categorías activas.
+
+```bash
+curl -s http://localhost:3000/api/v1/users/CLIENT_USER_ID/locations \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+Copiar el primer `id` como `LOCATION_ID`.
+
+5. Buscar trabajadores (demostración de búsqueda):
+
+```bash
+curl -s "http://localhost:3000/api/v1/workers/nearby?latitude=-34.6&longitude=-58.4&radius_km=20" \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+Debe devolver `count > 0`.
+
+6. Login del trabajador, OTP y perfil:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"worker1@test.com","password":"test123!"}'
+curl -s -X POST http://localhost:3000/api/v1/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"worker1@test.com","otp_code":"CODIGO_DEL_LOG"}'
+curl -s http://localhost:3000/api/v1/users/me \
+  -H "Authorization: Bearer WORKER_TOKEN"
+```
+
+Copiar `accessToken` como `WORKER_TOKEN`, `profile.worker.id` como `WORKER_ID` y
+`profile.worker.category_id` como `CATEGORY_ID`.
+
+7. Cliente crea la orden:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/orders \
+  -H "Authorization: Bearer CLIENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "CLIENT_ID",
+    "worker_id": "WORKER_ID",
+    "category_id": "CATEGORY_ID",
+    "location_id": "LOCATION_ID",
+    "description": "Reparar la canilla de la cocina",
+    "suggested_budget": 9000,
+    "scheduled_date": "FECHA_FUTURA_YYYY-MM-DD"
+  }'
+```
+
+Debe devolver `201` y `order.status = PENDING`. Copiar `order.id` como `ORDER_ID`.
+
+8. Trabajador crea la cotización:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/orders/ORDER_ID/quotes \
+  -H "Authorization: Bearer WORKER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "proposed_price": 8500,
+    "proposed_date": "FECHA_FUTURA_YYYY-MM-DD",
+    "proposed_time": "10:30"
+  }'
+```
+
+Debe devolver `201`. Copiar `quote.id` como `QUOTE_ID`.
+
+9. Cliente acepta la cotización:
+
+```bash
+curl -s -X PATCH http://localhost:3000/api/v1/quotes/QUOTE_ID \
+  -H "Authorization: Bearer CLIENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"ACCEPTED"}'
+```
+
+Debe devolver `200`, iniciar el escrow simulado y dejar la orden en `ACCEPTED`.
+
+10. Trabajador inicia la orden:
+
+```bash
+curl -s -X PATCH http://localhost:3000/api/v1/orders/ORDER_ID/status \
+  -H "Authorization: Bearer WORKER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"IN_PROGRESS"}'
+```
+
+Debe devolver `200`.
+
+11. Verificación final:
+
+```bash
+curl -s http://localhost:3000/api/v1/orders/ORDER_ID \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+curl -s http://localhost:3000/api/v1/orders/ORDER_ID/history \
+  -H "Authorization: Bearer CLIENT_TOKEN"
+```
+
+El estado final debe ser `IN_PROGRESS` y el historial debe mostrar `PENDING -> ACCEPTED -> IN_PROGRESS`.
+
+### Versión automatizada
+
+Con los OTP leídos del log:
+
+```bash
+CLIENT_OTP=123456 WORKER_OTP=654321 npm run smoke:e2e
+```
+
+O, si el servidor se inició redirigiendo el log a un archivo:
+
+```bash
+npm start > /tmp/backend.log 2>&1 &
+OTP_LOG_FILE=/tmp/backend.log npm run smoke:e2e
+```
+
+El script imprime `OK` o `FAIL` por cada paso y usa `BASE_URL` si se quiere apuntar a otro host.
+
+
+## 🧪 Testing y Cobertura
+
+- **Stack**: Jest 29 + `supertest` con **Babel** (`@babel/preset-env`, targets `node: current`, `modules: false` para conservar ESM nativo — ver `babel.config.json` y `transform` en `jest.config.js`).
+- La suite cubre **servicios críticos** (auth, pagos, órdenes, chat, escrow), máquina de estados de órdenes, validaciones de entrada (Joi), utilidades (cifrado, caché) y casos de error/edge.
+- `npm test` ejecuta `--coverage` y **falla si no se alcanza el umbral mínimo** definido en `jest.config.js`:
+
+| Métrica | Mínimo global |
+|---|---|
+| Statements | 70% |
+| Branches | 55% |
+| Functions | 60% |
+| Lines | 70% |
+
+- Cobertura actual: **70.73% statements, 62.36% branches, 74.5% functions y 71.09% lines**.
+- Servicios críticos dentro del global (statements): `AuthService` 100%, `PaymentService` 98.47%, `OrderService` 84.86%, `ChatService` 81.57%, `EscrowService` 92.72% y `src/utils/validation.js` 99.15%.
+- **Alcance del reporte**: `src/**/*.js`, incluyendo controllers. Quedan fuera `src/server.js`, `src/database/**`, `src/routes/**`, `src/middlewares/**` y los adaptadores de proveedores externos (`src/services/providers/**`), por ser plomería/dependencias de terceros.
+- El reporte HTML se genera en `coverage/lcov-report/index.html` (el directorio `coverage/` está en `.gitignore`).
+- El CI ejecuta `format:check` + `npm test` en cada Pull Request, por lo que la cobertura mínima se valida automáticamente.
+
+## 📂 Estructura del Directorio
+
+```
+├── config/             # Archivos de configuración general
+├── docs/               # Documentación técnica y diagramas
+├── scripts/            # Utilidades de mantenimiento (exportar OpenAPI)
+├── src/
+│   ├── controllers/    # Controladores de la API (HTTP endpoints)
+│   ├── database/       # Migraciones Knex y seeds (`clear.js`, `seedId.js`)
+│   ├── middlewares/    # Middlewares de Express (Auth, Rate Limiting, Upload, etc.)
+│   ├── models/         # Modelos de base de datos y esquemas
+│   ├── routes/         # Definición de rutas Express
+│   ├── services/       # Lógica de negocio core
+│   ├── utils/          # Utilidades y funciones helper (Joi validation, Swagger)
+│   ├── app.js          # Configuración de Express
+│   └── server.js       # Punto de entrada del servidor
+├── tests/              # Pruebas unitarias y de integración
+├── .env.example        # Plantilla de variables de entorno
+└── .gitignore          # Archivo para excluir archivos sensibles (.env)
+
+```
+
+## 🐳 Levantar con Docker y Docker Compose
+
+El proyecto está configurado para ejecutarse fácilmente en contenedores usando Docker y Docker Compose, lo que levanta tanto la API como la base de datos PostgreSQL de forma automatizada y sincronizada.
+
+### Requisitos previos
+
+Asegúrate de tener instalados:
+- **Docker**
+- **Docker Compose**
+
+### Instrucciones para iniciar el entorno
+
+1. **Crear archivo de variables de entorno**:
+   ```bash
+   cp .env.example .env
+   ```
+   *(La configuración por defecto apunta al servicio de base de datos dentro de Docker).*
+
+2. **Levantar los servicios**:
+   ```bash
+   docker-compose up --build
+   ```
+   *Este comando construirá la imagen del backend e iniciará los servicios de base de datos (`db`) y de API (`api`).*
+
+3. **Verificar el estado**:
+    - La API estará accesible en: `http://localhost:3000`
+    - El endpoint de salud en: `http://localhost:3000/health`
+    - El dashboard de monitoreo en: `http://localhost:3000/health/dashboard`
+
+### Detener los servicios
+
+Para detener y limpiar los contenedores, ejecuta:
+```bash
+docker-compose down
+```
+Para borrar también los datos persistidos de la base de datos, puedes añadir la bandera `-v`:
+```bash
+docker-compose down -v
+```
+
+---
+
+## 📋 Endpoints de la API
+
+### Autenticación (`/api/v1/auth`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/auth/register` | No | Registrar nuevo usuario. Responde `is_verified: false` |
+| `POST` | `/auth/login` | No | Iniciar sesión |
+| `POST` | `/auth/verify-otp` | No | Verificar código OTP (2FA) |
+| `POST` | `/auth/resend-otp` | No | Regenerar código OTP (ej. expirado o agotado) |
+| `POST` | `/auth/refresh-token` | No | Renovar access token |
+| `POST` | `/auth/forgot-password` | No | Solicitar recuperación de contraseña |
+| `POST` | `/auth/verify-reset-code` | No | Verificar código de recuperación |
+| `POST` | `/auth/reset-password` | No | Restablecer contraseña |
+
+### Usuarios (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id` | No | Perfil público del usuario |
+| `GET` | `/users/me` | JWT | Perfil privado del usuario autenticado |
+| `PATCH` | `/users/:id` | JWT | Actualizar perfil (solo propio usuario) |
+| `POST` | `/users/:id/change-password` | JWT | Cambiar contraseña validando contraseña actual (complejidad requerida) |
+| `POST` | `/users/:id/change-email` | JWT | Iniciar cambio de correo. Envía OTP a email actual y nuevo |
+| `POST` | `/users/:id/verify-email-change` | JWT | Verificar OTPs y confirmar cambio de email |
+| `POST` | `/users/:id/change-phone` | JWT | Iniciar cambio de teléfono. Envía OTP a teléfono actual y nuevo |
+| `POST` | `/users/:id/verify-phone-change` | JWT | Verificar OTPs y confirmar cambio de teléfono |
+
+### Perfil de Cliente (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id/client-profile` | JWT | Obtener perfil de cliente |
+| `POST` | `/users/:id/client-profile` | JWT | Crear perfil de cliente (ver [Flujo Completar Perfil](#-flujo-completar-perfil)) |
+| `PATCH` | `/users/:id/client-profile` | JWT | Actualizar perfil de cliente |
+
+### Perfil de Trabajador (`/api/v1/users`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/users/:id/worker-profile` | JWT | Obtener perfil de trabajador |
+| `POST` | `/users/:id/worker-profile` | JWT | Crear perfil de trabajador (ver [Flujo Completar Perfil](#-flujo-completar-perfil)) |
+| `PATCH` | `/users/:id/worker-profile` | JWT | Actualizar perfil de trabajador |
+
+> **No requiere rol activo `worker`.** Estos endpoints aceptan cualquier JWT del
+> usuario dueño (`req.user.user_id === :id`). Esto permite que un usuario con rol
+> `client` registre también su perfil de trabajador sin pasar por `switch-role`,
+> que a su vez exige un trabajador aprobado. Un JWT de otro usuario siempre
+> devuelve `403 FORBIDDEN`.
+
+### Imágenes de Perfil (`/api/v1/uploads`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/uploads/profile-image` | JWT | Subir una imagen de perfil (avatar o DNI). `multipart/form-data`, campo `file` |
+
+```bash
+curl -X POST http://localhost:3000/api/v1/uploads/profile-image \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@/ruta/a/mi/selfie.jpg"
+```
+
+```json
+{
+  "message": "Imagen subida exitosamente",
+  "url": "/uploads/profiles/77f80d8a-6f85-4b21-99db-b4c817754e45.jpg",
+  "size": 148213
+}
+```
+
+- **Formato:** JPG o PNG. Se normaliza a JPEG con `sharp` y se limita el lado
+  mayor a 1600 px (calidad 80), igual que las imágenes de mensajes.
+- **Tamaño máximo:** 10 MB (`UPLOAD_MAX_FILE_SIZE`).
+- **Destino:** `<UPLOAD_DIR>/profiles/` (default `uploads/profiles/`), separada de
+  `<UPLOAD_DIR>/messages/`. La URL devuelta es relativa y se sirve como archivo
+  estático en `GET /uploads/...`.
+- **Errores:** `400 UPLOAD_ERROR` (`Solo se permiten imágenes JPG o PNG`,
+  `El archivo excede el límite de 10 MB`), `401 UNAUTHORIZED`.
+- El mismo endpoint sirve para las tres imágenes del flujo de identidad: subí
+  cada archivo por separado y usá la `url` devuelta en el body del perfil.
+
+## 🧾 Flujo Completar Perfil
+
+Flujo universal de onboarding: **cliente y trabajador comparten los mismos campos
+de identidad**. Requiere subir 3 imágenes (`avatar`, frente del DNI, dorso del
+DNI) y registrar la fecha de nacimiento.
+
+> 📖 **[Guía de pruebas paso a paso desde el frontend →](docs/COMPLETAR_PERFIL_GUIDA.md)**:
+> checklist de 14 casos, ejemplos de código, valores esperados de cada respuesta y
+> troubleshooting. Incluye los dos bugs de auth que hay que conocer para testear
+> (`POST /auth/login` no devuelve token, y el campo es `accessToken`).
+
+### 1. Campos de identidad (obligatorios en ambos perfiles)
+
+| Campo | Tipo | Formato | Notas |
+|---|---|---|---|
+| `date_of_birth` | `string` | `YYYY-MM-DD` **exacto** | Entre `1900-01-01` y hoy. Sin hora ni zona horaria. Se persiste como columna `date` |
+| `avatar_url` | `string` | URL | Debe ser `.jpg`/`.jpeg`/`.png`. Ver [validación de URLs](#-validación-de-urls-de-imagen) |
+| `dni_front_url` | `string` | URL | Idem |
+| `dni_back_url` | `string` | URL | Idem |
+
+Las columnas son `NULL`-able en la base (para no romper filas existentes), pero
+Joi las **exige al crear el perfil**. `PATCH` es parcial: los campos omitidos no
+se tocan.
+
+La fecha se valida como string, no como `Date`: se exige el formato exacto
+`YYYY-MM-DD` y se verifica que la fecha exista en el calendario. Formatos como
+`1990`, `1990-05`, `1990-5-4` o `1990-05-14T10:00:00Z` devuelven `400`, igual que
+las fechas inexistentes (`1990-02-31`) y las futuras.
+
+### 2. Orden de las llamadas
+
+```
+POST /api/v1/uploads/profile-image   (x3: avatar, dni_front, dni_back)
+   ↓  devuelve { "url": "/uploads/profiles/<uuid>.jpg" }
+POST /api/v1/users/:id/client-profile   { full_name, date_of_birth, avatar_url, dni_front_url, dni_back_url }
+POST /api/v1/users/:id/worker-profile   { full_name, date_of_birth, avatar_url, dni_front_url, dni_back_url }
+   ↓
+GET  /api/v1/users/:id/client-profile   → incluye los 4 campos
+GET  /api/v1/users/:id/worker-profile   → incluye los 4 campos
+```
+
+Ambos `POST` comparten **exactamente el mismo body**. Un usuario con rol dual
+completa los dos perfiles con el mismo token, sin logout ni `switch-role`
+intermedio.
+
+### 3. Campos opcionales del perfil de trabajador
+
+`category_id`, `hourly_rate`, `availability_status`, `certification_status`,
+`bio`, `default_location_id` y `language` **no son obligatorios** al crear. Se
+pueden completar después con `PATCH` (o al cambiar a rol `worker`, que sigue
+exigiendo categoría, disponibilidad y certificación aprobada).
+
+Sin valor explícito, la base aplica sus defaults: `hourly_rate` queda en `NULL`
+(un `NULL` real, no `0`), `availability_status: 'AVAILABLE'` y
+`certification_status: 'PENDING'`.
+
+### 4. Validación de URLs de imagen
+
+Las URLs deben ser públicas y con extensión de imagen. El patrón acepta
+`http(s)://…​.jpg|png` y `/uploads/…​.jpg|png`, y **rechaza URIs locales**
+(`file://`, `content://`), que antes pasaban la validación y terminaban
+guardando una ruta del dispositivo en la base:
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "La URL de la imagen debe ser una URL pública JPG o PNG válida (no se aceptan URIs locales file:// o content://)",
+  "statusCode": 400
+}
+```
+
+### 5. Notas de implementación
+
+- **Formato estricto, sin conversión a `Date`.** El campo se valida como **string**
+  con el patrón exacto `^\d{4}-\d{2}-\d{2}$`, y la existencia en calendario se
+  verifica por round-trip. Con `Joi.date().iso()` el backend aceptaba ISO 8601 de
+  **precisión reducida** (`"1990"`, `"1990-05"`, `"1990-05-14T10:00:00Z"`), que se
+  normalizaba a `1990-01-01`: un DNI con una fecha de nacimiento que el usuario
+  nunca envió. Al no pasar por `Date`, tampoco hay corrimiento por zona horaria en
+  el camino de escritura (pg serializa un `Date` a columna `date` con la fecha
+  **local**; en UTC-3 eso guardaba un día antes). Los services leen con componentes
+  locales, siguiendo la convención ya usada por `QuoteService` para
+  `proposed_date`. La API siempre devuelve `YYYY-MM-DD`, sin `Z` ni componente
+  horario, para que el frontend pueda comparar sin parsear.
+- **404 antes que 403.** `GET` de un perfil inexistente devuelve
+  `404 CLIENT_PROFILE_NOT_FOUND` / `404 WORKER_PROFILE_NOT_FOUND` con un mensaje
+  que indica crear el perfil. `403` queda reservado para cuando `:id` no es del
+  usuario autenticado.
+- **`down` de la migración.** Revertir deja `hourly_rate` en `NULL`; si ya
+  existen tarifas nulas, el `down` falla por la restricción `NOT NULL` original.
+- **Limpieza de archivos.** `ImageService.deleteStoredFile` acepta URLs de
+  `messages/` y `profiles/`, pero nunca borra URLs externas (CDN). Reemplazar un
+  avatar no elimina el archivo anterior del disco: no hay endpoint de borrado de
+  imágenes de perfil.
+
+### Ubicaciones (`/api/v1/locations`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/locations` | JWT | Crear ubicación (address, latitude, longitude) |
+| `GET` | `/users/:id/locations` | JWT | Listar ubicaciones del usuario (`?lat=&lng=` para distancia) |
+| `GET` | `/locations/:location_id` | JWT | Detalles de una ubicación |
+| `PATCH` | `/locations/:location_id` | JWT | Actualizar dirección, coordenadas o marcado como principal |
+| `DELETE` | `/locations/:location_id` | JWT | Eliminar ubicación |
+
+### Métodos de Pago (`/api/v1/users/:id/payment-methods` y `/api/v1/payment-methods`)
+
+Gestión y ciclo de vida de los métodos de pago (tarjetas) de los usuarios.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/users/:id/payment-methods` | JWT | Registrar un nuevo método de pago (tarjeta de crédito/débito). Valida Luhn, enmascara el PAN y encripta con AES-256 |
+| `GET` | `/users/:id/payment-methods` | JWT | Listar los métodos de pago guardados del usuario (números enmascarados) |
+| `PATCH` | `/payment-methods/:id` | JWT | Actualizar expiración, titular o estado predeterminado de un método de pago |
+| `DELETE` | `/payment-methods/:id` | JWT | Eliminar un método de pago (valida que no existan transacciones pendientes) |
+
+**Reglas y validaciones:**
+- `card_number`: Validador Luhn obligatorio, longitud de 13 a 19 dígitos.
+- `cvv`: Obligatorio, longitud de 3 a 4 dígitos. No se almacena en la base de datos (cumplimiento PCI-DSS).
+- `is_primary`: Flag para marcar la tarjeta predeterminada del usuario. Si es la primera tarjeta o se establece explícitamente en `true`, se desmarca automáticamente el resto.
+- Límite: Máximo de 10 métodos de pago por usuario.
+- Encriptación: Se almacena solo los últimos 4 dígitos visibles y el resto se encripta de forma segura usando AES-256-CBC con la clave `ENCRYPTION_KEY`.
+- Eliminación: No se permite eliminar una tarjeta si está asociada a transacciones en estado `PENDING` o `ESCROWED`.
+
+### Procesamiento de Pagos e Integración con Stripe (`/api/v1/payments` y `/api/v1/webhooks`)
+
+Flujo de procesamiento de transacciones reales integrado con Stripe (Payment Intents y confirmación asíncrona mediante Webhooks).
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/payments/process` | JWT | Iniciar proceso de pago para una orden (`order_id`, `payment_method_id`, `amount`). Crea un Payment Intent en Stripe y devuelve éxito (`succeeded`) o requerimiento de autenticación 3D Secure (`requires_action`) |
+| `POST` | `/webhooks/payment` | No | Recibe y procesa los webhooks enviados por Stripe (`payment_intent.succeeded` o `payment_intent.payment_failed`). Valida la autenticidad con `stripe-signature` y actualiza la transacción local a `ESCROWED` o `FAILED` |
+
+**Detalles de resiliencia y seguridad:**
+- **Reintentos automáticos**: Las llamadas al API de Stripe se reintentan hasta un máximo de 3 veces con backoff exponencial ante errores transitorios de red o de API.
+- **Validación de firmas**: Las solicitudes al webhook verifican obligatoriamente la firma `stripe-signature` para prevenir usurpaciones.
+- **Flujo 3D Secure**: Soporte completo para flujos que requieren interacción del cliente, actualizando el estado de forma asíncrona mediante el webhook.
+
+### Certificaciones de Trabajadores (`/api/v1/workers/:id/certifications` y `/api/v1/certifications`)
+
+Gestión y validación de documentos oficiales presentados por los proveedores para habilitar sus perfiles.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/workers/:id/certifications` | JWT | Subir un nuevo documento de certificación (`BACKGROUND_CHECK`, `ID_VERIFICATION`, o `PROFESSIONAL_LICENSE`). Admite PDF/imagen hasta 10MB |
+| `GET` | `/workers/:id/certifications` | JWT | Listar todas las certificaciones subidas por el proveedor asociado |
+| `GET` | `/certifications/:id` | JWT | Detalles de una certificación específica (solo accesible por el propio proveedor o admin) |
+| `PATCH` | `/certifications/:id` | JWT | Reenviar archivo para una certificación previamente rechazada, restableciendo su estado a `PENDING` |
+| `PATCH` | `/certifications/:id/status` | JWT | Actualizar estado de verificación (`APPROVED` o `REJECTED`). Si es `REJECTED`, exige un `rejected_reason` |
+
+**Reglas de negocio y estados:**
+- **Estados de verificación**: `PENDING` (esperando revisión), `APPROVED` (aprobado), `REJECTED` (rechazado).
+- **Subida**: Límite de tamaño estricto de 10MB. Tipos de archivo permitidos: `.pdf`, `.png`, `.jpg`, `.jpeg`.
+- **Integridad de perfil**: Si todas las certificaciones asociadas a un proveedor son aprobadas (`APPROVED`), el estado de certificación del perfil del trabajador se actualiza automáticamente a `APPROVED` (permitiéndole alternar al rol de trabajador). Si alguna es rechazada, el perfil pasa a `REJECTED`.
+- **Auditoría**: Cada cambio de estado genera un log de auditoría detallado y envía una notificación simulada por correo/push al trabajador.
+
+### Búsqueda de Trabajadores (`/api/v1/workers`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/workers/nearby` | JWT | Trabajadores disponibles en un radio (`latitude`, `longitude`, `radius_km`, `category_id?`, `limit?`, `offset?`) |
+
+### Disponibilidad del Trabajador (`/api/v1/workers/:id/availability` y `/api/v1/availability`)
+
+Configuración de la disponibilidad horaria semanal de los trabajadores (día de la semana + rangos de horas en los que pueden recibir solicitudes).
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/workers/:id/availability` | JWT | Crear un rango de disponibilidad (`day_of_week` 0-6, `start_time`, `end_time`). Máximo 2 rangos por día |
+| `GET` | `/workers/:id/availability` | JWT | Listar la disponibilidad del trabajador (solo propio). Ordenada por día y hora de inicio |
+| `PATCH` | `/availability/:id` | JWT | Actualizar el día u horario de un rango de disponibilidad |
+| `DELETE` | `/availability/:id` | JWT | Eliminar un rango de disponibilidad |
+
+**Reglas de negocio y validaciones:**
+
+- **`day_of_week`**: número entero entre `0` (Domingo) y `6` (Sábado).
+- **Horarios**: formato `HH:mm` (24 horas). `start_time` siempre debe ser anterior a `end_time`.
+- **Límite**: máximo **2 rangos por día** por trabajador (al crear o al mover un rango a otro día).
+- **Permisos**: solo el propietario del perfil de trabajador (`worker_profiles.user_id === usuario autenticado`) puede crear, listar, actualizar o eliminar sus rangos.
+- Restricciones a nivel de BD (migración `20260818020000_create_worker_availability.js`): `CHECK (day_of_week BETWEEN 0 AND 6)` y `CHECK (start_time < end_time)`, con índices en `worker_id` y `day_of_week`.
+
+**Ejemplo — crear disponibilidad:**
+
+```json
+POST /api/v1/workers/:id/availability
+Authorization: Bearer <accessToken>
+{
+  "day_of_week": 1,
+  "start_time": "09:00",
+  "end_time": "13:00"
+}
+```
+
+Respuesta `201 Created`:
+
+```json
+{
+  "message": "Disponibilidad creada correctamente",
+  "availability": {
+    "id": "a1b2c3d4-...",
+    "worker_id": "c3d4e5f6-...",
+    "day_of_week": 1,
+    "start_time": "09:00",
+    "end_time": "13:00",
+    "created_at": "2026-08-18T12:00:00.000Z",
+    "updated_at": "2026-08-18T12:00:00.000Z"
+  }
+}
+```
+
+### Chats (`/api/v1/chats`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats` | JWT | Crear chat con otro usuario (`user_id_2`, `order_id?`). Idempotente: devuelve el chat existente (`200`, `created: false`) |
+| `GET` | `/users/:id/chats` | JWT | Listar chats del usuario (solo propio). Filtros: `status` (`all`, `favorites`, `active`, `archived`), `search` (por nombre del otro usuario). `?limit=&offset=` para paginación; incluye `unread_count`, último mensaje, `is_favorite` e `is_archived`. Orden: primero favoritos, luego por `last_message_at` |
+| `GET` | `/chats/:chat_id` | JWT | Detalle del chat + últimos 50 mensajes. Marca los mensajes como leídos |
+| `DELETE` | `/chats/:chat_id` | JWT | Eliminar chat (soft delete: lo oculta solo para el usuario) |
+
+### Mensajería (`/api/v1/chats/:chat_id/messages` y `/api/v1/messages`)
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/chats/:chat_id/messages` | JWT | Enviar mensaje. `message_type`: `TEXT`, `IMAGE`, `QUOTE` (default `TEXT`). `content` obligatorio para `TEXT`/`QUOTE` (máx 5000). Para `IMAGE`, adjuntar `file` (multipart, JPG/PNG, máx 5MB); se redimensiona a 1600px y se comprime. Emite `message:new` por WS |
+| `GET` | `/chats/:chat_id/messages` | JWT | Listar mensajes (`?limit=&offset=`; default 50, máx 100, más recientes al final). Marca la conversación como leída |
+| `DELETE` | `/messages/:message_id` | JWT | Eliminar mensaje (solo el autor, soft delete). Emite `message:deleted` por WS |
+
+### Cotizaciones (`/api/v1/orders/:order_id/quotes` y `/api/v1/quotes`)
+
+Gestión de cotizaciones (propuestas de tarifa y agenda) que el trabajador envía sobre una orden.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/orders/:order_id/quotes` | JWT (worker) | Crear cotización (`proposed_price`, `proposed_date`, `proposed_time`). Solo el trabajador de la orden y si la orden está activa. Crea la quote en `PENDING` |
+| `GET` | `/orders/:order_id/quotes` | JWT | Listar cotizaciones de la orden en orden cronológico (solo cliente o trabajador de la orden) |
+| `GET` | `/quotes/:quote_id` | JWT | Detalle de una cotización (solo participantes de la orden) |
+| `PATCH` | `/quotes/:quote_id` | JWT | Cambiar estado: `ACCEPTED`/`REJECTED` (solo cliente, con `rejection_reason` opcional) o `CANCELLED` (solo trabajador) |
+| `DELETE` | `/quotes/:quote_id` | JWT | Eliminar cotización (solo trabajador y si está en `PENDING`) |
+
+**Máquina de estados de cotizaciones:** `PENDING → ACCEPTED | REJECTED | CANCELLED` (solo se transiciona desde `PENDING`). Cualquier otra transición devuelve `409 INVALID_TRANSITION`.
+
+**Reglas y validaciones:**
+
+- `proposed_price`: número obligatorio, positivo, máx. `99,999,999.99` (2 decimales).
+- `proposed_date`: obligatoria, formato ISO `YYYY-MM-DD`; debe ser hoy o una fecha futura.
+- `proposed_time`: obligatoria, formato `HH:mm`.
+- Solo el **trabajador asignado** a la orden puede crear cotizaciones y solo si la orden está `PENDING`, `ACCEPTED` o `IN_PROGRESS` (si no, `409 ORDER_NOT_ACTIVE`).
+- Solo el **cliente** puede aceptar/rechazar (`PATCH`); solo el **trabajador** puede cancelar su propuesta (`CANCELLED`) o eliminar la cotización.
+- El motivo de rechazo (`rejection_reason`, opcional, máx. 1000 caracteres) se guarda para permitir renegociación.
+- Al **aceptar** una cotización se ejecuta de forma atómica: la cotización pasa a `ACCEPTED`, las demás cotizaciones pendientes de la orden pasan a `REJECTED`, la orden pasa a `ACCEPTED` y se **inicia el escrow**: se carga la tarjeta primaria del cliente y la transacción nace en `ESCROWED` (fondos retenidos). Si el cargo falla, la transacción pasa a `FAILED` y la orden se **cancela automáticamente** (`402 PAYMENT_FAILED`). Un índice `UNIQUE (order_id)` en `transactions` garantiza un solo pago por orden (`409 PAYMENT_ALREADY_STARTED`).
+
+**Ejemplo — crear cotización:**
+
+```json
+POST /api/v1/orders/:order_id/quotes
+Authorization: Bearer <accessToken>
+{
+  "proposed_price": 35000,
+  "proposed_date": "2026-08-20",
+  "proposed_time": "14:30"
+}
+```
+
+Respuesta `201 Created`:
+
+```json
+{
+  "message": "Cotización creada correctamente",
+  "quote": {
+    "id": "a1b2c3d4-...",
+    "order_id": "c3d4e5f6-...",
+    "proposed_price": 35000,
+    "proposed_date": "2026-08-20",
+    "proposed_time": "14:30:00",
+    "status": "PENDING",
+    "rejection_reason": null,
+    "created_at": "2026-08-13T12:00:00.000Z",
+    "updated_at": "2026-08-13T12:00:00.000Z"
+  }
+}
+```
+
+**Ejemplo — rechazar con motivo (renegociación):**
+
+```json
+PATCH /api/v1/quotes/:quote_id
+Authorization: Bearer <accessToken>
+{
+  "status": "REJECTED",
+  "rejection_reason": "El precio supera mi presupuesto"
+}
+```
+
+**Ejemplo — aceptar (inicia el pago):**
+
+```json
+{ "status": "ACCEPTED" }
+```
+
+**Cambios de base de datos (migración `20260811000000_add_quote_rejection_reason.js`):**
+
+- Columna `rejection_reason` (`TEXT`, nullable) en `quotes`.
+- Constraint `quotes_status_check` que restringe `status` a `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`.
+- Índice `UNIQUE (order_id)` en `transactions` para garantizar una sola transacción (pago/escrow) por orden.
+
+### Sistema de Escrow (`docs/ESCROW_SYSTEM.md`)
+
+Retención, liberación y reembolso de fondos sobre las transacciones:
+
+- **Estados de transacción**: `PENDING`, `ESCROWED`, `COMPLETED`, `REFUNDED`, `FAILED` (constraint `transactions_status_check`).
+- **Al aceptar cotización**: cargo simulado a la tarjeta del cliente → transacción `ESCROWED` y monto retenido en `user_wallets.escrowed_balance`. Si el cargo falla → `FAILED` y la orden se cancela (`402 PAYMENT_FAILED`).
+- **Al completar orden**: `releaseFunds` debita `escrowed_balance` del cliente y acredita `current_balance` del trabajador; transacción → `COMPLETED`.
+- **Al cancelar orden** (desde `ACCEPTED`/`IN_PROGRESS`): `refund` reembolsa a la tarjeta; transacción → `REFUNDED`.
+- **Auditoría**: `transaction_logs` registra cada cambio de estado (`from_status`, `to_status`, `changed_by_id`, `reason`).
+- **Tablas nuevas**: `user_wallets` (saldo disponible y retenido) y `transaction_logs`.
+- **Simulación**: el proveedor de pagos es simulado. `SIMULATE_CHARGE_FAILURE=true` en `.env` fuerza el fallo del cargo para probar la cancelación automática.
+
+**Cambios de base de datos (migración `20260815000000_create_escrow_system.js`):**
+- Constraint `transactions_status_check` (incluye `FAILED`).
+- Tabla `user_wallets` (`user_id` UNIQUE, `current_balance`, `escrowed_balance`).
+- Tabla `transaction_logs` (auditoría de estados).
+
+### Órdenes (`/api/v1/orders`)
+
+Gestión y ciclo de vida de las órdenes (pedidos de servicio) mediante una máquina de estados.
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/orders/:id` | JWT | Detalles de una orden |
+| `PATCH` | `/orders/:id/status` | JWT | Actualizar estado de la orden (sigue reglas de la máquina de estados) |
+| `GET` | `/orders/:id/history` | JWT | Historial de auditoría de la orden (cambios de estado) |
+| `POST` | `/orders/:id/complete` | JWT | Confirmar finalización del servicio (doble confirmación cliente/trabajador) |
+
+**Máquina de estados de órdenes:** `PENDING → ACCEPTED | REJECTED`, `ACCEPTED → IN_PROGRESS | CANCELLED`, `IN_PROGRESS → COMPLETED | CANCELLED`.
+
+**Reglas y validaciones:**
+- `PENDING -> ACCEPTED` y `PENDING -> REJECTED` solo pueden ser solicitados por el **cliente**.
+- `ACCEPTED -> IN_PROGRESS` y `IN_PROGRESS -> COMPLETED` solo pueden ser solicitados por el **trabajador**.
+- `CANCELLED` en estado `ACCEPTED` o `IN_PROGRESS` puede ser solicitado por cualquiera de los dos (**cliente o trabajador**).
+- Cada transición exitosa inserta un registro en la tabla `order_events` y emite el evento en tiempo real `order:status_changed` a los participantes vía WebSocket.
+- Las transiciones a `COMPLETED` y `CANCELLED` disparan la lógica de escrow: `COMPLETED` libera los fondos retenidos al trabajador (`releaseFunds`), y `CANCELLED` reembolsa a la tarjeta del cliente y marca la transacción como `REFUNDED` (ver `docs/ESCROW_SYSTEM.md`).
+
+**Confirmación de finalización (doble confirmación):**
+- Endpoint `POST /orders/:id/complete` permite a cliente o trabajador confirmar/revocar la finalización del servicio.
+- **Cliente (obligatorio)**: debe confirmar para que la orden pueda completarse.
+- **Trabajador (opcional)**: puede confirmar, pero no bloquea la finalización.
+- Cuando **ambas partes confirman** y la orden está en `IN_PROGRESS`, transiciona a `COMPLETED` y libera el escrow.
+- Body opcional: `{ "confirm": true }` (default) para confirmar, `{ "confirm": false }` para revocar.
+- Emite evento WebSocket `order:completion_confirmed` con `{ order_id, client_confirmed, worker_confirmed, status }`.
+
+**Cambios de base de datos (migración `20260813122916_create_order_events.js`):**
+- Nueva tabla `order_events` (`id`, `order_id`, `user_id`, `from_state`, `to_state`, `created_at`).
+- Constraint `orders_status_check` que restringe los estados permitidos a `PENDING`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `REJECTED`, `CANCELLED`.
+
+**Cambios de base de datos (migración `20260815000001_add_confirmations_to_orders.js`):**
+- Columnas de confirmación dual en `orders`: `client_confirmed`, `worker_confirmed`, `client_confirmed_by`, `worker_confirmed_by`, `client_confirmed_at`, `worker_confirmed_at`.
+
+### Disputas (`/api/v1/disputes`)
+
+Gestión de disputas para resolver conflictos de calidad de servicio, cancelación o retenciones en órdenes de trabajo.
+
+| Método | Ruta | Auth | Rol Mínimo | Descripción |
+|--------|------|------|------------|-------------|
+| `POST` | `/disputes` | JWT | Cliente o Trabajador | Abre una disputa para una orden en estado `COMPLETED` o `CANCELLED` |
+| `GET` | `/disputes` | JWT | Cualquiera | Lista las disputas (usuarios ven las suyas; admins ven todas) |
+| `PATCH` | `/disputes/:id` | JWT | Admin | Resuelve o cierra una disputa (`RESOLVED` o `CLOSED`) |
+
+**Reglas de negocio y flujos:**
+- **Apertura**: Solo los participantes directos (cliente o trabajador) de una orden en estado `COMPLETED` o `CANCELLED` pueden abrir una disputa. Máximo una disputa por orden.
+- **Visualización**: Los usuarios normales están restringidos a ver únicamente las disputas donde participan activamente.
+- **Resolución a favor del Cliente**:
+  - Si los fondos están en **escrow** (`ESCROWED`): se devuelven al cliente y se cambia la transacción a `REFUNDED`.
+  - Si el pago ya fue **completado** (`COMPLETED`): se debita el dinero del saldo disponible del trabajador (`current_balance`) y se procesa el reembolso al cliente.
+- **Resolución a favor del Trabajador**:
+  - Si los fondos están en **escrow** (`ESCROWED`): se liberan inmediatamente acreditándolos a la wallet del trabajador (`current_balance`).
+  - Si el pago ya estaba **completado** (`COMPLETED`): no-op (mantiene el pago).
+- Cada cambio emite eventos WebSocket (`dispute:created` y `dispute:status_changed`) y se registra en Winston.
+
+### WebSocket (real-time messaging)
+
+El servidor expone un WebSocket en `ws://<host>/ws`. El cliente se conecta pasando el
+access token en el query string del handshake:
+
+```
+ws://<host>/ws?token=<accessToken>
+```
+
+Eventos que el servidor envía al cliente:
+
+| Evento | Payload | Cuándo ocurre |
+|--------|---------|---------------|
+| `connected` | `{ user_id }` | Al autenticarse la conexión |
+| `message:new` | `{ chat_id, message }` | Cuando hay un nuevo mensaje en un chat del usuario |
+| `message:deleted` | `{ chat_id, message_id }` | Cuando un mensaje del chat es eliminado por su autor |
+| `user:typing` | `{ chat_id, user_id, is_typing }` | Cuando otro participante del chat escribe |
+
+Evento que el cliente envía al servidor:
+
+| Tipo | Payload | Cuándo ocurre |
+|------|---------|---------------|
+| `user:typing` | `{ chat_id, is_typing }` | Para notificar que el usuario está escribiendo (el servidor lo reenvía a los demás participantes) |
+
+Adjuntos: las imágenes de mensajes se guardan en `<UPLOAD_DIR>/messages/` (default `uploads/`,
+ver `.env.example`) y se sirven desde `GET /uploads/...`. Las imágenes de perfil usan
+`<UPLOAD_DIR>/profiles/` vía `POST /api/v1/uploads/profile-image`.
+`PUBLIC_BASE_URL` (ej. `https://api.tudominio.com`, sin `/api/v1`) resuelve las rutas
+`/uploads/...` a URLs absolutas en `attachment_url` y `avatar_url` de los mensajes;
+si no se configura, la API devuelve la ruta relativa. `message:new` y `message:deleted`
+se emiten a todos los participantes del chat.
+
+### Salud y Documentación
+
+| `GET` | `/health` | No | Health check básico del servicio (API, BD, Caché) |
+| `GET` | `/health/detailed` | No | Health check detallado + métricas del APM interno |
+| `GET` | `/health/dashboard` | No | Vista web del Dashboard de Monitoreo en tiempo real |
+| `GET` | `/api/v1/health` | No | Health check heredado v1 |
+| `GET` | `/api/v1/api-docs` | No | Documentación Swagger UI |
+| `GET` | `/api/docs` | No | Documentación Swagger UI (endpoint alternativo) |
+
+---
+
+## 📖 Documentación Interactiva de la API (Swagger / OpenAPI 3.0)
+
+El proyecto incluye documentación **interactiva y navegable** de toda la API, generada automáticamente a partir de los comentarios JSDoc de las rutas con `swagger-jsdoc` y servida con `swagger-ui-express`.
+
+### 🔗 Endpoints de la UI
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/v1/api-docs` | Swagger UI principal |
+| `GET /api/docs` | Endpoint alternativo (mismo Swagger UI) |
+
+### 🗂️ Archivo de especificación estática
+
+La especificación también está disponible como archivo **OpenAPI 3.0** en:
+
+- **`docs/openapi.yaml`** — Especificación completa exportada (56 paths, todos los schemas, parámetros, respuestas y códigos de error).
+
+> Este archivo se puede importar en herramientas como **Postman**, **Insomnia**, **Swagger Editor** o **Stoplight** para pruebas y generación de clientes.
+
+### ♻️ Regeneración automática (mantenimiento)
+
+La documentación se mantiene de forma **semicontinua**: cada vez que se agrega o modifica un endpoint en `src/routes/*.js`, se actualizan los comentarios JSDoc con la anotación `@openapi` y se regenera el YAML ejecutando:
+
+```bash
+npm run swagger:export
+```
+
+Esto vuelca el spec generado (`swaggerSpec`) a `docs/openapi.yaml` de forma manual. La UI en `/api/v1/api-docs` y `/api/docs` se actualiza automáticamente al reiniciar el servidor, ya que lee el spec desde `swagger-jsdoc` en tiempo de ejecución.
+
+### 🔐 Autenticación (Bearer Token)
+
+Toda la documentación define un esquema de autorización `bearerAuth` de tipo JWT. Los endpoints protegidos muestran un candado 🔒 en la UI; para probarlos:
+
+1. Llamá a `POST /auth/login` y luego `POST /auth/verify-otp` para obtener el `accessToken`.
+2. En Swagger UI hacé clic en **Authorize** y pegá el token.
+
+### ⚠️ Códigos de error documentados
+
+Cada endpoint documenta los códigos de error específicos de negocio y HTTP que puede devolver. Algunos ejemplos:
+
+| Código | Significado |
+|--------|-------------|
+| `400 VALIDATION_ERROR` | Validación de entrada fallida (usando Joi) |
+| `401 UNAUTHORIZED` / `AUTH_FAILED` | Token faltante o credenciales incorrectas |
+| `403 FORBIDDEN` | Rol no permitido o sin permisos |
+| `404 *_NOT_FOUND` | Recurso inexistente (p.ej. `ORDER_NOT_FOUND`) |
+| `409 *_CONFLICT` | Conflicto de negocio (p.ej. `INVALID_TRANSITION`, `ALREADY_RATED`, `PAYMENT_ALREADY_STARTED`) |
+| `429 TOO_MANY_REQUESTS` | Rate limit excedido |
+| `500 INTERNAL_SERVER_ERROR` | Error interno (sin detalles sensibles expuestos) |
+
+Todas las respuestas de error usan la estructura estandarizada:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Email inválido",
+  "statusCode": 400,
+  "timestamp": "2026-06-30T12:00:00.000Z"
+}
+```
+
+### 🧩 Schemas disponibles
+
+La especificación incluye schemas de modelos de datos reutilizables, entre otros: `UserProfile`, `ClientProfile`, `WorkerProfile`, `Location`, `Chat`, `Message`, `Quote`, `Order`, `Rating`, `Dispute`, `WorkerAvailability`, `PaymentMethod`, `Notification` y todas las entidades de error.
+
+---
+
+## 🛡️ Seguridad y Protección DDoS
+
+El backend tiene implementadas políticas y defensas estrictas a nivel de infraestructura y de código para garantizar la integridad y seguridad del servicio:
+
+### 1. Rate Limiting (Limitador de Tasa)
+- **Global**: Límite de **1000 solicitudes/minuto por IP** para mitigar ataques de denegación de servicio (DDoS) o de raspado de datos.
+- **Autenticación**: Límite específico de **5 intentos fallidos cada 15 minutos** por dirección IP. Solo cuentan los **fallos reales de autenticación** (`AUTH_FAILED`, `INVALID_OTP`, `EXPIRED_OTP`, `OTP_ATTEMPTS_EXCEEDED`, códigos de reset), nunca errores de validación del payload (`VALIDATION_ERROR`). Los accesos correctos resetean este contador.
+- **Órdenes de Trabajo**: Límite estricto de **20 creaciones de órdenes por hora por usuario** (`user_id`), evitando spamming o abusos transaccionales.
+- **OTP por código/usuario**: máximo **5 intentos fallidos** por código en el servidor (columna persistente `otp_failed_attempts`). Al superarlos el OTP se invalida y debe solicitarse uno nuevo con `POST /auth/resend-otp`. Límite configurable con `OTP_MAX_ATTEMPTS`.
+
+### Contrato de errores OTP (`POST /auth/verify-otp`)
+
+| Código error | HTTP status | Significado |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Payload inválido |
+| `INVALID_OTP` | 400 | Código incorrecto o usuario no encontrado |
+| `EXPIRED_OTP` | 410 | Código vencido (10 min) |
+| `OTP_ATTEMPTS_EXCEEDED` | 429 | 5 intentos fallidos: código invalidado |
+
+### Canonicalización de teléfonos (E.164)
+
+Todos los endpoints que reciben `phone` (`register`, `login`, `forgot-password`, `verify-otp`, `verify-reset-code`, `resend-otp`, `change-phone`) canonicalizan la entrada a **E.164** (`+57…`) en el servidor antes de validar o buscar en BD. El código de país por defecto se configura con `DEFAULT_PHONE_COUNTRY_CODE` (`.env`). Esto hace el lookup insensible a variaciones de formato (guiones, espacios, `+`, `00`, cero nacional).
+
+> ⚠️ **Migración requerida**: `20260912000001_add_otp_attempts_and_canonical_phone.js` agrega `users.otp_failed_attempts` y reescribe los teléfonos existentes a formato E.164 (`npm run migrate:latest`).
+
+### 2. Sanitización contra XSS (Cross-Site Scripting)
+- Middleware global recursivo (`sanitizeMiddleware`) que limpia etiquetas HTML/scripts en todos los parámetros entrantes (`req.body`, `req.query`, `req.params`).
+
+### 3. Headers de Seguridad (Helmet.js)
+- Configuración automática de cabeceras seguras en las respuestas HTTP (`X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, etc.) para proteger contra clickjacking y ataques relacionados con el navegador.
+
+### 4. Protección contra SQL Injection
+- Todas las consultas a la base de datos se realizan a través del constructor de consultas **Knex.js**, el cual utiliza de forma nativa parámetros y sentencias preparadas (Prepared Statements).
+
+### 5. CORS Enforzado
+- Intercepción estricta en base al dominio autorizado especificado en la variable `ALLOWED_ORIGINS` del entorno. La lista se separa por comas y se compara **exactamente**; un origin no listado recibe `403 CORS_ERROR`.
+- **Peticiones sin `Origin` pasan siempre** (lógica de navegadores y apps nativas). React Native no manda ese header, así que desde **Expo Go** no hace falta configurar nada.
+- **Para Expo Web o Metro** sí hace falta: el origen del bundler es `http://localhost:8081`. Agregalo a `ALLOWED_ORIGINS`.
+- `docker-compose.yml` **interpola** `ALLOWED_ORIGINS` desde el `.env` del proyecto (con fallback al valor de `.env.example`), así el contenedor y el run local usan la misma lista. Cambiarla requiere `docker compose up -d --force-recreate api`.
+- Guía completa para probar desde un teléfono físico (Expo Go + IP LAN): [`docs/COMPLETAR_PERFIL_GUIDA.md`](docs/COMPLETAR_PERFIL_GUIDA.md#-probar-desde-el-teléfono-con-expo-go).
+
+---
+
+## 🚀 Pipeline de CI/CD (GitHub Actions)
+
+El proyecto cuenta con integración y despliegue continuo automatizados mediante GitHub Actions.
+
+### 🧪 Integración Continua (CI)
+Se ejecuta de forma automática en cada **Pull Request** apuntando a cualquier rama o en pushes a ramas de desarrollo. Realiza las siguientes tareas:
+1. Valida el formato de código con Prettier (`npm run format:check`).
+2. Corre las pruebas unitarias y de integración del proyecto (`npm test`).
+
+### 📦 Despliegue Continuo (CD)
+Se ejecuta en cada **Push** o Merge directo a la rama `main`. Realiza las siguientes tareas:
+1. Construye la imagen Docker de producción.
+2. Sube la imagen Docker etiquetada a **Oracle Cloud Infrastructure Registry (OCIR)**.
+
+### 🔒 Secretos requeridos en GitHub
+Para que el workflow de CD funcione correctamente, debes configurar los siguientes secretos en tu repositorio de GitHub (`Settings > Secrets and variables > Actions`):
+
+| Secreto | Descripción | Ejemplo / Formato |
+|---------|-------------|-------------------|
+| `OCI_REGISTRY` | Endpoint del registro de contenedores de Oracle Cloud | `<region-code>.ocir.io` |
+| `OCI_USERNAME` | Nombre de usuario de acceso a OCI (incluye namespace) | `<tenancy-namespace>/oracleidentitycloudservice/<email>` |
+| `OCI_AUTH_TOKEN` | Token de autenticación generado en la consola de OCI | `T[a1_exampleToken}` |
+| `OCI_TENANCY_NAMESPACE` | Namespace de tu Tenancy en OCI | `id3abcde1234` |
+| `OCI_REPO_NAME` | Nombre del repositorio de imágenes en OCIR | `backend-service` |
